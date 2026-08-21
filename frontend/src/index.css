@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+/* ─── Base ──────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #F6F2E9;
+    color: #26231D;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  h1, h2, h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+
+  .font-mono, code, kbd {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #F6F2E9; }
+::-webkit-scrollbar-thumb { background: #D0C8B4; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #B8A898; }
+
+/* ─── Selection ─────────────────────────────────────────── */
+::selection { background: #D89A5C33; }
+
+/* ─── Ledger table animations ───────────────────────────── */
+@keyframes rowFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.table-row-animate {
+  animation: rowFadeIn 0.3s ease both;
+}
+
+/* ─── Premium shimmer skeleton ──────────────────────────── */
+@keyframes shimmer {
+  from { background-position: -400px 0; }
+  to   { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #E9E1CC 25%, #F3EFE5 50%, #E9E1CC 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+/* ─── Page entry ─────────────────────────────────────────── */
+@keyframes pageFadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter {
+  animation: pageFadeUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Hairline rule utility ──────────────────────────────── */
+.hairline {
+  border-top: 1px solid #E0D8C0;
+}
+
+/* ─── Numeric cell ─────────────────────────────────────── */
+.num-cell {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
