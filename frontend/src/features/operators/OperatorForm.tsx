@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import type { Operator } from "./mockApi";
+import type { Operator } from "./api";
 
 interface OperatorFormProps {
   initialData?: Operator | null;

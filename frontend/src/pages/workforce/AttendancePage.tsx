@@ -4,10 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PageHeader, DataCard, EmptyState } from "../../components/ui/PremiumUI";
 import { Button } from "../../components/ui/Button";
 
-import { attendanceApi, type AttendanceRecord, type AttendanceStatus } from "../../features/attendance/mockApi";
-import { shiftAssignmentApi } from "../../features/shift-assignments/mockApi";
-import { operatorsApi, type Operator } from "../../features/operators/mockApi";
-import { shiftApi } from "../../features/shifts/mockApi";
+import { attendanceApi, type AttendanceRecord, type AttendanceStatus } from "../../features/attendance/api";
+import { shiftAssignmentApi, type ShiftAssignment } from "../../features/shift-assignments/api";
+import { operatorsApi, type Operator } from "../../features/operators/api";
+import { shiftsApi } from "../../features/shifts/api";
 import type { Shift } from "../../features/shifts/types";
 import { cn } from "../../utils/cn";
 
@@ -31,6 +31,7 @@ export function AttendancePage() {
   
   const [roster, setRoster] = useState<Operator[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [pendingAttendance, setPendingAttendance] = useState<Record<string | number, AttendanceStatus>>({});
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -41,7 +42,7 @@ export function AttendancePage() {
   useEffect(() => {
     const fetchBase = async () => {
       const [shData, opData] = await Promise.all([
-        shiftApi.getShifts(),
+        shiftsApi.getShifts(),
         operatorsApi.getOperators(),
       ]);
       setShifts(shData.filter(s => s.active));
@@ -67,7 +68,7 @@ export function AttendancePage() {
 
         const targetDate = new Date(date).getTime();
         const activeAssigned = assignments.filter(a => 
-          a.shiftId === selectedShiftId &&
+          String(a.shiftId) === String(selectedShiftId) &&
           new Date(a.effectiveFrom).getTime() <= targetDate &&
           (!a.effectiveTo || new Date(a.effectiveTo).getTime() >= targetDate)
         );
@@ -77,6 +78,7 @@ export function AttendancePage() {
 
         setRoster(rosterOps);
         setAttendance(attData);
+        setPendingAttendance({}); // clear unsaved on date/shift change
       } finally {
         setLoading(false);
       }
@@ -85,45 +87,53 @@ export function AttendancePage() {
     loadDayData();
   }, [date, selectedShiftId, operators]);
 
-  const handleMark = async (operatorId: string, status: AttendanceStatus) => {
-    const record = await attendanceApi.markAttendance({
-      date,
-      shiftId: selectedShiftId,
-      operatorId,
-      status
-    });
-    
-    setAttendance(prev => {
-      const idx = prev.findIndex(a => a.operatorId === operatorId);
-      if (idx >= 0) {
-        const newArr = [...prev];
-        newArr[idx] = record;
-        return newArr;
-      }
-      return [...prev, record];
-    });
+  const handleMark = (operatorId: string | number, status: AttendanceStatus) => {
+    setPendingAttendance(prev => ({ ...prev, [operatorId]: status }));
   };
 
-  const handleBulkMarkPresent = async () => {
-    const pendingOps = roster.filter(op => !attendance.some(a => a.operatorId === op.id));
+  const handleSubmit = async () => {
+    if (Object.keys(pendingAttendance).length === 0) return;
+    
+    setLoading(true);
+    try {
+      for (const [operatorId, status] of Object.entries(pendingAttendance)) {
+        await attendanceApi.markAttendance({
+          attendanceDate: date,
+          shiftId: selectedShiftId,
+          operatorId,
+          status
+        });
+      }
+      setPendingAttendance({});
+      const attData = await attendanceApi.getAttendanceForDate(date, selectedShiftId);
+      setAttendance(attData);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkMarkPresent = () => {
+    const pendingOps = roster.filter(op => !attendance.some(a => String(a.operatorId) === String(op.id)) && !pendingAttendance[op.id]);
     if (pendingOps.length === 0) return;
     
-    // In a real app, this would be a single batch API call. 
-    // For mock, we loop.
-    setLoading(true);
-    for (const op of pendingOps) {
-      await handleMark(op.id, "PRESENT");
-    }
-    setLoading(false);
+    const newPending = { ...pendingAttendance };
+    pendingOps.forEach(op => {
+      newPending[op.id] = "PRESENT";
+    });
+    setPendingAttendance(newPending);
   };
 
   // Metrics
-  const presentCount = attendance.filter(a => a.status === "PRESENT").length;
-  const lateCount = attendance.filter(a => a.status === "LATE").length;
-  const absentCount = attendance.filter(a => a.status === "ABSENT").length;
-  const halfDayCount = attendance.filter(a => a.status === "HALF_DAY").length;
-  const leaveCount = attendance.filter(a => a.status === "ON_LEAVE").length;
-  const pendingCount = roster.length - attendance.length;
+  const getCombinedStatus = (operatorId: string | number) => pendingAttendance[operatorId] || attendance.find(a => String(a.operatorId) === String(operatorId))?.status;
+  
+  const presentCount = roster.filter(op => getCombinedStatus(op.id) === "PRESENT").length;
+  const lateCount = roster.filter(op => getCombinedStatus(op.id) === "LATE").length;
+  const absentCount = roster.filter(op => getCombinedStatus(op.id) === "ABSENT").length;
+  const halfDayCount = roster.filter(op => getCombinedStatus(op.id) === "HALF_DAY").length;
+  const leaveCount = roster.filter(op => getCombinedStatus(op.id) === "ON_LEAVE").length;
+  const pendingCount = roster.length - (presentCount + lateCount + absentCount + halfDayCount + leaveCount);
+
+  const hasUnsavedChanges = Object.keys(pendingAttendance).length > 0;
 
   // Filtered Roster
   const filteredRoster = useMemo(() => {
@@ -135,13 +145,13 @@ export function AttendancePage() {
       }
       // Status Filter
       if (statusFilter !== "ALL") {
-        const record = attendance.find(a => a.operatorId === op.id);
-        if (statusFilter === "PENDING" && record) return false;
-        if (statusFilter !== "PENDING" && record?.status !== statusFilter) return false;
+        const status = getCombinedStatus(op.id);
+        if (statusFilter === "PENDING" && status) return false;
+        if (statusFilter !== "PENDING" && status !== statusFilter) return false;
       }
       return true;
     });
-  }, [roster, attendance, searchQuery, statusFilter]);
+  }, [roster, attendance, pendingAttendance, searchQuery, statusFilter]);
 
   if (loading && roster.length === 0) {
     return (
@@ -253,14 +263,24 @@ export function AttendancePage() {
             </div>
           </div>
           
-          <Button 
-            onClick={handleBulkMarkPresent} 
-            disabled={pendingCount === 0 || loading}
-            className="w-full md:w-auto mt-4 md:mt-0"
-          >
-            <CheckCircle2 className="w-4 h-4 mr-2" />
-            Mark {pendingCount} Pending as Present
-          </Button>
+          <div className="flex flex-col gap-2 w-full md:w-auto mt-4 md:mt-0">
+            <Button 
+              onClick={handleBulkMarkPresent} 
+              disabled={pendingCount === 0 || loading}
+              variant="outline"
+              className="w-full"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Mark {pendingCount} Pending as Present
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              disabled={!hasUnsavedChanges || loading}
+              className="w-full"
+            >
+              Submit Attendance {hasUnsavedChanges ? `(${Object.keys(pendingAttendance).length})` : ''}
+            </Button>
+          </div>
         </div>
       </DataCard>
 
@@ -279,9 +299,9 @@ export function AttendancePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <AnimatePresence>
             {filteredRoster.map((operator) => {
-              const record = attendance.find(a => a.operatorId === operator.id);
-              const status = record?.status;
+              const status = getCombinedStatus(operator.id);
               const config = getStatusConfig(status);
+              const isUnsaved = !!pendingAttendance[operator.id];
 
               return (
                 <motion.div
@@ -292,11 +312,14 @@ export function AttendancePage() {
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.2 }}
                   className={cn(
-                    "flex flex-col rounded-sm border p-4 shadow-sm transition-colors",
+                    "flex flex-col rounded-sm border p-4 shadow-sm transition-colors relative",
                     config.bg,
-                    config.border
+                    isUnsaved ? "border-dashed border-2 border-[#B8763F]" : config.border
                   )}
                 >
+                  {isUnsaved && (
+                    <div className="absolute -top-2 -right-2 w-3 h-3 bg-[#B8763F] rounded-full animate-pulse" />
+                  )}
                   <div className="flex items-start gap-4 mb-4">
                     <div className={cn("w-12 h-12 rounded-full flex items-center justify-center shrink-0 border bg-white", config.border)}>
                       <User className={cn("w-6 h-6", config.text)} />

@@ -28,7 +28,7 @@ export function StationAssignment({
           
           if (!operation) return null;
 
-          const actualTime = operator ? operation.smv / (operator.efficiency / 100) : 0;
+          const actualTime = operator ? (operation as any).smv / ((operator as any).efficiency / 100) : 0;
 
           return (
             <div key={assignment.id} className="p-4 flex items-center gap-6 hover:bg-[#FBF8F0]/50 transition-colors">
@@ -40,8 +40,8 @@ export function StationAssignment({
                 <p className="text-sm font-medium text-[#26231D] truncate">{operation.name}</p>
                 <div className="flex gap-4 mt-1 text-[11px] text-[#8A8270]">
                   <span>{operation.code}</span>
-                  <span>SMV: {operation.smv}</span>
-                  <span>{operation.machineType}</span>
+                  <span>SMV: {(operation as any).smv}</span>
+                  <span>{(operation as any).machineType}</span>
                 </div>
               </div>
 
@@ -54,7 +54,7 @@ export function StationAssignment({
                   <option value="">Unassigned</option>
                   {operators.map(op => (
                     <option key={op.id} value={op.id}>
-                      {op.name} ({op.efficiency}%)
+                      {op.name} ({(op as any).efficiency}%)
                     </option>
                   ))}
                 </select>

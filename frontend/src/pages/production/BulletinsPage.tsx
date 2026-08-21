@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
 import { Plus, Search, FileText } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "../../components/ui/Button";
 import { PageHeader, DataCard, DataCardHeader, EmptyState, SkeletonTable, StatusBadge } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 
-import { bulletinsApi, type OperationBulletin, type CreateBulletinDTO } from "../../features/bulletins/mockApi";
+import { bulletinsApi, type OperationBulletin, type CreateBulletinDTO } from "../../features/bulletins/api";
 import { BulletinForm } from "../../features/bulletins/BulletinForm";
 
-import { stylesApi, type Style } from "../../features/styles/mockApi";
-import { operationsApi, type Operation } from "../../features/operations/mockApi";
+import { stylesApi, type Style } from "../../features/styles/api";
+import { operationsApi, type Operation } from "../../features/operations/api";
 
 export function BulletinsPage() {
   const [bulletins, setBulletins] = useState<OperationBulletin[]>([]);
@@ -131,26 +131,23 @@ export function BulletinsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {bulletin.styleIds.slice(0, 3).map(id => {
-                        const style = styles.find(s => s.id === id);
-                        return style ? (
-                          <span key={id} className="inline-block px-1.5 py-0.5 rounded-sm bg-[#FAF7F2] border border-[#D0C8B4] text-[9px] font-mono font-semibold text-[#6E6656]">
-                            {style.styleNo}
-                          </span>
-                        ) : null;
-                      })}
-                      {bulletin.styleIds.length > 3 && (
+                      {(bulletin.styles || []).slice(0, 3).map(style => (
+                        <span key={style.id} className="inline-block px-1.5 py-0.5 rounded-sm bg-[#FAF7F2] border border-[#D0C8B4] text-[9px] font-mono font-semibold text-[#6E6656]">
+                          {style.styleNo}
+                        </span>
+                      ))}
+                      {(bulletin.styles || []).length > 3 && (
                         <span className="inline-block px-1.5 py-0.5 rounded-sm bg-[#FAF7F2] border border-[#D0C8B4] text-[9px] font-mono font-semibold text-[#8A8270]">
-                          +{bulletin.styleIds.length - 3} more
+                          +{(bulletin.styles || []).length - 3} more
                         </span>
                       )}
-                      {bulletin.styleIds.length === 0 && (
+                      {(bulletin.styles || []).length === 0 && (
                         <span className="text-[10px] text-[#B8A898] italic">No styles linked</span>
                       )}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <span className="font-mono font-bold text-[#3C5245] text-sm">{bulletin.totalSMV.toFixed(2)}</span>
+                    <span className="font-mono font-bold text-[#3C5245] text-sm">{(bulletin.totalSmv || 0).toFixed(2)}</span>
                     <span className="text-[9px] text-[#8A8270] ml-1">min</span>
                   </TableCell>
                   <TableCell>

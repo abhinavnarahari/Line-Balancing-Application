@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
 import { Plus, Search, ChevronRight } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "../../components/ui/Button";
 import { PageHeader, DataCard, DataCardHeader, EmptyState, SkeletonTable } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 
-import { ordersApi, type Order, type CreateOrderDTO, type OrderStatus } from "../../features/orders/mockApi";
+import { ordersApi, type Order, type CreateOrderDTO, type OrderStatus } from "../../features/orders/api";
 import { OrderForm } from "../../features/orders/OrderForm";
 
-import { stylesApi, type Style } from "../../features/styles/mockApi";
-import { sizesApi, type Size } from "../../features/sizes/mockApi";
+import { stylesApi, type Style } from "../../features/styles/api";
+import { sizesApi, type Size } from "../../features/sizes/api";
 
 export function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);

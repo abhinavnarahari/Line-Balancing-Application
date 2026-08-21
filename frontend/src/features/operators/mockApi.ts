@@ -17,7 +17,6 @@ const firstNames = ["Priya", "Sunita", "Meena", "Kavita", "Anita", "Rekha", "Sus
 const lastNames = ["Sharma", "Verma", "Gupta", "Kumar", "Singh", "Yadav", "Patel", "Joshi", "Tiwari", "Mishra", "Chauhan", "Pandey", "Dubey", "Chaudhary", "Soni", "Rao", "Reddy", "Nair", "Pillai", "Menon", "Das", "Devi", "Kumari", "Bai", "Begum", "Khan", "Ansari", "Sheikh", "Siddiqui", "Malik", "Thakur", "Rathore", "Rajput", "Bhatt", "Mehta", "Shah", "Kapoor", "Malhotra", "Bhatia", "Khanna", "Ahuja", "Arora", "Sethi", "Chopra", "Walia", "Bansal", "Mittal", "Agarwal", "Goyal", "Jain"];
 
 const departments = ["Sewing", "Finishing", "Packing", "Quality Control"];
-const genders: Array<"Male" | "Female"> = ["Male", "Female"];
 
 function generateOperators(): Operator[] {
   const ops: Operator[] = [];

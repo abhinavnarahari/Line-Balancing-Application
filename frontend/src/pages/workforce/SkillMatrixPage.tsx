@@ -5,7 +5,7 @@ import { PageHeader, DataCard, DataCardHeader, EmptyState } from "../../componen
 import { Modal } from "../../components/ui/Modal";
 
 
-import { skillApi, type SkillAssessment } from "../../features/skill-matrix/mockApi";
+import { skillApi, type SkillAssessment } from "../../features/skill-matrix/api";
 import { SkillAssessmentForm } from "../../features/skill-matrix/SkillAssessmentForm";
 import { operationsApi, type Operation } from "../../features/operations/mockApi";
 import { operatorsApi, type Operator } from "../../features/operators/mockApi";
@@ -39,7 +39,7 @@ function SkillCell({ skill, onClick }: { skill?: SkillAssessment; onClick: () =>
       <div className={`w-6 h-6 rounded-sm border flex items-center justify-center text-[11px] font-bold font-mono ${colors[skill.rating]}`}>
         {skill.rating}
       </div>
-      <span className="text-[9px] text-[#8A8270] mt-0.5 font-mono">{skill.cycleTime}s</span>
+      <span className="text-[9px] text-[#8A8270] mt-0.5 font-mono">{skill.cycleTimeSeconds}s</span>
       
       {/* Tooltip on hover */}
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-20 w-max bg-[#26231D] text-white text-[10px] px-2 py-1 rounded-sm shadow-lg pointer-events-none">
@@ -165,7 +165,7 @@ export function SkillMatrixPage() {
                       </div>
                     </td>
                     {operations.map(op => {
-                      const skill = matrix.find(m => m.operatorId === operator.id && m.operationId === op.id);
+                      const skill = matrix.find(m => String(m.operatorId) === String(operator.id) && String(m.operationId) === String(op.id));
                       return (
                         <td key={op.id} className="border-r border-[#EDE8DF] p-0 relative">
                           <SkillCell 

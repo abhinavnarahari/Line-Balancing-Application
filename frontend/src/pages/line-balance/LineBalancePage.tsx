@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, AlertTriangle, CheckCircle, Users, ChevronDown, ChevronUp, Zap } from "lucide-react";
-import { operationsApi, type Operation } from "../../features/operations/mockApi";
-import { operatorsApi, type Operator } from "../../features/operators/mockApi";
-import { shiftApi } from "../../features/shifts/mockApi";
-import { ordersApi, type Order } from "../../features/orders/mockApi";
-import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/mockApi";
-import { skillApi, type SkillAssessment } from "../../features/skill-matrix/mockApi";
+import { operationsApi, type Operation } from "../../features/operations/api";
+import { operatorsApi, type Operator } from "../../features/operators/api";
+import { shiftsApi } from "../../features/shifts/api";
+import { ordersApi, type Order } from "../../features/orders/api";
+import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/api";
+import { skillApi, type SkillAssessment } from "../../features/skill-matrix/api";
 import { linePlanApi } from "../../features/line-balance/mockApi";
 import type { Shift } from "../../features/shifts/types";
 import { PageHeader, DataCard, DataCardHeader } from "../../components/ui/PremiumUI";
@@ -170,41 +170,46 @@ export function LineBalancePage() {
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
-      const [ops, oprs, shfts, ords, bulls, skills] = await Promise.all([
-        operationsApi.getOperations(),
-        operatorsApi.getOperators(),
-        shiftApi.getShifts(),
-        ordersApi.getOrders(),
-        bulletinsApi.getBulletins(),
-        skillApi.getAllAssessments(),
-      ]);
-      setOperations(ops);
-      setOperators(oprs.filter(o => o.active));
-      setAssessments(skills);
-      
-      const activeShifts = shfts.filter(s => s.active);
-      setShifts(activeShifts);
-      if (activeShifts.length > 0) setSelectedShiftId(activeShifts[0].id);
+      try {
+        const [ops, oprs, shfts, ords, bulls, skills] = await Promise.all([
+          operationsApi.getOperations(),
+          operatorsApi.getOperators(),
+          shiftsApi.getShifts(),
+          ordersApi.getOrders(),
+          bulletinsApi.getBulletins(),
+          skillApi.getCurrentMatrix(),
+        ]);
+        setOperations(ops);
+        setOperators(oprs.filter(o => o.active));
+        setAssessments(skills);
+        
+        const activeShifts = shfts.filter(s => s.active);
+        setShifts(activeShifts);
+        if (activeShifts.length > 0) setSelectedShiftId(activeShifts[0].id);
 
-      setOrders(ords);
-      setBulletins(bulls);
-      
-      if (ords.length > 0) {
-        setSelectedOrderId(ords[0].id);
+        setOrders(ords);
+        setBulletins(bulls);
+        
+        if (ords.length > 0) {
+          setSelectedOrderId(String(ords[0].id));
+        }
+      } catch (err) {
+        console.error("Failed to fetch line balance dependencies:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchAll();
   }, []);
 
   // Compute derived values based on selected Order
-  const selectedOrder = useMemo(() => orders.find(o => o.id === selectedOrderId), [orders, selectedOrderId]);
+  const selectedOrder = useMemo(() => orders.find(o => String(o.id) === String(selectedOrderId)), [orders, selectedOrderId]);
   const targetOutput = selectedOrder?.totalQuantity || 0;
 
   // Find Operation Bulletin linked to the selected Order's Style
   const selectedBulletin = useMemo(() => {
     if (!selectedOrder) return null;
-    return bulletins.find(b => b.styleIds.includes(selectedOrder.styleId)) || null;
+    return bulletins.find(b => (b.styles || []).some(s => String(s.id) === String(selectedOrder.styleId))) || null;
   }, [bulletins, selectedOrder]);
 
   // When selectedBulletin or Order changes, initialize assignments matching bulletin sequence
@@ -215,7 +220,7 @@ export function LineBalancePage() {
         return;
       }
       
-      const existingPlan = await linePlanApi.getPlanForOrder(selectedOrder.id);
+      const existingPlan = await linePlanApi.getPlanForOrder(String(selectedOrder.id));
       if (existingPlan) {
         setAssignments(existingPlan.assignments);
       } else {
@@ -223,8 +228,8 @@ export function LineBalancePage() {
           selectedBulletin.lines
             .sort((a, b) => a.sequence - b.sequence)
             .map(line => ({
-              bulletinLineId: line.id,
-              operationId: line.operationId,
+              bulletinLineId: String(line.id),
+              operationId: String(line.operationId),
               operatorId: null
             }))
         );
@@ -261,11 +266,11 @@ export function LineBalancePage() {
       const smv = line?.smv ?? 0.5;
       
       // Look up operator's exact cycle time from Skill Matrix
-      const assessment = operator ? assessments.find(s => s.operatorId === operator.id && s.operationId === a.operationId) : null;
+      const assessment = operator ? assessments.find(s => String(s.operatorId) === String(operator.id) && String(s.operationId) === String(a.operationId)) : null;
       
       // If assessment exists, use recorded cycleTime (in seconds, so / 60 for minutes). Else fallback to default efficiency.
       const actualTime = operator 
-        ? (assessment ? assessment.cycleTime / 60 : calcActualTime(smv, defaultEfficiency)) 
+        ? (assessment ? assessment.cycleTimeSeconds / 60 : calcActualTime(smv, defaultEfficiency)) 
         : 0;
         
       const efficiency = actualTime > 0 ? (smv / actualTime) * 100 : 0;
@@ -277,7 +282,7 @@ export function LineBalancePage() {
         operationId: a.operationId,
         operatorId: a.operatorId,
         label: op?.name ?? `Station ${i + 1}`,
-        code: op?.code ?? "",
+        code: op?.operationCode ?? "",
         smv,
         efficiency,
         actualTime,
@@ -308,7 +313,7 @@ export function LineBalancePage() {
     setSaving(true);
     try {
       await linePlanApi.savePlan({
-        orderId: selectedOrder.id,
+        orderId: String(selectedOrder.id),
         shiftId: selectedShiftId,
         allowance,
         assignments

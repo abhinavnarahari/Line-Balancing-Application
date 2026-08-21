@@ -1,6 +1,5 @@
 import React from "react";
 import { cn } from "../../utils/cn";
-import { motion } from "framer-motion";
 
 /* ─── Table Shell ──────────────────────────────────────── */
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(

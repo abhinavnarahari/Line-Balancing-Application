@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import type { ShiftAssignment } from "./mockApi";
-import type { Operator } from "../operators/mockApi";
+import type { ShiftAssignment } from "./api";
+import type { Operator } from "../operators/api";
 import type { Shift } from "../shifts/types";
 
 interface AssignmentFormProps {

@@ -20,13 +20,19 @@ const item: Variants = {
 export function Dashboard() {
   const links = [
     {
-      to: "/shifts",
+      to: "/settings/shifts",
       icon: Clock,
       title: "Manage Shifts",
       description: "Configure working hours and floor rotations",
     },
     {
-      to: "/operations",
+      to: "/settings/operators",
+      icon: Users,
+      title: "Manage Operators",
+      description: "Register and manage sewing operators",
+    },
+    {
+      to: "/settings/operations",
       icon: Scissors,
       title: "Manage Operations",
       description: "View and edit standard operations",

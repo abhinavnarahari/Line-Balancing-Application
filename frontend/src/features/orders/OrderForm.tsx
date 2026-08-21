@@ -1,9 +1,9 @@
 import { useState, useMemo } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import type { CreateOrderDTO } from "./mockApi";
-import type { Style } from "../styles/mockApi";
-import type { Size } from "../sizes/mockApi";
+import type { CreateOrderDTO } from "./api";
+import type { Style } from "../styles/api";
+import type { Size } from "../sizes/api";
 
 interface OrderFormProps {
   styles: Style[];
@@ -13,7 +13,7 @@ interface OrderFormProps {
 }
 
 export function OrderForm({ styles, sizes, onSubmit, onCancel }: OrderFormProps) {
-  const [formData, setFormData] = useState<Omit<CreateOrderDTO, "sizeQuantities">>({
+  const [formData, setFormData] = useState<Omit<CreateOrderDTO, "sizeLines">>({
     orderNo: "",
     buyer: "",
     styleId: "",
@@ -57,7 +57,11 @@ export function OrderForm({ styles, sizes, onSubmit, onCancel }: OrderFormProps)
     }
     setLoading(true);
     try {
-      await onSubmit({ ...formData, sizeQuantities: sizeQty });
+      const sizeLines = Object.entries(sizeQty)
+        .filter(([_, quantity]) => quantity > 0)
+        .map(([sizeId, quantity]) => ({ sizeId, quantity }));
+        
+      await onSubmit({ ...formData, sizeLines });
     } catch (err: any) {
       setError(err.message || "Failed to create order");
     } finally {

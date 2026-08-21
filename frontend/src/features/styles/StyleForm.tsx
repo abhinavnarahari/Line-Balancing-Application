@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import type { Style, CreateStyleDTO, UpdateStyleDTO } from "./mockApi";
+import type { Style, CreateStyleDTO, UpdateStyleDTO } from "./api";
 
 interface StyleFormProps {
   initialData?: Style | null;

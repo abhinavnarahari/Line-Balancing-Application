@@ -62,13 +62,10 @@ export function LineBalancePulse({ className }: LineBalancePulseProps) {
           strokeLinejoin="round" 
         />
         
-        {/* Hand Wheel (Spinning) */}
-        <motion.circle 
+        {/* Hand Wheel (Static) */}
+        <circle 
           cx="135" cy="45" r="9" 
           fill="none" stroke="#8A8270" strokeWidth="3" strokeDasharray="6 4"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 0.4, repeat: Infinity, ease: "linear" }}
-          style={{ originX: "135px", originY: "45px" }}
         />
 
         {/* Thread Spool on top */}

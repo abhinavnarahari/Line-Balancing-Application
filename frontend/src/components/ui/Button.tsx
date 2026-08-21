@@ -3,7 +3,8 @@ import { cn } from "../../utils/cn";
 import { motion } from "framer-motion";
 import type { HTMLMotionProps } from "framer-motion";
 
-export interface ButtonProps extends HTMLMotionProps<"button"> {
+export interface ButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {
+  children?: React.ReactNode;
   variant?: "primary" | "secondary" | "danger" | "ghost" | "outline";
   size?: "xs" | "sm" | "md" | "lg";
   loading?: boolean;

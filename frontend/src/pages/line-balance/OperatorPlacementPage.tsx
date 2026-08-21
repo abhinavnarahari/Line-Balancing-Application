@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Users, User, ArrowRight } from "lucide-react";
-import { operationsApi, type Operation } from "../../features/operations/mockApi";
-import { operatorsApi, type Operator } from "../../features/operators/mockApi";
-import { ordersApi, type Order } from "../../features/orders/mockApi";
-import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/mockApi";
+import { operationsApi, type Operation } from "../../features/operations/api";
+import { operatorsApi, type Operator } from "../../features/operators/api";
+import { ordersApi, type Order } from "../../features/orders/api";
+import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/api";
 import { linePlanApi, type LinePlan } from "../../features/line-balance/mockApi";
 import { PageHeader, DataCard, EmptyState } from "../../components/ui/PremiumUI";
 
@@ -21,21 +21,26 @@ export function OperatorPlacementPage() {
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
-      const [ops, oprs, ords, bulls] = await Promise.all([
-        operationsApi.getOperations(),
-        operatorsApi.getOperators(),
-        ordersApi.getOrders(),
-        bulletinsApi.getBulletins(),
-      ]);
-      setOperations(ops);
-      setOperators(oprs.filter(o => o.active));
-      setOrders(ords);
-      setBulletins(bulls);
-      
-      if (ords.length > 0) {
-        setSelectedOrderId(ords[0].id);
+      try {
+        const [ops, oprs, ords, bulls] = await Promise.all([
+          operationsApi.getOperations(),
+          operatorsApi.getOperators(),
+          ordersApi.getOrders(),
+          bulletinsApi.getBulletins(),
+        ]);
+        setOperations(ops);
+        setOperators(oprs.filter(o => o.active));
+        setOrders(ords);
+        setBulletins(bulls);
+        
+        if (ords.length > 0) {
+          setSelectedOrderId(String(ords[0].id));
+        }
+      } catch (err) {
+        console.error("Failed to fetch placement dependencies:", err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchAll();
   }, []);
@@ -46,31 +51,35 @@ export function OperatorPlacementPage() {
         setLinePlan(null);
         return;
       }
-      const plan = await linePlanApi.getPlanForOrder(selectedOrderId);
-      setLinePlan(plan);
+      try {
+        const plan = await linePlanApi.getPlanForOrder(String(selectedOrderId));
+        setLinePlan(plan);
+      } catch (err) {
+        console.error("Failed to fetch line plan:", err);
+      }
     };
     fetchPlan();
   }, [selectedOrderId]);
 
-  const selectedOrder = useMemo(() => orders.find(o => o.id === selectedOrderId), [orders, selectedOrderId]);
+  const selectedOrder = useMemo(() => orders.find(o => String(o.id) === String(selectedOrderId)), [orders, selectedOrderId]);
   const selectedBulletin = useMemo(() => {
     if (!selectedOrder) return null;
-    return bulletins.find(b => b.styleIds.includes(selectedOrder.styleId)) || null;
+    return bulletins.find(b => (b.styles || []).some(s => String(s.id) === String(selectedOrder.styleId))) || null;
   }, [bulletins, selectedOrder]);
 
   const placementData = useMemo(() => {
     if (!linePlan || !selectedBulletin) return [];
 
     return linePlan.assignments.map((assignment) => {
-      const line = selectedBulletin.lines.find(l => l.id === assignment.bulletinLineId);
-      const op = operations.find(o => o.id === assignment.operationId);
-      const operator = assignment.operatorId ? operators.find(o => o.id === assignment.operatorId) : null;
+      const line = selectedBulletin.lines.find(l => String(l.id) === String(assignment.bulletinLineId));
+      const op = operations.find(o => String(o.id) === String(assignment.operationId));
+      const operator = assignment.operatorId ? operators.find(o => String(o.id) === String(assignment.operatorId)) : null;
 
       return {
         sequence: line?.sequence ?? 0,
         machineType: line?.machineType ?? "Unknown",
         operationName: op?.name ?? "Unknown Operation",
-        operationCode: op?.code ?? "N/A",
+        operationCode: op?.operationCode ?? "N/A",
         operatorName: operator?.name ?? "Unassigned",
         operatorId: operator?.employeeId ?? null,
         isAssigned: !!operator

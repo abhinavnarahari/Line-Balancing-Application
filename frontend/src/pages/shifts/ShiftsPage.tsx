@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
 import type { Shift, CreateShiftDTO, UpdateShiftDTO } from "../../features/shifts/types";
-import { shiftApi } from "../../features/shifts/mockApi";
+import { shiftsApi } from "../../features/shifts/api";
 import { ShiftList } from "../../features/shifts/ShiftList";
 import { ShiftForm } from "../../features/shifts/ShiftForm";
 import { Button } from "../../components/ui/Button";
@@ -16,7 +16,7 @@ export function ShiftsPage() {
 
   const loadShifts = async () => {
     setLoading(true);
-    try { setShifts(await shiftApi.getShifts()); }
+    try { setShifts(await shiftsApi.getShifts()); }
     catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -24,7 +24,7 @@ export function ShiftsPage() {
   useEffect(() => { loadShifts(); }, []);
 
   const handleToggleActive = async (id: string) => {
-    await shiftApi.toggleActive(id);
+    await shiftsApi.toggleActive(id);
     loadShifts();
   };
 
@@ -32,8 +32,8 @@ export function ShiftsPage() {
   const handleClose = () => { setIsFormOpen(false); setEditingShift(null); };
 
   const handleSubmit = async (data: CreateShiftDTO | UpdateShiftDTO) => {
-    if (editingShift) await shiftApi.updateShift(editingShift.id, data as UpdateShiftDTO);
-    else await shiftApi.createShift(data as CreateShiftDTO);
+    if (editingShift) await shiftsApi.updateShift(editingShift.id, data as UpdateShiftDTO);
+    else await shiftsApi.createShift(data as CreateShiftDTO);
     handleClose();
     loadShifts();
   };

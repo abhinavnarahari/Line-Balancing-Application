@@ -4,13 +4,12 @@ import { PageHeader } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 
-import { shiftAssignmentApi } from "../../features/shift-assignments/mockApi";
-import type { ShiftAssignment } from "../../features/shift-assignments/mockApi";
+import { shiftAssignmentApi, type ShiftAssignment } from "../../features/shift-assignments/api";
 import { AssignmentList } from "../../features/shift-assignments/AssignmentList";
 import { AssignmentForm } from "../../features/shift-assignments/AssignmentForm";
 
-import { operatorsApi, type Operator } from "../../features/operators/mockApi";
-import { shiftApi } from "../../features/shifts/mockApi";
+import { operatorsApi, type Operator } from "../../features/operators/api";
+import { shiftsApi } from "../../features/shifts/api";
 import type { Shift } from "../../features/shifts/types";
 
 export function ShiftAssignmentPage() {
@@ -28,7 +27,7 @@ export function ShiftAssignmentPage() {
       const [assData, opData, shData] = await Promise.all([
         shiftAssignmentApi.getAssignments(),
         operatorsApi.getOperators(),
-        shiftApi.getShifts(),
+        shiftsApi.getShifts(),
       ]);
       setAssignments(assData);
       setOperators(opData.filter(o => o.active));

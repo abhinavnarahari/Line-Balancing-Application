@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { Button } from "../../components/ui/Button";
 import { DataCard, DataCardHeader, SkeletonTable, EmptyState, StatusBadge } from "../../components/ui/PremiumUI";
-import type { Operation } from "./mockApi";
+import type { Operation } from "./api";
 
 interface OperationListProps {
   operations: Operation[];
@@ -18,7 +18,7 @@ export function OperationList({ operations, onEdit, onToggleActive, loading }: O
 
   const filtered = operations.filter((op) => {
     const s = search.toLowerCase();
-    return op.name.toLowerCase().includes(s) || op.code.toLowerCase().includes(s);
+    return op.name.toLowerCase().includes(s) || op.operationCode.toLowerCase().includes(s);
   });
 
   return (
@@ -69,7 +69,7 @@ export function OperationList({ operations, onEdit, onToggleActive, loading }: O
                 <TableCell className="font-mono text-xs text-[#8A8270] w-14">{op.sequence}</TableCell>
                 <TableCell>
                   <span className="font-mono text-[11.5px] font-semibold text-[#B8763F] tracking-wide bg-[#FBF4EC] px-2 py-0.5 rounded-sm border border-[#E0D8C0]">
-                    {op.code}
+                    {op.operationCode}
                   </span>
                 </TableCell>
                 <TableCell>

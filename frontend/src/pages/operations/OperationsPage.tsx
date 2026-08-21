@@ -5,7 +5,7 @@ import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import { OperationList } from "../../features/operations/OperationList";
 import { OperationForm } from "../../features/operations/OperationForm";
-import { operationsApi, type Operation } from "../../features/operations/mockApi";
+import { operationsApi, type Operation } from "../../features/operations/api";
 
 export function OperationsPage() {
   const [operations, setOperations] = useState<Operation[]>([]);

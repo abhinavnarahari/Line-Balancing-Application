@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import type { SkillAssessment } from "./mockApi";
+import type { SkillAssessment } from "./api";
 
 interface SkillAssessmentFormProps {
   operatorId: string;
@@ -15,7 +15,7 @@ interface SkillAssessmentFormProps {
 export function SkillAssessmentForm({ operatorId, operationId, operatorName, operationName, onSubmit, onCancel }: SkillAssessmentFormProps) {
   const [formData, setFormData] = useState({
     rating: 3 as 1 | 2 | 3 | 4 | 5,
-    cycleTime: "",
+    cycleTimeSeconds: "",
     effectiveDate: new Date().toISOString().split("T")[0],
     notes: "",
   });
@@ -26,7 +26,7 @@ export function SkillAssessmentForm({ operatorId, operationId, operatorName, ope
       operatorId,
       operationId,
       rating: formData.rating,
-      cycleTime: parseFloat(formData.cycleTime),
+      cycleTimeSeconds: parseFloat(formData.cycleTimeSeconds),
       effectiveDate: formData.effectiveDate,
       notes: formData.notes,
     });
@@ -72,12 +72,12 @@ export function SkillAssessmentForm({ operatorId, operationId, operatorName, ope
         </div>
 
         <Input
-          label="Observed Cycle Time"
+          label="Cycle Time (seconds)"
           type="number"
           step="0.01"
           min="0.1"
-          value={formData.cycleTime}
-          onChange={(e) => setFormData(p => ({ ...p, cycleTime: e.target.value }))}
+          value={formData.cycleTimeSeconds}
+          onChange={(e) => setFormData(p => ({ ...p, cycleTimeSeconds: e.target.value }))}
           required
           hint="Standard time in seconds"
           rightIcon={<span className="text-[10px] font-semibold">sec</span>}

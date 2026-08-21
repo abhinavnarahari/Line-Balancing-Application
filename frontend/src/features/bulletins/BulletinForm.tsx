@@ -2,9 +2,9 @@ import { useState, useMemo } from "react";
 import { Plus, Trash2, GripVertical } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import type { CreateBulletinDTO, BulletinLine } from "./mockApi";
-import type { Style } from "../styles/mockApi";
-import type { Operation } from "../operations/mockApi";
+import type { OperationBulletin, CreateBulletinDTO, BulletinLine } from "./api";
+import type { Style } from "../styles/api";
+import type { Operation } from "../operations/api";
 
 interface BulletinFormProps {
   styles: Style[];
@@ -166,7 +166,7 @@ export function BulletinForm({ styles, operations, onSubmit, onCancel }: Bulleti
                     >
                       <option value="">-- Select Operation --</option>
                       {activeOps.map(op => (
-                        <option key={op.id} value={op.id}>{op.code} - {op.name}</option>
+                        <option key={op.id} value={op.id}>{op.operationCode} - {op.name}</option>
                       ))}
                     </select>
                   </td>

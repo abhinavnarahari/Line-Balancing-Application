@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import type { Operation } from "./mockApi";
+import type { Operation } from "./api";
 
 interface OperationFormProps {
   initialData?: Operation | null;
@@ -11,7 +11,7 @@ interface OperationFormProps {
 
 export function OperationForm({ initialData, onSubmit, onCancel }: OperationFormProps) {
   const [formData, setFormData] = useState({
-    code: initialData?.code || "",
+    operationCode: initialData?.operationCode || "",
     name: initialData?.name || "",
     description: initialData?.description || "",
     sequence: initialData?.sequence || 1,
@@ -36,9 +36,9 @@ export function OperationForm({ initialData, onSubmit, onCancel }: OperationForm
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Input
           label="Operation Code"
-          id="code"
-          name="code"
-          value={formData.code}
+          id="operationCode"
+          name="operationCode"
+          value={formData.operationCode}
           onChange={handleChange}
           placeholder="e.g. OP-001"
           required

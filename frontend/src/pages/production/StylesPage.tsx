@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { Plus, Search, Edit2, ToggleLeft, ToggleRight } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "../../components/ui/Button";
 import { PageHeader, DataCard, DataCardHeader, EmptyState, StatusBadge, SkeletonTable } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 
-import { stylesApi, type Style, type CreateStyleDTO, type UpdateStyleDTO } from "../../features/styles/mockApi";
+import { stylesApi, type Style, type CreateStyleDTO, type UpdateStyleDTO } from "../../features/styles/api";
 import { StyleForm } from "../../features/styles/StyleForm";
 
 export function StylesPage() {

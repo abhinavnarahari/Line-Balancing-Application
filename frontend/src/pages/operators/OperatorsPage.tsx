@@ -4,7 +4,7 @@ import { PageHeader } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { OperatorList } from "../../features/operators/OperatorList";
 import { OperatorForm } from "../../features/operators/OperatorForm";
-import { operatorsApi, type Operator } from "../../features/operators/mockApi";
+import { operatorsApi, type Operator } from "../../features/operators/api";
 import { Button } from "../../components/ui/Button";
 
 export function OperatorsPage() {

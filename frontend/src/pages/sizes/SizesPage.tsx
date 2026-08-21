@@ -6,7 +6,7 @@ import { Input } from "../../components/ui/Input";
 import { PageHeader, DataCard, DataCardHeader, EmptyState, SkeletonTable, StatusBadge } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
-import { sizesApi, type Size } from "../../features/sizes/mockApi";
+import { sizesApi, type Size } from "../../features/sizes/api";
 
 export function SizesPage() {
   const [sizes, setSizes] = useState<Size[]>([]);

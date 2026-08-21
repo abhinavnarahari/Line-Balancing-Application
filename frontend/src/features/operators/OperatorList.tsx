@@ -3,8 +3,8 @@ import { Search, Edit2, ToggleLeft, ToggleRight } from "lucide-react";
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { Button } from "../../components/ui/Button";
-import { DataCard, DataCardHeader, SkeletonTable, EmptyState, StatusBadge, SkillBadge } from "../../components/ui/PremiumUI";
-import type { Operator } from "./mockApi";
+import { DataCard, DataCardHeader, SkeletonTable, EmptyState, StatusBadge } from "../../components/ui/PremiumUI";
+import type { Operator } from "./api";
 
 interface OperatorListProps {
   operators: Operator[];

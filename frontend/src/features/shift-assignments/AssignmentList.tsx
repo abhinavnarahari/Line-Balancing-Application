@@ -4,8 +4,8 @@ import { Search, History, Check, X } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { Button } from "../../components/ui/Button";
 import { DataCard, DataCardHeader, SkeletonTable, EmptyState, StatusBadge } from "../../components/ui/PremiumUI";
-import type { ShiftAssignment } from "./mockApi";
-import type { Operator } from "../operators/mockApi";
+import type { ShiftAssignment } from "./api";
+import type { Operator } from "../operators/api";
 import type { Shift } from "../shifts/types";
 
 interface AssignmentListProps {
