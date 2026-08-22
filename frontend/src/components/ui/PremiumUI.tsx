@@ -1,6 +1,9 @@
+import { useState, useRef, useEffect } from "react";
 import { cn } from "../../utils/cn";
-import { motion } from "framer-motion";
-import { Download, Upload, Clock } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Clock, ChevronDown } from "lucide-react";
+
+import { ExcelImportExport } from "../common/ExcelImportExport";
 
 /* ─── PageHeader ─────────────────────────────────────────── */
 interface PageHeaderProps {
@@ -9,10 +12,23 @@ interface PageHeaderProps {
   description?: string;
   action?: React.ReactNode;
   showImportExport?: boolean;
+  onImport?: (data: any[]) => void;
+  exportData?: any[];
+  exportFilename?: string;
   className?: string;
 }
 
-export function PageHeader({ eyebrow, title, description, action, showImportExport, className }: PageHeaderProps) {
+export function PageHeader({ 
+  eyebrow, 
+  title, 
+  description, 
+  action, 
+  showImportExport, 
+  onImport,
+  exportData,
+  exportFilename,
+  className 
+}: PageHeaderProps) {
   return (
     <motion.div
       className={cn("bg-white rounded-2xl border border-[#E6DDCE] p-6 shadow-sm flex items-center justify-between gap-6 flex-wrap mb-6", className)}
@@ -38,20 +54,11 @@ export function PageHeader({ eyebrow, title, description, action, showImportExpo
       <div className="shrink-0 flex items-center gap-3">
         {showImportExport && (
           <div className="flex items-center gap-2 mr-2">
-            <button
-              onClick={() => alert("Import Excel mock")}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] rounded-lg transition-colors border border-transparent hover:border-[#E6DDCE]"
-            >
-              <Upload className="h-3.5 w-3.5" />
-              Import Excel
-            </button>
-            <button
-              onClick={() => alert("Export Excel mock")}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-bold text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] rounded-lg transition-colors border border-transparent hover:border-[#E6DDCE]"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export Excel
-            </button>
+            <ExcelImportExport 
+              onImport={onImport || (() => console.warn('onImport not provided'))}
+              exportData={exportData || []}
+              filename={exportFilename || title.replace(/\s+/g, '_').toLowerCase()}
+            />
             <div className="h-6 w-px bg-[#E6DDCE] mx-2" />
           </div>
         )}
@@ -246,6 +253,90 @@ export function RecentActivityLog({ activities = [], className }: RecentActivity
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ─── PremiumSelect ────────────────────────────────────────── */
+export interface PremiumSelectOption {
+  value: string | number;
+  label: string;
+}
+
+interface PremiumSelectProps {
+  value: string | number;
+  onChange: (value: string) => void;
+  options: PremiumSelectOption[];
+  className?: string;
+  name?: string;
+  disabled?: boolean;
+}
+
+export function PremiumSelect({ value, onChange, options, className, name, disabled }: PremiumSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const selectedOption = options.find((opt) => String(opt.value) === String(value));
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className={cn("relative w-full", className)} ref={dropdownRef}>
+      {/* Hidden native input for form compatibility if needed */}
+      {name && <input type="hidden" name={name} value={value} />}
+      
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={cn(
+          "w-full h-10 bg-white border rounded-sm px-3 text-sm text-[#221912] flex items-center justify-between transition-colors",
+          isOpen ? "border-[#B48259] ring-1 ring-[#B48259]/20" : "border-[#E6DDCE] hover:border-[#B48259]/60",
+          disabled && "opacity-50 cursor-not-allowed hover:border-[#E6DDCE]"
+        )}
+      >
+        <span className="truncate">{selectedOption?.label || "Select..."}</span>
+        <ChevronDown className={cn("w-4 h-4 text-[#8C7E6E] transition-transform duration-200", isOpen && "rotate-180")} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="absolute z-50 w-full mt-1 bg-white border border-[#E6DDCE] rounded-sm shadow-lg overflow-hidden max-h-60 overflow-y-auto"
+          >
+            {options.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(String(option.value));
+                  setIsOpen(false);
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-2 text-sm transition-colors",
+                  String(option.value) === String(value)
+                    ? "bg-[#FEFCF9] text-[#B48259] font-medium"
+                    : "text-[#221912] hover:bg-[#FEFCF9]"
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

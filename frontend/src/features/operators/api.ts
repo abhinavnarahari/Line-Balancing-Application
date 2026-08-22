@@ -41,4 +41,22 @@ export const operatorsApi = {
   toggleActive: async (id: string): Promise<void> => {
     return await api.patch(`/operators/${id}/toggle-status`);
   },
+
+  getAttachments: async (id: string): Promise<any[]> => {
+    return await api.get(`/operators/${id}/attachments`);
+  },
+
+  uploadAttachment: async (id: string, file: File): Promise<any> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    // When using FormData, let the browser set the Content-Type to multipart/form-data with boundary
+    // api (axios) usually handles this automatically if you pass FormData.
+    return await api.post(`/operators/${id}/attachments`, formData, {
+      headers: { "Content-Type": "multipart/form-data" }
+    });
+  },
+
+  deleteAttachment: async (id: string): Promise<void> => {
+    return await api.delete(`/operators/attachments/${id}`);
+  }
 };

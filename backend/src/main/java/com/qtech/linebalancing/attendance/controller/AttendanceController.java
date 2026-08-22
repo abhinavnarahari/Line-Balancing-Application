@@ -27,6 +27,11 @@ public class AttendanceController {
         return ResponseEntity.ok(ApiResponse.success(attendanceService.getAttendanceForDate(date, shiftId)));
     }
 
+    @GetMapping("/history")
+    public ResponseEntity<ApiResponse<List<AttendanceResponse>>> getHistory() {
+        return ResponseEntity.ok(ApiResponse.success(attendanceService.getAllHistory()));
+    }
+
     @GetMapping("/operator/{operatorId}")
     public ResponseEntity<ApiResponse<List<AttendanceResponse>>> getByOperator(
             @PathVariable Long operatorId) {
@@ -37,5 +42,11 @@ public class AttendanceController {
     public ResponseEntity<ApiResponse<AttendanceResponse>> markAttendance(
             @Valid @RequestBody AttendanceRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Attendance recorded", attendanceService.markAttendance(request)));
+    }
+
+    @PostMapping("/biometric-sync")
+    public ResponseEntity<ApiResponse<List<AttendanceResponse>>> syncBiometric(
+            @Valid @RequestBody List<com.qtech.linebalancing.attendance.dto.BiometricSyncRequest> requests) {
+        return ResponseEntity.ok(ApiResponse.success("Biometric data synced", attendanceService.syncBiometric(requests)));
     }
 }

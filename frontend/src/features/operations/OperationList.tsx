@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { Search, Edit2, ToggleLeft, ToggleRight } from "lucide-react";
+import { Search, Edit2 } from "lucide-react";
+import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { Button } from "../../components/ui/Button";
@@ -93,16 +94,10 @@ export function OperationList({ operations, onEdit, onToggleActive, loading }: O
                     >
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => onToggleActive(op.id)}
-                      title={op.active ? "Deactivate" : "Activate"}
-                    >
-                      {op.active
-                        ? <ToggleRight className="h-3.5 w-3.5 text-emerald-500" />
-                        : <ToggleLeft className="h-3.5 w-3.5" />}
-                    </Button>
+                    <ToggleSwitch
+                      checked={op.active}
+                      onChange={() => onToggleActive(op.id)}
+                    />
                   </div>
                 </TableCell>
               </motion.tr>

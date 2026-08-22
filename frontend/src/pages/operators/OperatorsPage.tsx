@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { PageHeader, RecentActivityLog } from "../../components/ui/PremiumUI";
+import { PageHeader } from "../../components/ui/PremiumUI";
+import { AuditedRecentActivityLog } from "../../components/common/AuditedRecentActivityLog";
 import { Modal } from "../../components/ui/Modal";
 import { OperatorList } from "../../features/operators/OperatorList";
 import { OperatorForm } from "../../features/operators/OperatorForm";
@@ -39,6 +40,8 @@ export function OperatorsPage() {
     <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
         showImportExport={true}
+        exportData={operators}
+        onImport={(data) => console.log('Import Operators:', data)}
         eyebrow="Masters"
         title="Sewing Operators"
         description="Register and manage all sewing operators on the factory floor."
@@ -63,7 +66,7 @@ export function OperatorsPage() {
 
       <OperatorList operators={operators} onEdit={handleEdit} onToggleActive={handleToggleActive} loading={loading} />
     
-      <RecentActivityLog />
+      <AuditedRecentActivityLog entityName="Operator" />
     </div>
   );
 }

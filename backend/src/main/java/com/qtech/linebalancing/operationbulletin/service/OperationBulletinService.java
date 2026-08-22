@@ -27,6 +27,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class OperationBulletinService {
 
     private final OperationBulletinRepository bulletinRepository;

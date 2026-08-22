@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
+import { PremiumSelect } from "../../components/ui/PremiumUI";
 import type { CreateOrderDTO } from "./api";
 import type { Style } from "../styles/api";
 import type { Size } from "../sizes/api";
@@ -84,33 +85,30 @@ export function OrderForm({ styles, sizes, onSubmit, onCancel }: OrderFormProps)
         
         <div className="flex flex-col space-y-1.5 md:col-span-2">
           <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#475569]">Style</label>
-          <select
+          <PremiumSelect
             name="styleId"
             value={formData.styleId}
-            onChange={handleChange}
-            className="h-10 bg-white border border-[#E6DDCE] rounded-sm px-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-2 focus:ring-[#B48259]/15"
-            required
-          >
-            <option value="">Select Style...</option>
-            {activeStyles.map(s => (
-              <option key={s.id} value={s.id}>{s.styleNo} - {s.description}</option>
-            ))}
-          </select>
+            onChange={(val) => setFormData(prev => ({ ...prev, styleId: val }))}
+            options={[
+              { value: "", label: "Select Style..." },
+              ...activeStyles.map(s => ({ value: s.id, label: `${s.styleNo} - ${s.description}` }))
+            ]}
+          />
         </div>
 
         <Input label="Color" name="color" value={formData.color} onChange={handleChange} required placeholder="e.g. Navy Blue" />
         <div className="flex flex-col space-y-1.5">
           <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#475569]">Status</label>
-          <select
+          <PremiumSelect
             name="status"
             value={formData.status}
-            onChange={handleChange}
-            className="h-10 bg-white border border-[#E6DDCE] rounded-sm px-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259]"
-          >
-            <option value="PLANNED">Planned</option>
-            <option value="IN_PRODUCTION">In Production</option>
-            <option value="ON_HOLD">On Hold</option>
-          </select>
+            onChange={(val) => setFormData(prev => ({ ...prev, status: val as any }))}
+            options={[
+              { value: "PLANNED", label: "Planned" },
+              { value: "IN_PRODUCTION", label: "In Production" },
+              { value: "ON_HOLD", label: "On Hold" }
+            ]}
+          />
         </div>
 
         <Input label="Order Date" name="orderDate" type="date" value={formData.orderDate} onChange={handleChange} required />

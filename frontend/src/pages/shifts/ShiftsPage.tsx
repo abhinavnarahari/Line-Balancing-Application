@@ -5,7 +5,8 @@ import { shiftsApi } from "../../features/shifts/api";
 import { ShiftList } from "../../features/shifts/ShiftList";
 import { ShiftForm } from "../../features/shifts/ShiftForm";
 import { Button } from "../../components/ui/Button";
-import {  PageHeader , RecentActivityLog } from "../../components/ui/PremiumUI";
+import { PageHeader } from "../../components/ui/PremiumUI";
+import { AuditedRecentActivityLog } from "../../components/common/AuditedRecentActivityLog";
 import { Modal } from "../../components/ui/Modal";
 
 export function ShiftsPage() {
@@ -42,6 +43,11 @@ export function ShiftsPage() {
     <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
         showImportExport={true}
+        exportData={shifts}
+        onImport={(data) => {
+          // TODO: handle bulk import later via API
+          console.log("Imported shifts", data);
+        }}
         eyebrow="Masters"
         title="Shift Master"
         description="Configure production shifts including overnight shifts. Timings are not hard-coded."
@@ -66,10 +72,7 @@ export function ShiftsPage() {
 
       <ShiftList shifts={shifts} onEdit={handleEdit} onToggleActive={handleToggleActive} loading={loading} />
     
-      <RecentActivityLog />
+      <AuditedRecentActivityLog entityName="Shift" />
     </div>
   );
 }
-
-
-

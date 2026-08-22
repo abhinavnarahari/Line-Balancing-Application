@@ -19,6 +19,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class AttendanceService {
 
     private final AttendanceRepository attendanceRepository;
@@ -34,6 +35,11 @@ public class AttendanceService {
 
     public List<AttendanceResponse> getByOperator(Long operatorId) {
         return attendanceRepository.findByOperatorIdOrderByAttendanceDateDesc(operatorId)
+                .stream().map(this::toResponse).toList();
+    }
+
+    public List<AttendanceResponse> getAllHistory() {
+        return attendanceRepository.findTop500ByOrderByAttendanceDateDesc()
                 .stream().map(this::toResponse).toList();
     }
 
@@ -62,6 +68,63 @@ public class AttendanceService {
         record.setRemarks(request.getRemarks());
 
         return toResponse(attendanceRepository.save(record));
+    }
+
+    @Transactional
+    public List<AttendanceResponse> syncBiometric(List<com.qtech.linebalancing.attendance.dto.BiometricSyncRequest> requests) {
+        List<AttendanceResponse> responses = new java.util.ArrayList<>();
+        com.qtech.linebalancing.shiftassignment.repository.ShiftAssignmentRepository shiftAssignmentRepo = 
+            com.qtech.linebalancing.common.BeanUtil.getBean(com.qtech.linebalancing.shiftassignment.repository.ShiftAssignmentRepository.class);
+        com.qtech.linebalancing.operator.repository.OperatorRepository opRepo = 
+            com.qtech.linebalancing.common.BeanUtil.getBean(com.qtech.linebalancing.operator.repository.OperatorRepository.class);
+
+        for (com.qtech.linebalancing.attendance.dto.BiometricSyncRequest req : requests) {
+            Operator operator = opRepo.findByEmployeeIdIgnoreCase(req.getEmployeeId()).orElse(null);
+            
+            if (operator == null) continue;
+
+            com.qtech.linebalancing.shiftassignment.entity.ShiftAssignment assignment = 
+                shiftAssignmentRepo.findCurrentAssignment(operator.getId(), req.getAttendanceDate()).orElse(null);
+            
+            Shift shift = null;
+            if (assignment != null) {
+                shift = assignment.getShift();
+            } else {
+                // Fallback to default shift (ID 1) if no assignment exists
+                shift = shiftRepository.findById(1L).orElse(null);
+                if (shift == null) continue; // If even default shift doesn't exist, skip
+            }
+            AttendanceRecord.Status status = AttendanceRecord.Status.PRESENT;
+            
+            if (req.getCheckInTime() != null && shift.getStartTime() != null) {
+                if (req.getCheckInTime().isAfter(shift.getStartTime().plusMinutes(15))) {
+                    status = AttendanceRecord.Status.LATE;
+                }
+            } else if (req.getCheckInTime() == null) {
+                status = AttendanceRecord.Status.ABSENT;
+            }
+            
+            AttendanceRecord record = attendanceRepository
+                    .findByAttendanceDateAndOperatorIdAndShiftId(
+                            req.getAttendanceDate(), operator.getId(), shift.getId())
+                    .orElse(AttendanceRecord.builder()
+                            .attendanceDate(req.getAttendanceDate())
+                            .operator(operator)
+                            .shift(shift)
+                            .build());
+
+            // Do not override manual remarks unless empty
+            if (record.getRemarks() == null) {
+                record.setRemarks("Synced from Biometric");
+            }
+            
+            record.setStatus(status);
+            if (req.getCheckInTime() != null) record.setCheckInTime(req.getCheckInTime());
+            if (req.getCheckOutTime() != null) record.setCheckOutTime(req.getCheckOutTime());
+
+            responses.add(toResponse(attendanceRepository.save(record)));
+        }
+        return responses;
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

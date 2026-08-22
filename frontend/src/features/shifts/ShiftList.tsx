@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
-import { Edit2, ToggleLeft, ToggleRight, Clock, Moon } from "lucide-react";
+import { Edit2, Clock, Moon } from "lucide-react";
+import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { Button } from "../../components/ui/Button";
 import { DataCard, DataCardHeader, SkeletonTable, EmptyState, StatusBadge } from "../../components/ui/PremiumUI";
@@ -97,19 +98,14 @@ export function ShiftList({ shifts, onToggleActive, onEdit, loading }: ShiftList
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-3 border-t border-[#F0EAE0] opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-3 pt-3 border-t border-[#F0EAE0] opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button variant="ghost" size="xs" onClick={() => onEdit(shift)} className="flex-1 justify-center">
                     <Edit2 className="h-3 w-3 mr-1" /> Edit
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => onToggleActive(shift.id)}
-                    className={`flex-1 justify-center ${shift.active ? "text-red-500 hover:bg-red-50" : "text-emerald-600 hover:bg-emerald-50"}`}
-                  >
-                    {shift.active ? <ToggleRight className="h-3 w-3 mr-1 text-emerald-500" /> : <ToggleLeft className="h-3 w-3 mr-1" />}
-                    {shift.active ? "Deactivate" : "Activate"}
-                  </Button>
+                  <ToggleSwitch
+                    checked={shift.active}
+                    onChange={() => onToggleActive(shift.id)}
+                  />
                 </div>
               </div>
             </motion.div>
@@ -170,9 +166,10 @@ export function ShiftList({ shifts, onToggleActive, onEdit, loading }: ShiftList
                     <Button variant="ghost" size="xs" onClick={() => onEdit(shift)}>
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="xs" onClick={() => onToggleActive(shift.id)}>
-                      {shift.active ? <ToggleRight className="h-3.5 w-3.5 text-emerald-500" /> : <ToggleLeft className="h-3.5 w-3.5" />}
-                    </Button>
+                    <ToggleSwitch
+                      checked={shift.active}
+                      onChange={() => onToggleActive(shift.id)}
+                    />
                   </div>
                 </TableCell>
               </motion.tr>

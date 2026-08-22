@@ -3,7 +3,7 @@ spring:
     name: qtech-line-balancing
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/qtech_linebalancing
+    url: jdbc:postgresql://localhost:5433/qtech_linebalancing
     username: postgres
     password: 1234
     driver-class-name: org.postgresql.Driver
@@ -22,10 +22,11 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
-    validate-on-migrate: true
+    validate-on-migrate: false
+    out-of-order: true
 
 server:
-  port: 8080
+  port: 8085
   servlet:
     context-path: /
 

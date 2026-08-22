@@ -1,0 +1,17 @@
+# Maven build output
+target/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Logs
+*.log
+hs_err_pid*.log
+replay_pid*.log
+
+# Scratch files
+FixFlyway.java
+FixFlyway.class

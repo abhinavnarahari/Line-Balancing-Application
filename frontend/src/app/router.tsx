@@ -24,6 +24,8 @@ import { BulletinsPage } from "../pages/production/BulletinsPage";
 
 
 
+import { SkillMatrixLogsPage } from "../pages/workforce/SkillMatrixLogsPage";
+
 export const router = createBrowserRouter([
   {
     path: "/",
@@ -51,6 +53,7 @@ export const router = createBrowserRouter([
       { path: "shift-assignment", element: <ShiftAssignmentPage /> },
       { path: "attendance",       element: <AttendancePage /> },
       { path: "skill-matrix",     element: <SkillMatrixPage /> },
+      { path: "skill-matrix/logs", element: <SkillMatrixLogsPage /> },
 
       // Production
       { path: "orders",             element: <OrdersPage /> },

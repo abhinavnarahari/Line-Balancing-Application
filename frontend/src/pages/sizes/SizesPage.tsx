@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Plus, Edit2, ToggleLeft, ToggleRight, Layers } from "lucide-react";
+import { Plus, Edit2, Layers } from "lucide-react";
+import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { motion } from "framer-motion";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import {  PageHeader, DataCard, DataCardHeader, EmptyState, SkeletonTable, StatusBadge , RecentActivityLog } from "../../components/ui/PremiumUI";
+import { PageHeader, DataCard, DataCardHeader, EmptyState, SkeletonTable, StatusBadge, RecentActivityLog } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { sizesApi, type Size } from "../../features/sizes/api";
@@ -60,7 +61,6 @@ export function SizesPage() {
   return (
     <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
-        showImportExport={true}
         eyebrow="Masters"
         title="Size Master"
         description="Configure all garment size codes. Sizes must not be hard-coded — they come from here."
@@ -151,13 +151,14 @@ export function SizesPage() {
                     <StatusBadge status={s.active ? "active" : "inactive"} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button variant="ghost" size="xs" onClick={() => openEdit(s)} title="Edit">
                         <Edit2 className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="xs" onClick={() => handleToggle(s.id)} title={s.active ? "Deactivate" : "Activate"}>
-                        {s.active ? <ToggleRight className="h-3.5 w-3.5 text-emerald-500" /> : <ToggleLeft className="h-3.5 w-3.5" />}
-                      </Button>
+                      <ToggleSwitch
+                        checked={s.active}
+                        onChange={() => handleToggle(s.id)}
+                      />
                     </div>
                   </TableCell>
                 </motion.tr>
@@ -170,12 +171,8 @@ export function SizesPage() {
           <span className="text-[11px] text-[#8C7E6E]">{sizes.filter(s => s.active).length} active</span>
         </div>
       </DataCard>
-    
+
       <RecentActivityLog />
     </div>
   );
 }
-
-
-
-

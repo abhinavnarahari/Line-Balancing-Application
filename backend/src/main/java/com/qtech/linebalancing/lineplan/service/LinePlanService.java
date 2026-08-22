@@ -9,7 +9,6 @@ import com.qtech.linebalancing.lineplan.repository.LinePlanRepository;
 import com.qtech.linebalancing.operation.entity.Operation;
 import com.qtech.linebalancing.operation.repository.OperationRepository;
 import com.qtech.linebalancing.operationbulletin.entity.BulletinLine;
-import com.qtech.linebalancing.operationbulletin.repository.OperationBulletinRepository;
 import com.qtech.linebalancing.operator.entity.Operator;
 import com.qtech.linebalancing.operator.repository.OperatorRepository;
 import com.qtech.linebalancing.order.entity.Order;
@@ -26,6 +25,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class LinePlanService {
 
     private final LinePlanRepository linePlanRepository;
@@ -33,7 +33,7 @@ public class LinePlanService {
     private final ShiftRepository shiftRepository;
     private final OperationRepository operationRepository;
     private final OperatorRepository operatorRepository;
-    private final OperationBulletinRepository bulletinRepository; // Needed if we want to directly find bulletin lines, but for now we can rely on EM or a separate repo.
+    // Assuming we have EntityManager or we just use references.
     // Assuming we have EntityManager or we just use references. Let's use JpaRepository reference resolving via getReferenceById for simplicity if we don't validate strictly, or just save IDs.
     // For strict validation, we would need OperationBulletinLineRepository.
     

@@ -19,4 +19,6 @@ public interface AttendanceRepository extends JpaRepository<AttendanceRecord, Lo
             LocalDate date, Long operatorId, Long shiftId);
 
     List<AttendanceRecord> findByOperatorIdOrderByAttendanceDateDesc(Long operatorId);
+
+    List<AttendanceRecord> findTop500ByOrderByAttendanceDateDesc();
 }

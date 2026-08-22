@@ -22,6 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class ShiftAssignmentService {
 
     private final ShiftAssignmentRepository assignmentRepository;

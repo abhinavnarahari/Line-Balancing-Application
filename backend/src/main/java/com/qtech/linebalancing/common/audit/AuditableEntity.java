@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
  * Annotate the main Application class with @EnableJpaAuditing.
  */
 @MappedSuperclass
-@EntityListeners(AuditingEntityListener.class)
+@EntityListeners({AuditingEntityListener.class, EntityAuditListener.class})
 @Getter
 @Setter
 public abstract class AuditableEntity {

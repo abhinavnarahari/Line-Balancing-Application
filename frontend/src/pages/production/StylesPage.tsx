@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, Edit2, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Search, Edit2 } from "lucide-react";
+import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { motion } from "framer-motion";
 import { Button } from "../../components/ui/Button";
-import {  PageHeader, DataCard, DataCardHeader, EmptyState, StatusBadge, SkeletonTable , RecentActivityLog } from "../../components/ui/PremiumUI";
+import { PageHeader, DataCard, DataCardHeader, EmptyState, StatusBadge, SkeletonTable, RecentActivityLog } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 
@@ -46,8 +47,8 @@ export function StylesPage() {
     loadStyles();
   };
 
-  const filteredStyles = styles.filter(s => 
-    s.styleNo.toLowerCase().includes(search.toLowerCase()) || 
+  const filteredStyles = styles.filter(s =>
+    s.styleNo.toLowerCase().includes(search.toLowerCase()) ||
     s.buyer.toLowerCase().includes(search.toLowerCase()) ||
     s.description.toLowerCase().includes(search.toLowerCase())
   );
@@ -55,7 +56,6 @@ export function StylesPage() {
   return (
     <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
-        showImportExport={true}
         eyebrow="Production"
         title="Style Master"
         description="Maintain the catalog of styles and garments manufactured by the factory."
@@ -79,9 +79,9 @@ export function StylesPage() {
       </Modal>
 
       <DataCard noPad>
-        <DataCardHeader 
-          title="Style Catalog" 
-          count={filteredStyles.length} 
+        <DataCardHeader
+          title="Style Catalog"
+          count={filteredStyles.length}
           action={
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8C7E6E]" />
@@ -95,7 +95,7 @@ export function StylesPage() {
             </div>
           }
         />
-        
+
         {loading ? (
           <SkeletonTable rows={5} cols={6} />
         ) : filteredStyles.length === 0 ? (
@@ -138,13 +138,14 @@ export function StylesPage() {
                     <StatusBadge status={style.active ? "active" : "inactive"} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button variant="ghost" size="xs" onClick={() => { setEditingStyle(style); setIsFormOpen(true); }} title="Edit">
                         <Edit2 className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="xs" onClick={() => handleToggle(style.id)} title={style.active ? "Deactivate" : "Activate"}>
-                        {style.active ? <ToggleRight className="h-3.5 w-3.5 text-emerald-500" /> : <ToggleLeft className="h-3.5 w-3.5" />}
-                      </Button>
+                      <ToggleSwitch
+                        checked={style.active}
+                        onChange={() => handleToggle(style.id)}
+                      />
                     </div>
                   </TableCell>
                 </motion.tr>
@@ -153,12 +154,8 @@ export function StylesPage() {
           </Table>
         )}
       </DataCard>
-    
+
       <RecentActivityLog />
     </div>
   );
 }
-
-
-
-
