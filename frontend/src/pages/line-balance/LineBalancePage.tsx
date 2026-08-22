@@ -7,7 +7,7 @@ import { shiftsApi } from "../../features/shifts/api";
 import { ordersApi, type Order } from "../../features/orders/api";
 import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/api";
 import { skillApi, type SkillAssessment } from "../../features/skill-matrix/api";
-import { linePlanApi } from "../../features/line-balance/mockApi";
+import { linePlanApi, type LinePlan } from "../../features/line-balance/api";
 import type { Shift } from "../../features/shifts/types";
 import { PageHeader, DataCard, DataCardHeader } from "../../components/ui/PremiumUI";
 import { Input } from "../../components/ui/Input";
@@ -15,9 +15,9 @@ import { Button } from "../../components/ui/Button";
 
 // ─── Types ──────────────────────────────────────────────────
 interface Assignment {
-  bulletinLineId: string;
-  operationId: string;
-  operatorId: string | null;
+  bulletinLineId: string | number;
+  operationId: string | number;
+  operatorId: string | number | null;
 }
 
 // ─── Utility ────────────────────────────────────────────────
@@ -302,7 +302,7 @@ export function LineBalancePage() {
     ? (totalSMV / (taktTime * assignedCount)) * 100
     : 0;
 
-  const handleAssign = (bulletinLineId: string, operatorId: string) => {
+  const handleAssign = (bulletinLineId: string | number, operatorId: string) => {
     setAssignments(prev =>
       prev.map(a => a.bulletinLineId === bulletinLineId ? { ...a, operatorId: operatorId || null } : a)
     );

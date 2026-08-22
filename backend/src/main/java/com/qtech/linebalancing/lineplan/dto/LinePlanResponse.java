@@ -1,0 +1,23 @@
+package com.qtech.linebalancing.lineplan.dto;
+
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+public class LinePlanResponse {
+    private Long id;
+    private Long orderId;
+    private Long shiftId;
+    private Integer targetOutput;
+    private Integer allowance;
+    private String status;
+    private List<LinePlanAssignmentResponse> assignments;
+
+    @Data
+    public static class LinePlanAssignmentResponse {
+        private Long bulletinLineId;
+        private Long operationId;
+        private Long operatorId;
+    }
+}

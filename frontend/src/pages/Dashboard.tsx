@@ -2,6 +2,11 @@ import type { Variants } from "framer-motion";
 import { motion } from "framer-motion";
 import { ArrowRight, Clock, Package, Scissors, Users } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { ordersApi } from "../features/orders/api";
+import { shiftsApi as shiftApi } from "../features/shifts/api";
+import { operationsApi } from "../features/operations/api";
+import { operatorsApi } from "../features/operators/api";
 import FabricWeave from "../components/ui/FabricWeave";
 
 const container: Variants = {
@@ -38,6 +43,35 @@ export function Dashboard() {
       description: "View and edit standard operations",
     },
   ];
+
+  const [stats, setStats] = useState({
+    orders: 0,
+    shifts: 0,
+    operations: 0,
+    operators: 0
+  });
+
+  useEffect(() => {
+    const fetchKPIs = async () => {
+      try {
+        const [orders, shifts, operations, operators] = await Promise.all([
+          ordersApi.getOrders(),
+          shiftApi.getShifts(),
+          operationsApi.getOperations(),
+          operatorsApi.getOperators()
+        ]);
+        setStats({
+          orders: orders.length,
+          shifts: shifts.filter((s: any) => s.active).length,
+          operations: operations.length,
+          operators: operators.filter((o: any) => o.active).length
+        });
+      } catch (err) {
+        console.error("Failed to fetch KPIs", err);
+      }
+    };
+    fetchKPIs();
+  }, []);
 
   return (
     <div className="relative min-h-screen bg-[#F6F1E8] p-4 lg:p-5">
@@ -114,10 +148,10 @@ export function Dashboard() {
           className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
         >
           {([] as any[]).concat([
-            { label: "ACTIVE ORDERS", value: "12", color: "bg-[#B48259]", icon: Package },
-            { label: "ACTIVE SHIFTS", value: "04", color: "bg-[#C59B76]", icon: Clock },
-            { label: "OPERATIONS", value: "18", color: "bg-[#C0462B]", icon: Scissors },
-            { label: "OPERATORS", value: "50", color: "bg-[#4A7C9D]", icon: Users },
+            { label: "ACTIVE ORDERS", value: String(stats.orders).padStart(2, '0'), color: "bg-[#B48259]", icon: Package },
+            { label: "ACTIVE SHIFTS", value: String(stats.shifts).padStart(2, '0'), color: "bg-[#C59B76]", icon: Clock },
+            { label: "OPERATIONS", value: String(stats.operations).padStart(2, '0'), color: "bg-[#C0462B]", icon: Scissors },
+            { label: "OPERATORS", value: String(stats.operators).padStart(2, '0'), color: "bg-[#4A7C9D]", icon: Users },
           ]).map((stat: any) => (
             <motion.div
               key={stat.label}

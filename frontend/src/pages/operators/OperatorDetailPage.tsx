@@ -4,6 +4,7 @@ import { ChevronRight, Paperclip, FileText, Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { operationsApi, type Operation } from "../../features/operations/api";
 import { operatorsApi, type Operator } from "../../features/operators/api";
+import { skillApi } from "../../features/skill-matrix/api";
 
 type Tab = "Overview" | "Connections" | "Skill Matrix";
 
@@ -24,11 +25,12 @@ export function OperatorDetailPage() {
         const allOps = await operationsApi.getOperations();
         setOperations(allOps);
 
-        const mockSkills: Record<string, number> = {};
-        allOps.forEach(op => {
-          mockSkills[op.id] = Math.floor(Math.random() * 5) + 1; // 1-5
+        const currentSkills = await skillApi.getCurrentMatrix(id);
+        const skillMap: Record<string, number> = {};
+        currentSkills.forEach(skill => {
+          skillMap[skill.operationId.toString()] = skill.rating;
         });
-        setSkills(mockSkills);
+        setSkills(skillMap);
       } catch (err) {
         console.error(err);
       }
@@ -38,6 +40,32 @@ export function OperatorDetailPage() {
 
   const handleSkillChange = (opId: string, value: number) => {
     setSkills(prev => ({ ...prev, [opId]: value }));
+  };
+
+  const [saving, setSaving] = useState(false);
+  const handleSaveRatings = async () => {
+    if (!operator) return;
+    setSaving(true);
+    try {
+      const promises = Object.entries(skills).map(([opId, rating]) => {
+        // Simple mapping: Rating 1 -> 10s, Rating 2 -> 20s, etc.
+        const cycleTimeSeconds = rating * 10;
+        return skillApi.addAssessment({
+          operatorId: operator.id,
+          operationId: opId,
+          rating: rating as 1|2|3|4|5,
+          cycleTimeSeconds,
+          effectiveDate: new Date().toISOString().split('T')[0]
+        });
+      });
+      await Promise.all(promises);
+      alert("Ratings saved successfully!");
+    } catch (err) {
+      console.error("Failed to save ratings:", err);
+      alert("Failed to save ratings. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!operator) return <div className="p-8 text-center text-[#8C7E6E]">Loading employee...</div>;
@@ -240,8 +268,12 @@ export function OperatorDetailPage() {
               <div className="space-y-6 animate-in fade-in duration-300">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-[#221912] text-lg">Master Operation Skills</h3>
-                  <button className="px-4 py-2 bg-[#221912] text-white text-[12px] font-bold rounded-lg hover:bg-[#3A2E24] transition-colors">
-                    Save Ratings
+                  <button 
+                    onClick={handleSaveRatings}
+                    disabled={saving}
+                    className="px-4 py-2 bg-[#221912] text-white text-[12px] font-bold rounded-lg hover:bg-[#3A2E24] transition-colors disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Save Ratings"}
                   </button>
                 </div>
                 

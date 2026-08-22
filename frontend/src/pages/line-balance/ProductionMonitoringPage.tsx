@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { AlertTriangle, CheckCircle } from "lucide-react";
-import { ordersApi, type Order } from "../../features/orders/mockApi";
-import { shiftApi } from "../../features/shifts/mockApi";
-import { linePlanApi, type LinePlan } from "../../features/line-balance/mockApi";
+import { ordersApi, type Order } from "../../features/orders/api";
+import { shiftsApi as shiftApi } from "../../features/shifts/api";
+import { linePlanApi, type LinePlan } from "../../features/line-balance/api";
 import type { Shift } from "../../features/shifts/types";
 import { PageHeader, DataCard, DataCardHeader, EmptyState } from "../../components/ui/PremiumUI";
 
@@ -31,7 +31,7 @@ export function ProductionMonitoringPage() {
       setShifts(shfts.filter(s => s.active));
       
       if (ords.length > 0) {
-        setSelectedOrderId(ords[0].id);
+        setSelectedOrderId(String(ords[0].id));
       }
       setLoading(false);
     };
