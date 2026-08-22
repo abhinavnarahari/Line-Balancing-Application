@@ -12,7 +12,7 @@ interface AssignmentListProps {
   assignments: ShiftAssignment[];
   operators: Operator[];
   shifts: Shift[];
-  onEndAssignment: (id: string, date: string) => void;
+  onEndAssignment: (id: string | number, date: string) => void;
   loading?: boolean;
 }
 
@@ -57,24 +57,24 @@ export function AssignmentList({ assignments, operators, shifts, onEndAssignment
         count={filtered.length}
         action={
           <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-[11px] font-semibold text-[#8A8270] cursor-pointer hover:text-[#26231D] transition-colors">
+            <label className="flex items-center gap-2 text-[11px] font-semibold text-[#8C7E6E] cursor-pointer hover:text-[#221912] transition-colors">
               <input 
                 type="checkbox" 
                 checked={showHistory} 
                 onChange={(e) => setShowHistory(e.target.checked)}
-                className="rounded-sm border-[#D0C8B4] text-[#B8763F] focus:ring-[#B8763F]"
+                className="rounded-sm border-[#E6DDCE] text-[#B48259] focus:ring-[#B48259]"
               />
               <History className="h-3.5 w-3.5" />
               Show History
             </label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8A8270]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8C7E6E]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name or ID…"
-                className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#D0C8B4] text-[#26231D] placeholder-[#B8A898] w-52 focus:outline-none focus:border-[#B8763F] focus:ring-1 focus:ring-[#B8763F]/20 transition-all rounded-sm"
+                className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#E6DDCE] text-[#221912] placeholder-[#B8A898] w-52 focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20 transition-all rounded-sm"
               />
             </div>
           </div>
@@ -102,27 +102,27 @@ export function AssignmentList({ assignments, operators, shifts, onEndAssignment
             {filtered.map((a, index) => (
               <motion.tr
                 key={a.id}
-                className={`group bg-white hover:bg-[#FBF8F3] border-b border-[#EDE8DF] last:border-0 transition-colors duration-100 ${a.status === 'Completed' ? 'opacity-60' : ''}`}
+                className={`group bg-white hover:bg-[#FEFCF9] border-b border-[#F0EAE0] last:border-0 transition-colors duration-100 ${a.status === 'Completed' ? 'opacity-60' : ''}`}
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.02, duration: 0.2 }}
               >
                 <TableCell>
-                  <span className="font-mono text-[11px] font-semibold text-[#B8763F] tracking-wide">
+                  <span className="font-mono text-[11px] font-semibold text-[#B48259] tracking-wide">
                     {a.employeeId}
                   </span>
                 </TableCell>
-                <TableCell className="font-medium text-sm text-[#1E1B16]">{a.operatorName}</TableCell>
+                <TableCell className="font-medium text-sm text-[#221912]">{a.operatorName}</TableCell>
                 <TableCell>
-                  <span className="inline-flex items-center gap-1.5 font-semibold text-xs text-[#26231D]">
-                    <span className="w-5 h-5 rounded-sm bg-gradient-to-br from-[#B8763F] to-[#8B4A3C] text-white flex items-center justify-center text-[10px]">
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-xs text-[#221912]">
+                    <span className="w-5 h-5 rounded-sm bg-gradient-to-br from-[#B48259] to-[#8B4A3C] text-white flex items-center justify-center text-[10px]">
                       {a.shiftCode}
                     </span>
                     {a.shiftName}
                   </span>
                 </TableCell>
-                <TableCell className="font-mono text-xs text-[#6E6656]">{a.effectiveFrom}</TableCell>
-                <TableCell className="font-mono text-xs text-[#6E6656]">
+                <TableCell className="font-mono text-xs text-[#475569]">{a.effectiveFrom}</TableCell>
+                <TableCell className="font-mono text-xs text-[#475569]">
                   {a.effectiveTo || <span className="italic text-[#B8A898]">Indefinite</span>}
                 </TableCell>
                 <TableCell>
@@ -132,23 +132,23 @@ export function AssignmentList({ assignments, operators, shifts, onEndAssignment
                   />
                 </TableCell>
                 <TableCell className="text-right">
-                  {a.status === "Active" && endingId !== a.id && (
+                  {a.status === "Active" && endingId !== a.id.toString() && (
                     <Button 
                       variant="outline" 
                       size="xs" 
-                      onClick={() => setEndingId(a.id)}
+                      onClick={() => setEndingId(a.id.toString())}
                       className="opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       End Assignment
                     </Button>
                   )}
-                  {endingId === a.id && (
+                  {endingId === a.id.toString() && (
                     <div className="flex items-center justify-end gap-2">
                       <input 
                         type="date" 
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="h-7 text-[10px] border border-[#D0C8B4] px-2 rounded-sm"
+                        className="h-7 text-[10px] border border-[#E6DDCE] px-2 rounded-sm"
                       />
                       <Button variant="ghost" size="xs" onClick={() => setEndingId(null)} className="h-7 px-2 text-red-500"><X className="h-3.5 w-3.5"/></Button>
                       <Button variant="primary" size="xs" onClick={() => { onEndAssignment(a.id, endDate); setEndingId(null); }} className="h-7 px-2"><Check className="h-3.5 w-3.5"/></Button>
@@ -163,3 +163,4 @@ export function AssignmentList({ assignments, operators, shifts, onEndAssignment
     </DataCard>
   );
 }
+

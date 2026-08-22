@@ -15,12 +15,12 @@ export function SettingsLayout() {
   const location = useLocation();
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full p-6 lg:p-8">
       {/* Settings Header & Sub-nav */}
       <div>
-        <h1 className="font-serif text-4xl text-[#26231D] tracking-tight leading-none mb-6">Settings</h1>
+        <h1 className="font-serif text-4xl text-[#221912] tracking-tight leading-none mb-6">Settings</h1>
         
-        <div className="border-b border-[#E0D8C0]">
+        <div className="border-b border-[#F0EAE0]">
           <nav className="-mb-px flex space-x-6 overflow-x-auto" aria-label="Tabs">
             {tabs.map((tab) => {
               const active = location.pathname.startsWith(tab.href);
@@ -31,14 +31,14 @@ export function SettingsLayout() {
                   className={cn(
                     "group inline-flex items-center py-3 px-1 border-b-2 font-medium text-sm transition-colors relative whitespace-nowrap",
                     active
-                      ? "border-[#B8763F] text-[#B8763F]"
-                      : "border-transparent text-[#6E6656] hover:text-[#26231D] hover:border-[#D0C8B4]"
+                      ? "border-[#B48259] text-[#B48259]"
+                      : "border-transparent text-[#475569] hover:text-[#221912] hover:border-[#E6DDCE]"
                   )}
                 >
                   <tab.icon
                     className={cn(
                       "mr-2 h-4 w-4",
-                      active ? "text-[#B8763F]" : "text-[#8A8270] group-hover:text-[#6E6656]"
+                      active ? "text-[#B48259]" : "text-[#8C7E6E] group-hover:text-[#475569]"
                     )}
                     aria-hidden="true"
                   />
@@ -62,3 +62,6 @@ export function SettingsLayout() {
     </div>
   );
 }
+
+
+

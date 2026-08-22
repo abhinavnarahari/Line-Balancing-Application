@@ -5,7 +5,7 @@ import { shiftsApi } from "../../features/shifts/api";
 import { ShiftList } from "../../features/shifts/ShiftList";
 import { ShiftForm } from "../../features/shifts/ShiftForm";
 import { Button } from "../../components/ui/Button";
-import { PageHeader } from "../../components/ui/PremiumUI";
+import {  PageHeader , RecentActivityLog } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 
 export function ShiftsPage() {
@@ -39,8 +39,9 @@ export function ShiftsPage() {
   };
 
   return (
-    <div className="space-y-7 max-w-7xl mx-auto">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
+        showImportExport={true}
         eyebrow="Masters"
         title="Shift Master"
         description="Configure production shifts including overnight shifts. Timings are not hard-coded."
@@ -64,6 +65,11 @@ export function ShiftsPage() {
       </Modal>
 
       <ShiftList shifts={shifts} onEdit={handleEdit} onToggleActive={handleToggleActive} loading={loading} />
+    
+      <RecentActivityLog />
     </div>
   );
 }
+
+
+

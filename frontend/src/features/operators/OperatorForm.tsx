@@ -67,13 +67,13 @@ export function OperatorForm({ initialData, onSubmit, onCancel }: OperatorFormPr
         />
 
         <div className="flex flex-col space-y-2">
-          <label htmlFor="gender" className="text-sm font-medium text-[#6E6656]">Gender</label>
+          <label htmlFor="gender" className="text-sm font-medium text-[#475569]">Gender</label>
           <select
             id="gender"
             name="gender"
             value={formData.gender}
             onChange={handleChange}
-            className="flex h-11 w-full bg-white border border-[#E0D8C0] px-4 py-2 text-sm text-[#26231D] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#B8763F] focus:border-[#B8763F]"
+            className="flex h-11 w-full bg-white border border-[#F0EAE0] px-4 py-2 text-sm text-[#221912] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#B48259] focus:border-[#B48259]"
           >
             <option value="Female">Female</option>
             <option value="Male">Male</option>
@@ -82,13 +82,13 @@ export function OperatorForm({ initialData, onSubmit, onCancel }: OperatorFormPr
         </div>
 
         <div className="flex flex-col space-y-2">
-          <label htmlFor="department" className="text-sm font-medium text-[#6E6656]">Department</label>
+          <label htmlFor="department" className="text-sm font-medium text-[#475569]">Department</label>
           <select
             id="department"
             name="department"
             value={formData.department}
             onChange={handleChange}
-            className="flex h-11 w-full bg-white border border-[#E0D8C0] px-4 py-2 text-sm text-[#26231D] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#B8763F] focus:border-[#B8763F]"
+            className="flex h-11 w-full bg-white border border-[#F0EAE0] px-4 py-2 text-sm text-[#221912] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#B48259] focus:border-[#B48259]"
           >
             <option value="Sewing">Sewing</option>
             <option value="Finishing">Finishing</option>
@@ -108,7 +108,7 @@ export function OperatorForm({ initialData, onSubmit, onCancel }: OperatorFormPr
         />
 
         <div className="flex flex-col space-y-2">
-          <label htmlFor="active" className="text-sm font-medium text-[#6E6656]">Status</label>
+          <label htmlFor="active" className="text-sm font-medium text-[#475569]">Status</label>
           <select
             id="active"
             name="active"
@@ -116,7 +116,7 @@ export function OperatorForm({ initialData, onSubmit, onCancel }: OperatorFormPr
             onChange={(e) =>
               setFormData((prev) => ({ ...prev, active: e.target.value === "true" }))
             }
-            className="flex h-11 w-full bg-white border border-[#E0D8C0] px-4 py-2 text-sm text-[#26231D] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#B8763F] focus:border-[#B8763F]"
+            className="flex h-11 w-full bg-white border border-[#F0EAE0] px-4 py-2 text-sm text-[#221912] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#B48259] focus:border-[#B48259]"
           >
             <option value="true">Active</option>
             <option value="false">Inactive</option>
@@ -124,7 +124,7 @@ export function OperatorForm({ initialData, onSubmit, onCancel }: OperatorFormPr
         </div>
       </div>
 
-      <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#E0D8C0]">
+      <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#F0EAE0]">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button type="submit" variant="primary">
           {initialData ? "Update Operator" : "Register Operator"}
@@ -133,3 +133,4 @@ export function OperatorForm({ initialData, onSubmit, onCancel }: OperatorFormPr
     </form>
   );
 }
+

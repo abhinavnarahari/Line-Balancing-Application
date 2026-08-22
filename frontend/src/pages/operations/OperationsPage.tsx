@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
-import { PageHeader } from "../../components/ui/PremiumUI";
+import {  PageHeader , RecentActivityLog } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 import { OperationList } from "../../features/operations/OperationList";
@@ -36,8 +36,9 @@ export function OperationsPage() {
   const handleClose = () => { setIsFormOpen(false); setEditingOperation(null); };
 
   return (
-    <div className="space-y-7 max-w-7xl mx-auto">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
+        showImportExport={true}
         eyebrow="Masters"
         title="Operation Master"
         description="Define all standard sewing operations used in production bulletins."
@@ -70,6 +71,11 @@ export function OperationsPage() {
         onToggleActive={handleToggleActive}
         loading={loading}
       />
+    
+      <RecentActivityLog />
     </div>
   );
 }
+
+
+

@@ -2,7 +2,7 @@ import type { Variants } from "framer-motion";
 import { motion } from "framer-motion";
 import { ArrowRight, Clock, Package, Scissors, Users } from "lucide-react";
 import { Link } from "react-router-dom";
-import { LineBalancePulse } from "./LineBalancePulse";
+import FabricWeave from "../components/ui/FabricWeave";
 
 const container: Variants = {
   hidden: { opacity: 0 },
@@ -40,132 +40,108 @@ export function Dashboard() {
   ];
 
   return (
-    <div className="relative overflow-hidden bg-[#F6F2E9]">
-      {/* Quiet backdrop — a near-invisible paper grain plus one soft corner wash, well clear of the content */}
-      <svg
-        className="pointer-events-none absolute inset-0 w-full h-full"
-        viewBox="0 0 1400 900"
-        preserveAspectRatio="xMidYMid slice"
-      >
-        <defs>
-          <filter id="paperGrain">
-            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="noise" />
-            <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0.15  0 0 0 0 0.14  0 0 0 0 0.11  0 0 0 0.02 0" />
-          </filter>
+    <div className="relative min-h-screen bg-[#F6F1E8] p-4 lg:p-5">
 
-          <radialGradient id="cornerWash" cx="100%" cy="0%" r="75%">
-            <stop offset="0%" stopColor="#D89A5C" stopOpacity="0.16" />
-            <stop offset="55%" stopColor="#D89A5C" stopOpacity="0.05" />
-            <stop offset="100%" stopColor="#D89A5C" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-
-        {/* Barely-there paper texture across the whole canvas */}
-        <rect x="0" y="0" width="1400" height="900" filter="url(#paperGrain)" />
-
-        {/* One quiet wash, tucked into the top-right corner, away from the card grid */}
-        <rect x="0" y="0" width="1400" height="900" fill="url(#cornerWash)" />
-
-        {/* Single hairline rule, low contrast, echoing a ruled ledger page */}
-        <line x1="0" y1="0" x2="1400" y2="0" stroke="#26231D" strokeOpacity="0.06" strokeWidth="1" />
-      </svg>
-
-      <div className="relative max-w-5xl mx-auto px-6 py-14">
-        {/* Header */}
+      <div className="relative z-10 w-full space-y-6">
+        {/* ─ Welcome Banner ─ */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-          className="flex items-end justify-between mb-14 flex-wrap gap-6"
+          className="relative overflow-hidden rounded-2xl border border-[#E6DDCE] px-7 py-6 shadow-sm"
+          style={{ backgroundImage: 'radial-gradient(130% 160% at 88% 10%, rgba(156,91,60,0.30), transparent 55%), linear-gradient(155deg, #2A2019 0%, #1C1712 75%)' }}
         >
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="h-px w-8 bg-gradient-to-r from-[#D89A5C] to-[#B8763F]" />
-              <span className="text-[11px] font-semibold tracking-[0.22em] text-[#B8763F] uppercase">
-                Factory Floor
+          <FabricWeave id="banner-weave" color="#F6F1E8" opacity={0.05} size={16} />
+          <div className="relative flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B8935A]">
+                QTexPro · Admin Dashboard
               </span>
+              <h1 className="mt-1 text-[22px] font-bold leading-tight text-[#F6F1E8]">
+                Good evening, Admin.
+              </h1>
+              <p className="mt-1 text-[13px] font-medium text-[#B8A791]">
+                {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </p>
             </div>
-            <h1 className="font-serif text-5xl text-[#26231D] tracking-tight leading-none">
-              Overview
-            </h1>
-            <p className="text-sm text-[#6E6656] mt-3 max-w-sm">
-              Current factory performance and metrics, updated in real time.
-            </p>
+            <div className="flex items-center gap-3">
+              <button
+                className="inline-flex items-center gap-2 rounded-xl bg-[#9C5B3C] px-5 py-2.5 text-[13px] font-bold text-white hover:bg-[#B06C49] transition-colors"
+              >
+                Style Board <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
-
-          {/* Line-balance signature — the shop-floor concept the product is built around, in motion */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
-            className="shrink-0 w-64"
-          >
-            <div className="flex items-center gap-1.5 mb-1.5 justify-end">
-              <span className="text-[10px] font-medium tracking-[0.14em] text-[#8A8270] uppercase">
-                Line Balance
-              </span>
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#B8763F] opacity-60" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#B8763F]" />
-              </span>
-            </div>
-            <LineBalancePulse className="w-64 h-28" />
-          </motion.div>
         </motion.div>
 
-        {/* Bento stats */}
+        <div className="flex items-end justify-between flex-wrap gap-6 mb-2">
+          {/* Slicers / Filters Bar */}
+          <div className="flex w-full flex-wrap items-center gap-3 rounded-2xl border border-[#E6DDCE] bg-white px-5 py-3.5 shadow-sm">
+            <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-[#8C7E6E]">
+              Filters
+            </div>
+            <div className="h-5 w-px bg-[#E6DDCE]" />
+            <div className="flex items-center gap-1 rounded-xl border border-[#E6DDCE] bg-[#F6F1E8] p-1">
+              <button className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-[12px] font-bold text-[#221912] shadow-sm">
+                Last 7 Days
+              </button>
+              <button className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-bold text-[#8C7E6E] hover:text-[#475569] transition-all">
+                Last 30 Days
+              </button>
+            </div>
+            <div className="h-5 w-px bg-[#E6DDCE]" />
+            <button className="flex h-9 items-center gap-2 rounded-xl border border-[#E6DDCE] bg-white px-3.5 text-[12.5px] font-semibold text-[#475569] hover:border-[#C5B9A8] hover:bg-[#FEFCF9] transition-colors">
+              All Styles
+            </button>
+            <button className="flex h-9 items-center gap-2 rounded-xl border border-[#E6DDCE] bg-white px-3.5 text-[12.5px] font-semibold text-[#475569] hover:border-[#C5B9A8] hover:bg-[#FEFCF9] transition-colors">
+              All Plants
+            </button>
+            <button className="flex h-9 items-center gap-2 rounded-xl border border-[#E6DDCE] bg-white px-3.5 text-[12.5px] font-semibold text-[#475569] hover:border-[#C5B9A8] hover:bg-[#FEFCF9] transition-colors">
+              All Lines
+            </button>
+            <button className="flex h-9 items-center gap-2 rounded-xl border border-[#E6DDCE] bg-white px-3.5 text-[12.5px] font-semibold text-[#475569] hover:border-[#C5B9A8] hover:bg-[#FEFCF9] transition-colors">
+              All Operators
+            </button>
+          </div>
+        </div>
+
+
+        {/* KPI Cards */}
         <motion.div
           variants={container}
           initial="hidden"
           animate="show"
-          className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-6"
+          className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
         >
-          {/* Hero stat */}
-          <motion.div
-            variants={item}
-            className="lg:col-span-7 relative bg-white border border-[#E0D8C0] p-8 flex flex-col justify-between overflow-hidden group hover:border-[#B8763F] transition-colors duration-300 shadow-sm"
-          >
-            <div className="flex items-center justify-between relative">
-              <span className="text-[11px] font-medium tracking-[0.14em] text-[#8A8270] uppercase">
-                Active Orders
-              </span>
-              <Package className="w-4 h-4 text-[#B8763F]" strokeWidth={1.5} />
-            </div>
-            <div className="relative">
-              <span
-                className="font-serif text-7xl tracking-tight bg-clip-text text-transparent"
-                style={{ backgroundImage: "linear-gradient(135deg, #B8763F, #8B4A3C)" }}
-              >
-                12
-              </span>
-              <p className="text-xs text-[#8A8270] mt-2">Across 6 active production lines</p>
-            </div>
-          </motion.div>
-
-          {/* Compact stat stack */}
-          <motion.div
-            variants={item}
-            className="lg:col-span-5 bg-white border border-[#E0D8C0] divide-y divide-[#E9E1CC] shadow-sm"
-          >
-            {[
-              { name: "Active Shifts", value: "04", icon: Clock },
-              { name: "Operations", value: "18", icon: Scissors },
-              { name: "Operators", value: "50", icon: Users },
-            ].map((stat) => (
-              <div
-                key={stat.name}
-                className="flex items-center justify-between px-6 py-5 hover:bg-[#FBF8F0] transition-colors duration-200"
-              >
-                <div className="flex items-center gap-3">
-                  <stat.icon className="w-4 h-4 text-[#B8763F]" strokeWidth={1.5} />
-                  <span className="text-sm text-[#6E6656]">{stat.name}</span>
+          {([] as any[]).concat([
+            { label: "ACTIVE ORDERS", value: "12", color: "bg-[#B48259]", icon: Package },
+            { label: "ACTIVE SHIFTS", value: "04", color: "bg-[#C59B76]", icon: Clock },
+            { label: "OPERATIONS", value: "18", color: "bg-[#C0462B]", icon: Scissors },
+            { label: "OPERATORS", value: "50", color: "bg-[#4A7C9D]", icon: Users },
+          ]).map((stat: any) => (
+            <motion.div
+              key={stat.label}
+              variants={item}
+              className={`relative flex flex-col justify-between rounded-2xl p-5 shadow-sm text-white overflow-hidden ${stat.color}`}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20">
+                  <stat.icon className="h-4 w-4" />
                 </div>
-                <span className="font-serif text-2xl text-[#26231D] tracking-tight">
-                  {stat.value}
-                </span>
+                {stat.badge && (
+                  <span className="rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-bold tracking-wider">
+                    {stat.badge}
+                  </span>
+                )}
               </div>
-            ))}
-          </motion.div>
+              <div>
+                <h3 className="font-serif text-3xl tracking-tight">{stat.value}</h3>
+                <p className="mt-1 text-[10px] font-bold tracking-wider uppercase text-white/80">
+                  {stat.label}
+                </p>
+              </div>
+            </motion.div>
+          ))}
         </motion.div>
 
         {/* Quick links */}
@@ -175,7 +151,7 @@ export function Dashboard() {
           transition={{ delay: 0.35, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
           <div className="flex items-center gap-2 mb-4 mt-4">
-            <span className="text-[11px] font-semibold tracking-[0.22em] text-[#8A8270] uppercase">
+            <span className="text-[11px] font-semibold tracking-[0.22em] text-[#8C7E6E] uppercase">
               Quick Links
             </span>
           </div>
@@ -184,26 +160,26 @@ export function Dashboard() {
               <Link
                 key={link.to}
                 to={link.to}
-                className="group relative bg-white border border-[#E0D8C0] p-6 flex items-center justify-between gap-4 hover:border-[#B8763F] transition-colors duration-300 overflow-hidden shadow-sm"
+                className="group relative bg-white border border-[#F0EAE0] p-6 flex items-center justify-between gap-4 hover:border-[#B48259] transition-colors duration-300 overflow-hidden shadow-sm"
               >
                 <div
                   className="pointer-events-none absolute inset-x-0 bottom-0 h-px opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                  style={{ background: "linear-gradient(90deg, transparent, #B8763F, transparent)" }}
+                  style={{ background: "linear-gradient(90deg, transparent, #B48259, transparent)" }}
                 />
                 <div className="flex items-center gap-4 relative">
                   <div
                     className="w-11 h-11 flex items-center justify-center shrink-0"
-                    style={{ background: "linear-gradient(135deg, #B8763F, #8B4A3C)" }}
+                    style={{ background: "linear-gradient(135deg, #B48259, #8B4A3C)" }}
                   >
-                    <link.icon className="w-4 h-4 text-[#FBF8F0]" strokeWidth={1.75} />
+                    <link.icon className="w-4 h-4 text-[#FAFAF8]" strokeWidth={1.75} />
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-[#26231D]">{link.title}</h3>
-                    <p className="text-xs text-[#6E6656] mt-0.5">{link.description}</p>
+                    <h3 className="text-sm font-semibold text-[#221912]">{link.title}</h3>
+                    <p className="text-xs text-[#475569] mt-0.5">{link.description}</p>
                   </div>
                 </div>
                 <ArrowRight
-                  className="w-4 h-4 text-[#8A8270] group-hover:text-[#B8763F] group-hover:translate-x-1 transition-all duration-300 relative"
+                  className="w-4 h-4 text-[#8C7E6E] group-hover:text-[#B48259] group-hover:translate-x-1 transition-all duration-300 relative"
                   strokeWidth={1.75}
                 />
               </Link>

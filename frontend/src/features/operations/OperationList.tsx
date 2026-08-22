@@ -9,7 +9,7 @@ import type { Operation } from "./api";
 interface OperationListProps {
   operations: Operation[];
   onEdit: (op: Operation) => void;
-  onToggleActive: (id: string) => void;
+  onToggleActive: (id: string | number) => void;
   loading?: boolean;
 }
 
@@ -29,13 +29,13 @@ export function OperationList({ operations, onEdit, onToggleActive, loading }: O
         count={filtered.length}
         action={
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8A8270]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8C7E6E]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search operations…"
-              className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#D0C8B4] text-[#26231D] placeholder-[#B8A898] w-52 focus:outline-none focus:border-[#B8763F] focus:ring-1 focus:ring-[#B8763F]/20 transition-all"
+              className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#E6DDCE] text-[#221912] placeholder-[#B8A898] w-52 focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20 transition-all"
             />
           </div>
         }
@@ -61,23 +61,23 @@ export function OperationList({ operations, onEdit, onToggleActive, loading }: O
             {filtered.map((op, index) => (
               <motion.tr
                 key={op.id}
-                className="group bg-white hover:bg-[#FBF8F3] border-b border-[#EDE8DF] last:border-0 transition-colors duration-100"
+                className="group bg-white hover:bg-[#FEFCF9] border-b border-[#F0EAE0] last:border-0 transition-colors duration-100"
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.03, duration: 0.25 }}
               >
-                <TableCell className="font-mono text-xs text-[#8A8270] w-14">{op.sequence}</TableCell>
+                <TableCell className="font-mono text-xs text-[#8C7E6E] w-14">{op.sequence}</TableCell>
                 <TableCell>
-                  <span className="font-mono text-[11.5px] font-semibold text-[#B8763F] tracking-wide bg-[#FBF4EC] px-2 py-0.5 rounded-sm border border-[#E0D8C0]">
+                  <span className="font-mono text-[11.5px] font-semibold text-[#B48259] tracking-wide bg-[#FBF4EC] px-2 py-0.5 rounded-sm border border-[#F0EAE0]">
                     {op.operationCode}
                   </span>
                 </TableCell>
                 <TableCell>
-                  <span className={`font-medium text-sm ${!op.active ? "text-[#8A8270]" : "text-[#1E1B16]"}`}>
+                  <span className={`font-medium text-sm ${!op.active ? "text-[#8C7E6E]" : "text-[#221912]"}`}>
                     {op.name}
                   </span>
                 </TableCell>
-                <TableCell className="hidden lg:table-cell text-xs text-[#6E6656] max-w-xs truncate">
+                <TableCell className="hidden lg:table-cell text-xs text-[#475569] max-w-xs truncate">
                   {op.description}
                 </TableCell>
                 <TableCell>
@@ -111,14 +111,15 @@ export function OperationList({ operations, onEdit, onToggleActive, loading }: O
         </Table>
       )}
 
-      <div className="px-5 py-2.5 border-t border-[#E0D8C0] bg-[#FAF7F2] flex justify-between items-center">
-        <span className="text-[11px] text-[#8A8270] font-mono">
+      <div className="px-5 py-2.5 border-t border-[#F0EAE0] bg-[#FAFAF8] flex justify-between items-center">
+        <span className="text-[11px] text-[#8C7E6E] font-mono">
           {filtered.length} of {operations.length} operations
         </span>
-        <span className="text-[11px] text-[#8A8270]">
+        <span className="text-[11px] text-[#8C7E6E]">
           {operations.filter(o => o.active).length} active
         </span>
       </div>
     </DataCard>
   );
 }
+

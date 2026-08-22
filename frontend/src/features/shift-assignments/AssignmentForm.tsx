@@ -36,11 +36,11 @@ export function AssignmentForm({ operators, shifts, onSubmit, onCancel }: Assign
     <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="flex flex-col space-y-1.5">
-          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#6E6656]">Operator</label>
+          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#475569]">Operator</label>
           <select
             value={formData.operatorId}
             onChange={(e) => setFormData(p => ({ ...p, operatorId: e.target.value }))}
-            className="h-10 bg-white border border-[#D0C8B4] rounded-sm px-3 text-sm text-[#26231D] focus:outline-none focus:border-[#B8763F] focus:ring-2 focus:ring-[#B8763F]/15"
+            className="h-10 bg-white border border-[#E6DDCE] rounded-sm px-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-2 focus:ring-[#B48259]/15"
             required
           >
             <option value="">Select an operator...</option>
@@ -51,11 +51,11 @@ export function AssignmentForm({ operators, shifts, onSubmit, onCancel }: Assign
         </div>
 
         <div className="flex flex-col space-y-1.5">
-          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#6E6656]">Shift</label>
+          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#475569]">Shift</label>
           <select
             value={formData.shiftId}
             onChange={(e) => setFormData(p => ({ ...p, shiftId: e.target.value }))}
-            className="h-10 bg-white border border-[#D0C8B4] rounded-sm px-3 text-sm text-[#26231D] focus:outline-none focus:border-[#B8763F] focus:ring-2 focus:ring-[#B8763F]/15"
+            className="h-10 bg-white border border-[#E6DDCE] rounded-sm px-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-2 focus:ring-[#B48259]/15"
             required
           >
             <option value="">Select a shift...</option>
@@ -82,10 +82,11 @@ export function AssignmentForm({ operators, shifts, onSubmit, onCancel }: Assign
         />
       </div>
 
-      <div className="flex justify-end gap-3 pt-5 border-t border-[#E0D8C0]">
+      <div className="flex justify-end gap-3 pt-5 border-t border-[#F0EAE0]">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button type="submit" variant="primary">Assign Shift</Button>
       </div>
     </form>
   );
 }
+

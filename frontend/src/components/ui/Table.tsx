@@ -20,7 +20,7 @@ const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttribut
   ({ className, ...props }, ref) => (
     <thead
       ref={ref}
-      className={cn("bg-[#F6F2E9] border-b-2 border-[#E0D8C0]", className)}
+      className={cn("bg-[slate-50] border-b-2 border-[#F0EAE0]", className)}
       {...props}
     />
   )
@@ -30,7 +30,7 @@ TableHeader.displayName = "TableHeader";
 /* ─── Body ─────────────────────────────────────────────── */
 const TableBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
   ({ className, ...props }, ref) => (
-    <tbody ref={ref} className={cn("divide-y divide-[#EDE8DF]", className)} {...props} />
+    <tbody ref={ref} className={cn("divide-y divide-[#F0EAE0]", className)} {...props} />
   )
 );
 TableBody.displayName = "TableBody";
@@ -46,8 +46,8 @@ const TableRow = React.forwardRef<HTMLTableRowElement, TableRowProps>(
       ref={ref}
       className={cn(
         "group relative bg-white transition-colors duration-150",
-        "hover:bg-[#FBF8F3]",
-        "border-b border-[#EDE8DF] last:border-0",
+        "hover:bg-[#FEFCF9]",
+        "border-b border-[#F0EAE0] last:border-0",
         className
       )}
       style={{
@@ -68,7 +68,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
       className={cn(
         "px-5 py-3.5 text-left align-middle",
         "text-[10.5px] font-semibold tracking-[0.14em] uppercase",
-        "text-[#8A8270] select-none",
+        "text-[#8C7E6E] select-none",
         "[&:has([role=checkbox])]:pr-0",
         className
       )}
@@ -84,7 +84,7 @@ const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<
     <td
       ref={ref}
       className={cn(
-        "px-5 py-3.5 align-middle text-[#26231D]",
+        "px-5 py-3.5 align-middle text-[#221912]",
         "[&:has([role=checkbox])]:pr-0",
         className
       )}
@@ -99,7 +99,7 @@ const TableFooter = React.forwardRef<HTMLTableSectionElement, React.HTMLAttribut
   ({ className, ...props }, ref) => (
     <tfoot
       ref={ref}
-      className={cn("bg-[#F6F2E9] border-t-2 border-[#E0D8C0] text-[#6E6656]", className)}
+      className={cn("bg-[slate-50] border-t-2 border-[#F0EAE0] text-[#475569]", className)}
       {...props}
     />
   )
@@ -107,3 +107,4 @@ const TableFooter = React.forwardRef<HTMLTableSectionElement, React.HTMLAttribut
 TableFooter.displayName = "TableFooter";
 
 export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TableFooter };
+

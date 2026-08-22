@@ -83,12 +83,12 @@ export function OrderForm({ styles, sizes, onSubmit, onCancel }: OrderFormProps)
         <Input label="Buyer" name="buyer" value={formData.buyer} onChange={handleChange} required placeholder="e.g. Acme Corp" />
         
         <div className="flex flex-col space-y-1.5 md:col-span-2">
-          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#6E6656]">Style</label>
+          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#475569]">Style</label>
           <select
             name="styleId"
             value={formData.styleId}
             onChange={handleChange}
-            className="h-10 bg-white border border-[#D0C8B4] rounded-sm px-3 text-sm text-[#26231D] focus:outline-none focus:border-[#B8763F] focus:ring-2 focus:ring-[#B8763F]/15"
+            className="h-10 bg-white border border-[#E6DDCE] rounded-sm px-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-2 focus:ring-[#B48259]/15"
             required
           >
             <option value="">Select Style...</option>
@@ -100,12 +100,12 @@ export function OrderForm({ styles, sizes, onSubmit, onCancel }: OrderFormProps)
 
         <Input label="Color" name="color" value={formData.color} onChange={handleChange} required placeholder="e.g. Navy Blue" />
         <div className="flex flex-col space-y-1.5">
-          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#6E6656]">Status</label>
+          <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#475569]">Status</label>
           <select
             name="status"
             value={formData.status}
             onChange={handleChange}
-            className="h-10 bg-white border border-[#D0C8B4] rounded-sm px-3 text-sm text-[#26231D] focus:outline-none focus:border-[#B8763F]"
+            className="h-10 bg-white border border-[#E6DDCE] rounded-sm px-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259]"
           >
             <option value="PLANNED">Planned</option>
             <option value="IN_PRODUCTION">In Production</option>
@@ -118,17 +118,17 @@ export function OrderForm({ styles, sizes, onSubmit, onCancel }: OrderFormProps)
       </div>
 
       {/* Size Grid */}
-      <div className="border border-[#E0D8C0] rounded-sm overflow-hidden mt-6">
-        <div className="bg-[#FAF7F2] p-3 border-b border-[#E0D8C0] flex justify-between items-center">
-          <h3 className="text-sm font-semibold text-[#1E1B16]">Size-Wise Quantities</h3>
-          <p className="text-[11px] font-mono font-bold text-[#8A8270] bg-white px-2 py-1 rounded-sm border border-[#D0C8B4]">
-            TOTAL: <span className="text-[#B8763F]">{totalQty}</span>
+      <div className="border border-[#F0EAE0] rounded-sm overflow-hidden mt-6">
+        <div className="bg-[#FAFAF8] p-3 border-b border-[#F0EAE0] flex justify-between items-center">
+          <h3 className="text-sm font-semibold text-[#221912]">Size-Wise Quantities</h3>
+          <p className="text-[11px] font-mono font-bold text-[#8C7E6E] bg-white px-2 py-1 rounded-sm border border-[#E6DDCE]">
+            TOTAL: <span className="text-[#B48259]">{totalQty}</span>
           </p>
         </div>
         <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 bg-white">
           {activeSizes.map(size => (
             <div key={size.id} className="flex flex-col space-y-1">
-              <label className="text-[11px] font-bold text-[#6E6656] flex items-center justify-between">
+              <label className="text-[11px] font-bold text-[#475569] flex items-center justify-between">
                 <span>{size.code}</span>
                 <span className="font-normal text-[9px] text-[#B8A898]">{size.label}</span>
               </label>
@@ -136,24 +136,25 @@ export function OrderForm({ styles, sizes, onSubmit, onCancel }: OrderFormProps)
                 type="number"
                 min="0"
                 placeholder="0"
-                value={sizeQty[size.id] || ""}
-                onChange={(e) => handleSizeChange(size.id, e.target.value)}
-                className="w-full h-9 bg-[#FBF8F3] border border-[#D0C8B4] rounded-sm px-3 text-sm text-[#26231D] text-right focus:outline-none focus:border-[#B8763F] focus:ring-1 focus:ring-[#B8763F]/20 font-mono"
+                value={sizeQty[size.id.toString()] || ""}
+                onChange={(e) => handleSizeChange(size.id.toString(), e.target.value)}
+                className="w-full h-9 bg-[#FEFCF9] border border-[#E6DDCE] rounded-sm px-3 text-sm text-[#221912] text-right focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20 font-mono"
               />
             </div>
           ))}
           {activeSizes.length === 0 && (
-            <div className="col-span-full text-sm text-[#8A8270] text-center py-4">
+            <div className="col-span-full text-sm text-[#8C7E6E] text-center py-4">
               No active sizes found in the master. Please add sizes first.
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-5 border-t border-[#E0D8C0]">
+      <div className="flex justify-end gap-3 pt-5 border-t border-[#F0EAE0]">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={loading}>Cancel</Button>
         <Button type="submit" variant="primary" loading={loading} disabled={totalQty <= 0}>Create Order</Button>
       </div>
     </form>
   );
 }
+

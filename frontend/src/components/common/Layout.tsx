@@ -11,7 +11,7 @@ const routeLabels: Record<string, string> = {
   "/styles":             "Style Master",
   "/shift-assignment":   "Shift Assignment",
   "/attendance":         "Daily Attendance",
-  "/skill-matrix":       "Swing Skill Matrix",
+  "/skill-matrix":       "Sewing Skill Matrix",
   "/orders":             "Order Details",
   "/operation-bulletins":"Operation Bulletins",
   "/line-balance":       "Line Balancing",
@@ -21,17 +21,17 @@ const routeLabels: Record<string, string> = {
 
 export function Layout() {
   const location = useLocation();
-  const pageLabel = routeLabels[location.pathname] || "QTech Swing";
+  const pageLabel = routeLabels[location.pathname] || "QTexPro Sewing";
 
   return (
-    <div className="flex h-screen w-full bg-[#F6F2E9] overflow-hidden text-[#26231D] relative">
+    <div className="flex h-screen w-full bg-[#F6F1E8] overflow-hidden text-[#221912] relative">
       <Sidebar />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Bar */}
-        <header className="h-14 shrink-0 border-b border-[#E0D8C0] bg-white/80 backdrop-blur-xl flex items-center justify-between px-8 z-10 sticky top-0">
+        <header className="h-14 shrink-0 border-b border-[#F0EAE0] bg-white/80 backdrop-blur-xl flex items-center justify-between px-8 z-10 sticky top-0">
           <div className="flex items-center gap-3">
-            <span className="h-3 w-3 rounded-full bg-gradient-to-br from-[#C47F45] to-[#9B5A32] shadow-sm shadow-[#B8763F]/30" />
+            <span className="h-3 w-3 rounded-full bg-gradient-to-br from-[#FFE5BF] to-[#B48259] shadow-sm shadow-[#B48259]/30" />
             <AnimatePresence mode="wait">
               <motion.span
                 key={pageLabel}
@@ -39,7 +39,7 @@ export function Layout() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 4 }}
                 transition={{ duration: 0.18 }}
-                className="text-[11px] font-semibold tracking-[0.18em] text-[#6E6656] uppercase"
+                className="text-[11px] font-semibold tracking-[0.18em] text-[#8C7E6E] uppercase"
               >
                 {pageLabel}
               </motion.span>
@@ -48,15 +48,15 @@ export function Layout() {
 
           <div className="flex items-center gap-4">
             {/* Live indicator */}
-            <div className="flex items-center gap-1.5 text-[10px] text-[#8A8270] font-medium">
+            <div className="flex items-center gap-1.5 text-[10px] text-[#8C7E6E] font-medium">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
               </span>
               Live
             </div>
-            <div className="h-4 w-px bg-[#E0D8C0]" />
-            <div className="text-[10px] font-mono text-[#8A8270]">
+            <div className="h-4 w-px bg-[#F0EAE0]" />
+            <div className="text-[10px] font-mono text-[#8C7E6E]">
               {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
             </div>
           </div>
@@ -64,31 +64,11 @@ export function Layout() {
 
         {/* Main content */}
         <main className="flex-1 overflow-y-auto relative">
-          {/* Subtle paper texture overlay */}
-          <svg
-            className="pointer-events-none absolute inset-0 w-full h-full"
-            viewBox="0 0 1400 900"
-            preserveAspectRatio="xMidYMid slice"
-          >
-            <defs>
-              <filter id="paperGrain">
-                <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch" result="noise" />
-                <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0.15  0 0 0 0 0.14  0 0 0 0 0.11  0 0 0 0.018 0" />
-              </filter>
-              <radialGradient id="cornerWash" cx="100%" cy="0%" r="60%">
-                <stop offset="0%" stopColor="#D89A5C" stopOpacity="0.10" />
-                <stop offset="60%" stopColor="#D89A5C" stopOpacity="0.03" />
-                <stop offset="100%" stopColor="#D89A5C" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <rect x="0" y="0" width="100%" height="100%" filter="url(#paperGrain)" />
-            <rect x="0" y="0" width="100%" height="100%" fill="url(#cornerWash)" />
-          </svg>
 
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
-              className="p-8 relative z-10 min-h-full"
+              className="relative z-10 min-h-full"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
@@ -102,3 +82,4 @@ export function Layout() {
     </div>
   );
 }
+

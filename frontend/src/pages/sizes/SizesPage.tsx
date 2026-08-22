@@ -3,7 +3,7 @@ import { Plus, Edit2, ToggleLeft, ToggleRight, Layers } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import { PageHeader, DataCard, DataCardHeader, EmptyState, SkeletonTable, StatusBadge } from "../../components/ui/PremiumUI";
+import {  PageHeader, DataCard, DataCardHeader, EmptyState, SkeletonTable, StatusBadge , RecentActivityLog } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { sizesApi, type Size } from "../../features/sizes/api";
@@ -47,7 +47,7 @@ export function SizesPage() {
     } finally { setSaving(false); }
   };
 
-  const handleToggle = async (id: string) => {
+  const handleToggle = async (id: string | number) => {
     await sizesApi.toggleActive(id);
     await loadSizes();
   };
@@ -58,8 +58,9 @@ export function SizesPage() {
   };
 
   return (
-    <div className="space-y-7 max-w-5xl mx-auto">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
+        showImportExport={true}
         eyebrow="Masters"
         title="Size Master"
         description="Configure all garment size codes. Sizes must not be hard-coded — they come from here."
@@ -85,7 +86,7 @@ export function SizesPage() {
             <Input label="Label" name="label" value={formData.label} onChange={handleChange} placeholder="e.g. Extra Large" required />
             <Input label="Display Sequence" name="sequence" type="number" min="1" value={formData.sequence} onChange={handleChange} required hint="Controls sort order" />
           </div>
-          <div className="flex justify-end gap-3 pt-5 border-t border-[#E0D8C0]">
+          <div className="flex justify-end gap-3 pt-5 border-t border-[#F0EAE0]">
             <Button type="button" variant="ghost" size="md" onClick={() => setIsFormOpen(false)}>Cancel</Button>
             <Button type="submit" variant="primary" size="md" loading={saving}>
               {editingSize ? "Update Size" : "Create Size"}
@@ -101,7 +102,7 @@ export function SizesPage() {
             key={s.id}
             initial={{ opacity: 0, scale: 0.85 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="px-4 py-2 bg-white border border-[#D0C8B4] rounded-sm text-sm font-semibold text-[#26231D] shadow-sm"
+            className="px-4 py-2 bg-white border border-[#E6DDCE] rounded-sm text-sm font-semibold text-[#221912] shadow-sm"
           >
             {s.code}
           </motion.div>
@@ -134,18 +135,18 @@ export function SizesPage() {
               {[...sizes].sort((a, b) => a.sequence - b.sequence).map((s, index) => (
                 <motion.tr
                   key={s.id}
-                  className="group bg-white hover:bg-[#FBF8F3] border-b border-[#EDE8DF] last:border-0 transition-colors duration-100"
+                  className="group bg-white hover:bg-[#FEFCF9] border-b border-[#F0EAE0] last:border-0 transition-colors duration-100"
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.04, duration: 0.22 }}
                 >
-                  <TableCell className="font-mono text-xs text-[#8A8270]">{s.sequence}</TableCell>
+                  <TableCell className="font-mono text-xs text-[#8C7E6E]">{s.sequence}</TableCell>
                   <TableCell>
-                    <span className="font-mono font-bold text-[#26231D] text-base tracking-widest">
+                    <span className="font-mono font-bold text-[#221912] text-base tracking-widest">
                       {s.code}
                     </span>
                   </TableCell>
-                  <TableCell className="text-sm text-[#26231D]">{s.label}</TableCell>
+                  <TableCell className="text-sm text-[#221912]">{s.label}</TableCell>
                   <TableCell>
                     <StatusBadge status={s.active ? "active" : "inactive"} />
                   </TableCell>
@@ -164,11 +165,17 @@ export function SizesPage() {
             </TableBody>
           </Table>
         )}
-        <div className="px-5 py-2.5 border-t border-[#E0D8C0] bg-[#FAF7F2] flex justify-between">
-          <span className="text-[11px] text-[#8A8270] font-mono">{sizes.length} total sizes</span>
-          <span className="text-[11px] text-[#8A8270]">{sizes.filter(s => s.active).length} active</span>
+        <div className="px-5 py-2.5 border-t border-[#F0EAE0] bg-[#FAFAF8] flex justify-between">
+          <span className="text-[11px] text-[#8C7E6E] font-mono">{sizes.length} total sizes</span>
+          <span className="text-[11px] text-[#8C7E6E]">{sizes.filter(s => s.active).length} active</span>
         </div>
       </DataCard>
+    
+      <RecentActivityLog />
     </div>
   );
 }
+
+
+
+

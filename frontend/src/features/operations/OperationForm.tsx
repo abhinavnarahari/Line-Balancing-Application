@@ -65,7 +65,7 @@ export function OperationForm({ initialData, onSubmit, onCancel }: OperationForm
           />
         </div>
         <div className="md:col-span-2 flex flex-col space-y-2">
-          <label htmlFor="description" className="text-sm font-medium text-[#6E6656]">Description</label>
+          <label htmlFor="description" className="text-sm font-medium text-[#475569]">Description</label>
           <textarea
             id="description"
             name="description"
@@ -73,17 +73,17 @@ export function OperationForm({ initialData, onSubmit, onCancel }: OperationForm
             onChange={handleChange}
             rows={3}
             placeholder="Describe what this operation entails…"
-            className="w-full bg-white border border-[#E0D8C0] px-4 py-2 text-sm text-[#26231D] placeholder-[#8A8270] shadow-sm resize-none focus:outline-none focus:ring-1 focus:ring-[#B8763F] focus:border-[#B8763F]"
+            className="w-full bg-white border border-[#F0EAE0] px-4 py-2 text-sm text-[#221912] placeholder-[#8C7E6E] shadow-sm resize-none focus:outline-none focus:ring-1 focus:ring-[#B48259] focus:border-[#B48259]"
           />
         </div>
         <div className="flex flex-col space-y-2">
-          <label htmlFor="active" className="text-sm font-medium text-[#6E6656]">Status</label>
+          <label htmlFor="active" className="text-sm font-medium text-[#475569]">Status</label>
           <select
             id="active"
             name="active"
             value={formData.active ? "true" : "false"}
             onChange={(e) => setFormData((p) => ({ ...p, active: e.target.value === "true" }))}
-            className="flex h-11 w-full bg-white border border-[#E0D8C0] px-4 py-2 text-sm text-[#26231D] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#B8763F] focus:border-[#B8763F]"
+            className="flex h-11 w-full bg-white border border-[#F0EAE0] px-4 py-2 text-sm text-[#221912] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#B48259] focus:border-[#B48259]"
           >
             <option value="true">Active</option>
             <option value="false">Inactive</option>
@@ -91,7 +91,7 @@ export function OperationForm({ initialData, onSubmit, onCancel }: OperationForm
         </div>
       </div>
 
-      <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#E0D8C0]">
+      <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#F0EAE0]">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button type="submit" variant="primary">
           {initialData ? "Update Operation" : "Create Operation"}
@@ -100,3 +100,4 @@ export function OperationForm({ initialData, onSubmit, onCancel }: OperationForm
     </form>
   );
 }
+

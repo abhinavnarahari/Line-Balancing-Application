@@ -1,6 +1,22 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
+@theme {
+  --color-brand-dark: #0A2947;
+  --color-brand-cream: #F3E4C9;
+  --color-brand-sage: #D3D4C0;
+  --color-brand-brown: #8B5E3C;
+  --color-brand-peach: #FFE5BF;
+
+  --animate-float: float 6s ease-in-out infinite;
+
+  @keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+    100% { transform: translateY(0px); }
+  }
+}
+
 /* ─── Base ──────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after {
@@ -8,8 +24,8 @@
   }
 
   body {
-    background-color: #F6F2E9;
-    color: #26231D;
+    background-color: #F6F1E8;
+    color: #221912;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-family: 'Inter', system-ui, sans-serif;
@@ -24,14 +40,14 @@
   }
 }
 
-/* ─── Scrollbar ─────────────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #F6F2E9; }
-::-webkit-scrollbar-thumb { background: #D0C8B4; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #B8A898; }
+/* ─── Custom Scrollbar ─────────────────────────────────────────── */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #FAFAF8; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #D3D4C0; border-radius: 3px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #8C7E6E; }
 
 /* ─── Selection ─────────────────────────────────────────── */
-::selection { background: #D89A5C33; }
+::selection { background: #B4825933; }
 
 /* ─── Ledger table animations ───────────────────────────── */
 @keyframes rowFadeIn {
@@ -50,7 +66,7 @@
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #E9E1CC 25%, #F3EFE5 50%, #E9E1CC 75%);
+  background: linear-gradient(90deg, #E6DDCE 25%, #F0EAE0 50%, #E6DDCE 75%);
   background-size: 800px 100%;
   animation: shimmer 1.4s ease infinite;
 }
@@ -67,7 +83,7 @@
 
 /* ─── Hairline rule utility ──────────────────────────────── */
 .hairline {
-  border-top: 1px solid #E0D8C0;
+  border-top: 1px solid #F0EAE0;
 }
 
 /* ─── Numeric cell ─────────────────────────────────────── */

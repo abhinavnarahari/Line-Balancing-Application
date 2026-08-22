@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Plus, Search, Edit2, ToggleLeft, ToggleRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "../../components/ui/Button";
-import { PageHeader, DataCard, DataCardHeader, EmptyState, StatusBadge, SkeletonTable } from "../../components/ui/PremiumUI";
+import {  PageHeader, DataCard, DataCardHeader, EmptyState, StatusBadge, SkeletonTable , RecentActivityLog } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 
@@ -41,7 +41,7 @@ export function StylesPage() {
     loadStyles();
   };
 
-  const handleToggle = async (id: string) => {
+  const handleToggle = async (id: string | number) => {
     await stylesApi.toggleActive(id);
     loadStyles();
   };
@@ -53,8 +53,9 @@ export function StylesPage() {
   );
 
   return (
-    <div className="space-y-7 max-w-7xl mx-auto">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
+        showImportExport={true}
         eyebrow="Production"
         title="Style Master"
         description="Maintain the catalog of styles and garments manufactured by the factory."
@@ -83,13 +84,13 @@ export function StylesPage() {
           count={filteredStyles.length} 
           action={
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8A8270]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8C7E6E]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search styles..."
-                className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#D0C8B4] text-[#26231D] placeholder-[#B8A898] w-64 focus:outline-none focus:border-[#B8763F] focus:ring-1 focus:ring-[#B8763F]/20 transition-all rounded-sm"
+                className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#E6DDCE] text-[#221912] placeholder-[#B8A898] w-64 focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20 transition-all rounded-sm"
               />
             </div>
           }
@@ -115,24 +116,24 @@ export function StylesPage() {
               {filteredStyles.map((style, index) => (
                 <motion.tr
                   key={style.id}
-                  className="group bg-white hover:bg-[#FBF8F3] border-b border-[#EDE8DF] last:border-0 transition-colors duration-100"
+                  className="group bg-white hover:bg-[#FEFCF9] border-b border-[#F0EAE0] last:border-0 transition-colors duration-100"
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.03, duration: 0.2 }}
                 >
                   <TableCell>
-                    <span className="font-mono text-sm font-bold text-[#B8763F] tracking-wide">{style.styleNo}</span>
+                    <span className="font-mono text-sm font-bold text-[#B48259] tracking-wide">{style.styleNo}</span>
                   </TableCell>
                   <TableCell>
-                    <span className="font-semibold text-[#1E1B16]">{style.buyer}</span>
+                    <span className="font-semibold text-[#221912]">{style.buyer}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="text-sm text-[#26231D] truncate max-w-xs">{style.description}</span>
-                      <span className="text-[10px] text-[#8A8270]">{style.productType}</span>
+                      <span className="text-sm text-[#221912] truncate max-w-xs">{style.description}</span>
+                      <span className="text-[10px] text-[#8C7E6E]">{style.productType}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-xs text-[#6E6656]">{style.season}</TableCell>
+                  <TableCell className="font-mono text-xs text-[#475569]">{style.season}</TableCell>
                   <TableCell>
                     <StatusBadge status={style.active ? "active" : "inactive"} />
                   </TableCell>
@@ -152,6 +153,12 @@ export function StylesPage() {
           </Table>
         )}
       </DataCard>
+    
+      <RecentActivityLog />
     </div>
   );
 }
+
+
+
+

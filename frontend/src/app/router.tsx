@@ -5,6 +5,7 @@ import { Dashboard } from "../pages/Dashboard";
 // Masters
 import { ShiftsPage } from "../pages/shifts/ShiftsPage";
 import { OperatorsPage } from "../pages/operators/OperatorsPage";
+import { OperatorDetailPage } from "../pages/operators/OperatorDetailPage";
 import { OperationsPage } from "../pages/operations/OperationsPage";
 import { SizesPage } from "../pages/sizes/SizesPage";
 import { SettingsLayout } from "../pages/settings/SettingsLayout";
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
       },
 
       // Workforce
+      { path: "settings/operators/:id", element: <OperatorDetailPage /> },
       { path: "shift-assignment", element: <ShiftAssignmentPage /> },
       { path: "attendance",       element: <AttendancePage /> },
       { path: "skill-matrix",     element: <SkillMatrixPage /> },

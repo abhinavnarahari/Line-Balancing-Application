@@ -62,7 +62,7 @@ export function ShiftAssignmentPage() {
   };
 
   return (
-    <div className="space-y-7 max-w-7xl mx-auto">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
         eyebrow="Workforce"
         title="Shift Assignment"
@@ -104,3 +104,5 @@ export function ShiftAssignmentPage() {
     </div>
   );
 }
+
+

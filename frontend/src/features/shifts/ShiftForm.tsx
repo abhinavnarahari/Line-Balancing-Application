@@ -88,15 +88,15 @@ export function ShiftForm({ initialData, onSubmit, onCancel }: ShiftFormProps) {
             name="active"
             checked={formData.active}
             onChange={handleChange}
-            className="h-4 w-4 rounded border-[#E0D8C0] bg-white text-[#B8763F] focus:ring-[#B8763F] focus:ring-offset-white"
+            className="h-4 w-4 rounded border-[#F0EAE0] bg-white text-[#B48259] focus:ring-[#B48259] focus:ring-offset-white"
           />
-          <label htmlFor="active" className="text-sm font-medium text-[#6E6656]">
+          <label htmlFor="active" className="text-sm font-medium text-[#475569]">
             Active immediately
           </label>
         </div>
       )}
 
-      <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#E0D8C0]">
+      <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#F0EAE0]">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button type="submit" variant="primary">
           {initialData ? "Update Shift" : "Create Shift"}
@@ -105,3 +105,4 @@ export function ShiftForm({ initialData, onSubmit, onCancel }: ShiftFormProps) {
     </form>
   );
 }
+

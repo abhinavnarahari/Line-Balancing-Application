@@ -20,31 +20,31 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         className={cn(
           "relative inline-flex items-center justify-center font-medium tracking-wide",
-          "transition-all duration-150 focus-visible:outline-none",
-          "focus-visible:ring-2 focus-visible:ring-[#B8763F] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F6F2E9]",
+          "transition-colors duration-200 focus-visible:outline-none",
+          "focus-visible:ring-2 focus-visible:ring-[#B48259] focus-visible:ring-offset-2",
           "disabled:pointer-events-none disabled:opacity-40 select-none",
           {
-            // Primary — rich gradient
-            "bg-gradient-to-br from-[#C47F45] via-[#B8763F] to-[#9B5A32] text-white shadow-md shadow-[#B8763F]/25 hover:shadow-lg hover:shadow-[#B8763F]/30":
+            // Primary
+            "bg-[#B48259]/10 text-[#B48259] border border-[#B48259] hover:bg-[#B48259]/20 shadow-sm":
               variant === "primary",
-            // Secondary — white with border
-            "bg-white text-[#26231D] border border-[#D0C8B4] hover:border-[#B8763F] hover:bg-[#FBF8F0] shadow-sm":
+            // Secondary
+            "bg-white text-[#475569] border border-[#E6DDCE] hover:border-[#C5B9A8] hover:bg-[#FEFCF9] shadow-sm":
               variant === "secondary",
-            // Outline — transparent with border
-            "border border-[#B8763F] text-[#B8763F] hover:bg-[#B8763F]/8 bg-transparent":
+            // Outline
+            "border border-[#E6DDCE] text-[#8C7E6E] hover:bg-[#FAFAF8] bg-transparent":
               variant === "outline",
             // Danger
-            "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 hover:border-red-300 shadow-sm":
+            "bg-[#FDF2F0] text-[#C0462B] border border-[#FDF2F0] hover:border-[#C0462B]/30 shadow-sm":
               variant === "danger",
             // Ghost
-            "text-[#6E6656] hover:text-[#26231D] hover:bg-[#EDE8DF]/60":
+            "text-[#475569] hover:text-[#221912] hover:bg-[#FAFAF8]":
               variant === "ghost",
 
             // Sizes
-            "h-7 px-3 text-[11px] rounded-sm gap-1":   size === "xs",
-            "h-9 px-4 text-xs rounded-sm gap-1.5":     size === "sm",
-            "h-11 px-6 text-sm rounded-sm gap-2":      size === "md",
-            "h-13 px-8 text-base rounded-sm gap-2.5":  size === "lg",
+            "h-7 px-3 text-[11px] rounded-xl gap-1":   size === "xs",
+            "h-9 px-3.5 text-[12.5px] rounded-xl gap-2": size === "sm",
+            "h-11 px-5 text-sm rounded-xl gap-2":      size === "md",
+            "h-13 px-6 text-base rounded-xl gap-2.5":  size === "lg",
           },
           className
         )}

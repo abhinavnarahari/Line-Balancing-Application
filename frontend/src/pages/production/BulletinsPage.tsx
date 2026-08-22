@@ -53,7 +53,7 @@ export function BulletinsPage() {
   );
 
   return (
-    <div className="space-y-7 max-w-7xl mx-auto">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
         eyebrow="Production"
         title="Operation Bulletins"
@@ -84,13 +84,13 @@ export function BulletinsPage() {
           count={filteredBulletins.length} 
           action={
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8A8270]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8C7E6E]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search bulletins..."
-                className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#D0C8B4] text-[#26231D] placeholder-[#B8A898] w-64 focus:outline-none focus:border-[#B8763F] focus:ring-1 focus:ring-[#B8763F]/20 transition-all rounded-sm"
+                className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#E6DDCE] text-[#221912] placeholder-[#B8A898] w-64 focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20 transition-all rounded-sm"
               />
             </div>
           }
@@ -99,7 +99,7 @@ export function BulletinsPage() {
         {loading ? (
           <SkeletonTable rows={4} cols={5} />
         ) : filteredBulletins.length === 0 ? (
-          <EmptyState icon={<FileText className="h-6 w-6 text-[#D0C8B4]" />} title="No bulletins found" description="Create a bulletin to define your first operation sequence." />
+          <EmptyState icon={<FileText className="h-6 w-6 text-[#E6DDCE]" />} title="No bulletins found" description="Create a bulletin to define your first operation sequence." />
         ) : (
           <Table>
             <TableHeader>
@@ -115,29 +115,29 @@ export function BulletinsPage() {
               {filteredBulletins.map((bulletin, index) => (
                 <motion.tr
                   key={bulletin.id}
-                  className="group bg-white hover:bg-[#FBF8F3] border-b border-[#EDE8DF] last:border-0 transition-colors duration-100 cursor-pointer"
+                  className="group bg-white hover:bg-[#FEFCF9] border-b border-[#F0EAE0] last:border-0 transition-colors duration-100 cursor-pointer"
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.03, duration: 0.2 }}
                 >
                   <TableCell>
-                    <span className="font-mono text-sm font-bold text-[#1E1B16] tracking-wide">{bulletin.bulletinCode}</span>
+                    <span className="font-mono text-sm font-bold text-[#221912] tracking-wide">{bulletin.bulletinCode}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="font-semibold text-[#B8763F] text-sm">{bulletin.name}</span>
-                      <span className="text-[10px] text-[#8A8270] mt-0.5">{bulletin.lines.length} Operations • v{bulletin.version}.0</span>
+                      <span className="font-semibold text-[#B48259] text-sm">{bulletin.name}</span>
+                      <span className="text-[10px] text-[#8C7E6E] mt-0.5">{bulletin.lines.length} Operations • v{bulletin.version}.0</span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {(bulletin.styles || []).slice(0, 3).map(style => (
-                        <span key={style.id} className="inline-block px-1.5 py-0.5 rounded-sm bg-[#FAF7F2] border border-[#D0C8B4] text-[9px] font-mono font-semibold text-[#6E6656]">
+                        <span key={style.id} className="inline-block px-1.5 py-0.5 rounded-sm bg-[#FAFAF8] border border-[#E6DDCE] text-[9px] font-mono font-semibold text-[#475569]">
                           {style.styleNo}
                         </span>
                       ))}
                       {(bulletin.styles || []).length > 3 && (
-                        <span className="inline-block px-1.5 py-0.5 rounded-sm bg-[#FAF7F2] border border-[#D0C8B4] text-[9px] font-mono font-semibold text-[#8A8270]">
+                        <span className="inline-block px-1.5 py-0.5 rounded-sm bg-[#FAFAF8] border border-[#E6DDCE] text-[9px] font-mono font-semibold text-[#8C7E6E]">
                           +{(bulletin.styles || []).length - 3} more
                         </span>
                       )}
@@ -148,7 +148,7 @@ export function BulletinsPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <span className="font-mono font-bold text-[#3C5245] text-sm">{(bulletin.totalSmv || 0).toFixed(2)}</span>
-                    <span className="text-[9px] text-[#8A8270] ml-1">min</span>
+                    <span className="text-[9px] text-[#8C7E6E] ml-1">min</span>
                   </TableCell>
                   <TableCell>
                     <StatusBadge 
@@ -165,3 +165,6 @@ export function BulletinsPage() {
     </div>
   );
 }
+
+
+

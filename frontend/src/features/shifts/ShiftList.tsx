@@ -30,9 +30,9 @@ function isOvernightShift(start: string, end: string): boolean {
 
 const shiftColors: Record<string, string> = {
   A: "from-[#4A7E6A] to-[#3C5245]",
-  B: "from-[#B8763F] to-[#8B4A3C]",
+  B: "from-[#B48259] to-[#8B4A3C]",
   C: "from-[#4A5A8A] to-[#2E3A5C]",
-  GENERAL: "from-[#6E6656] to-[#4A443C]",
+  GENERAL: "from-[#475569] to-[#4A443C]",
 };
 
 export function ShiftList({ shifts, onToggleActive, onEdit, loading }: ShiftListProps) {
@@ -51,7 +51,7 @@ export function ShiftList({ shifts, onToggleActive, onEdit, loading }: ShiftList
       {/* Premium Shift Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {shifts.map((shift, index) => {
-          const gradient = shiftColors[shift.shiftCode] || "from-[#6E6656] to-[#4A443C]";
+          const gradient = shiftColors[shift.shiftCode] || "from-[#475569] to-[#4A443C]";
           const overnight = isOvernightShift(shift.startTime, shift.endTime);
           const duration = shiftDuration(shift.startTime, shift.endTime);
 
@@ -61,7 +61,7 @@ export function ShiftList({ shifts, onToggleActive, onEdit, loading }: ShiftList
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.08, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              className={`relative overflow-hidden rounded-sm border ${shift.active ? "border-[#D0C8B4]" : "border-[#E9E1CC] opacity-60"} bg-white shadow-sm group`}
+              className={`relative overflow-hidden rounded-sm border ${shift.active ? "border-[#E6DDCE]" : "border-[#FAFAF8] opacity-60"} bg-white shadow-sm group`}
             >
               {/* Gradient header band */}
               <div className={`h-1.5 w-full bg-gradient-to-r ${gradient}`} />
@@ -73,31 +73,31 @@ export function ShiftList({ shifts, onToggleActive, onEdit, loading }: ShiftList
                       <span className={`font-mono text-[10px] font-bold tracking-[0.15em] uppercase px-2 py-0.5 rounded-sm bg-gradient-to-r ${gradient} text-white`}>
                         {shift.shiftCode}
                       </span>
-                      {overnight && <span title="Overnight shift"><Moon className="h-3 w-3 text-[#8A8270]" /></span>}
+                      {overnight && <span title="Overnight shift"><Moon className="h-3 w-3 text-[#8C7E6E]" /></span>}
                     </div>
-                    <h3 className="text-sm font-semibold text-[#1E1B16] tracking-tight">{shift.shiftName}</h3>
+                    <h3 className="text-sm font-semibold text-[#221912] tracking-tight">{shift.shiftName}</h3>
                   </div>
                   <StatusBadge status={shift.active ? "active" : "inactive"} />
                 </div>
 
                 <div className="space-y-2 mb-4">
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-[#8A8270]">Start</span>
-                    <span className="font-mono font-semibold text-[#26231D]">{shift.startTime}</span>
+                    <span className="text-[#8C7E6E]">Start</span>
+                    <span className="font-mono font-semibold text-[#221912]">{shift.startTime}</span>
                   </div>
-                  <div className="h-px bg-[#EDE8DF]" />
+                  <div className="h-px bg-[#F0EAE0]" />
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-[#8A8270]">End</span>
-                    <span className="font-mono font-semibold text-[#26231D]">{shift.endTime}</span>
+                    <span className="text-[#8C7E6E]">End</span>
+                    <span className="font-mono font-semibold text-[#221912]">{shift.endTime}</span>
                   </div>
-                  <div className="h-px bg-[#EDE8DF]" />
+                  <div className="h-px bg-[#F0EAE0]" />
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-[#8A8270]">Duration</span>
-                    <span className="font-mono font-semibold text-[#B8763F]">{duration}</span>
+                    <span className="text-[#8C7E6E]">Duration</span>
+                    <span className="font-mono font-semibold text-[#B48259]">{duration}</span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 pt-3 border-t border-[#EDE8DF] opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-2 pt-3 border-t border-[#F0EAE0] opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button variant="ghost" size="xs" onClick={() => onEdit(shift)} className="flex-1 justify-center">
                     <Edit2 className="h-3 w-3 mr-1" /> Edit
                   </Button>
@@ -137,20 +137,20 @@ export function ShiftList({ shifts, onToggleActive, onEdit, loading }: ShiftList
             {shifts.map((shift, index) => (
               <motion.tr
                 key={shift.id}
-                className="group bg-white hover:bg-[#FBF8F3] border-b border-[#EDE8DF] last:border-0 transition-colors duration-100"
+                className="group bg-white hover:bg-[#FEFCF9] border-b border-[#F0EAE0] last:border-0 transition-colors duration-100"
                 initial={{ opacity: 0, x: -4 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.05, duration: 0.2 }}
               >
                 <TableCell>
-                  <span className="font-mono text-[11px] font-bold text-white bg-gradient-to-br from-[#B8763F] to-[#8B4A3C] px-2 py-0.5 rounded-sm">
+                  <span className="font-mono text-[11px] font-bold text-white bg-gradient-to-br from-[#B48259] to-[#8B4A3C] px-2 py-0.5 rounded-sm">
                     {shift.shiftCode}
                   </span>
                 </TableCell>
-                <TableCell className="font-medium text-[#1E1B16]">{shift.shiftName}</TableCell>
-                <TableCell className="font-mono text-xs text-[#26231D]">{shift.startTime}</TableCell>
-                <TableCell className="font-mono text-xs text-[#26231D]">{shift.endTime}</TableCell>
-                <TableCell className="font-mono text-xs text-[#B8763F] font-semibold">
+                <TableCell className="font-medium text-[#221912]">{shift.shiftName}</TableCell>
+                <TableCell className="font-mono text-xs text-[#221912]">{shift.startTime}</TableCell>
+                <TableCell className="font-mono text-xs text-[#221912]">{shift.endTime}</TableCell>
+                <TableCell className="font-mono text-xs text-[#B48259] font-semibold">
                   {shiftDuration(shift.startTime, shift.endTime)}
                 </TableCell>
                 <TableCell>
@@ -183,3 +183,4 @@ export function ShiftList({ shifts, onToggleActive, onEdit, loading }: ShiftList
     </div>
   );
 }
+

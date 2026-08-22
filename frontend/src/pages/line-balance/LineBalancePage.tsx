@@ -33,16 +33,16 @@ const defaultEfficiency = 85; // 85% assumed standard
 function StatCard({ label, value, sub, icon: Icon, accent = false, warning = false }:
   { label: string; value: string | number; sub?: string; icon: React.ElementType; accent?: boolean; warning?: boolean }) {
   return (
-    <div className={`bg-white border rounded-sm p-5 flex items-start gap-4 shadow-sm ${warning ? "border-amber-300" : accent ? "border-[#B8763F]" : "border-[#E0D8C0]"}`}>
+    <div className={`bg-white border rounded-sm p-5 flex items-start gap-4 shadow-sm ${warning ? "border-amber-300" : accent ? "border-[#B48259]" : "border-[#F0EAE0]"}`}>
       <div className={`w-9 h-9 rounded-sm flex items-center justify-center shrink-0 ${warning ? "bg-amber-50" : accent ? "bg-gradient-to-br from-[#C47F45] to-[#9B5A32]" : "bg-[#F0EAE0]"}`}>
-        <Icon className={`h-4 w-4 ${warning ? "text-amber-600" : accent ? "text-white" : "text-[#6E6656]"}`} />
+        <Icon className={`h-4 w-4 ${warning ? "text-amber-600" : accent ? "text-white" : "text-[#475569]"}`} />
       </div>
       <div>
-        <p className="text-[10.5px] text-[#8A8270] uppercase tracking-[0.1em] font-semibold">{label}</p>
-        <p className={`text-2xl font-bold tracking-tight mt-0.5 ${warning ? "text-amber-600" : accent ? "text-[#B8763F]" : "text-[#1E1B16]"}`}>
+        <p className="text-[10.5px] text-[#8C7E6E] uppercase tracking-[0.1em] font-semibold">{label}</p>
+        <p className={`text-2xl font-bold tracking-tight mt-0.5 ${warning ? "text-amber-600" : accent ? "text-[#B48259]" : "text-[#221912]"}`}>
           {value}
         </p>
-        {sub && <p className="text-[10px] text-[#8A8270] mt-0.5">{sub}</p>}
+        {sub && <p className="text-[10px] text-[#8C7E6E] mt-0.5">{sub}</p>}
       </div>
     </div>
   );
@@ -85,10 +85,10 @@ function YamazumiChart({ data, taktTime }: {
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="absolute bottom-full mb-2 z-20 bg-[#26231D] text-white text-[10px] px-2.5 py-1.5 rounded-sm whitespace-nowrap shadow-lg"
+                    className="absolute bottom-full mb-2 z-20 bg-[#221912] text-white text-[10px] px-2.5 py-1.5 rounded-sm whitespace-nowrap shadow-lg"
                   >
                     <p className="font-semibold">{d.label}</p>
-                    {d.operatorName && <p className="text-[#D89A5C]">{d.operatorName}</p>}
+                    {d.operatorName && <p className="text-[#FFE5BF]">{d.operatorName}</p>}
                     <p>Actual: <span className="font-mono">{d.actualTime.toFixed(3)}m</span></p>
                     <p>SMV: <span className="font-mono">{d.smv.toFixed(2)}m</span></p>
                     {d.isBottleneck && <p className="text-amber-400 font-bold">⚠ Bottleneck</p>}
@@ -107,7 +107,7 @@ function YamazumiChart({ data, taktTime }: {
               >
                 {d.actualTime > 0 ? (
                   <>
-                    <div className={`absolute inset-0 ${d.isBottleneck ? "bg-[#D89A5C]" : "bg-[#3C5245]"}`} />
+                    <div className={`absolute inset-0 ${d.isBottleneck ? "bg-[#FFE5BF]" : "bg-[#3C5245]"}`} />
                     {d.isBottleneck && (
                       <motion.div
                         className="absolute top-0 left-0 right-0 bg-[#8B4A3C]"
@@ -119,29 +119,29 @@ function YamazumiChart({ data, taktTime }: {
                     )}
                   </>
                 ) : (
-                  <div className="absolute inset-0 border-2 border-dashed border-[#E0D8C0]" />
+                  <div className="absolute inset-0 border-2 border-dashed border-[#F0EAE0]" />
                 )}
               </motion.div>
 
-              <span className="mt-1.5 text-[9px] font-mono text-[#8A8270]">ST-{d.stationNum}</span>
+              <span className="mt-1.5 text-[9px] font-mono text-[#8C7E6E]">ST-{d.stationNum}</span>
             </div>
           );
         })}
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 px-2 pt-1 border-t border-[#EDE8DF]">
-        <div className="flex items-center gap-1.5 text-[10px] text-[#6E6656]">
+      <div className="flex items-center gap-4 px-2 pt-1 border-t border-[#F0EAE0]">
+        <div className="flex items-center gap-1.5 text-[10px] text-[#475569]">
           <div className="w-3 h-3 bg-[#3C5245] rounded-sm" /> Balanced
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] text-[#6E6656]">
-          <div className="w-3 h-3 bg-[#D89A5C] rounded-sm" /> Near Takt
+        <div className="flex items-center gap-1.5 text-[10px] text-[#475569]">
+          <div className="w-3 h-3 bg-[#FFE5BF] rounded-sm" /> Near Takt
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] text-[#6E6656]">
+        <div className="flex items-center gap-1.5 text-[10px] text-[#475569]">
           <div className="w-3 h-3 bg-[#8B4A3C] rounded-sm" /> Bottleneck
         </div>
-        <div className="flex items-center gap-1.5 text-[10px] text-[#6E6656]">
-          <div className="w-3 h-2.5 border-2 border-dashed border-[#E0D8C0] rounded-sm" /> Unassigned
+        <div className="flex items-center gap-1.5 text-[10px] text-[#475569]">
+          <div className="w-3 h-2.5 border-2 border-dashed border-[#F0EAE0] rounded-sm" /> Unassigned
         </div>
       </div>
     </div>
@@ -327,15 +327,15 @@ export function LineBalancePage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center space-y-3">
-          <div className="w-8 h-8 border-4 border-[#D89A5C] border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-[#8A8270]">Loading line plan data…</p>
+          <div className="w-8 h-8 border-4 border-[#FFE5BF] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-[#8C7E6E]">Loading line plan data…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-7 max-w-[1400px] mx-auto">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
         eyebrow="Line Balancing"
         title="Planned Lines"
@@ -352,11 +352,11 @@ export function LineBalancePage() {
         <DataCardHeader title="Plan Configuration" subtitle="Set the production order for this line" />
         <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 items-end">
           <div className="lg:col-span-2">
-            <label className="text-[10.5px] font-semibold tracking-[0.1em] uppercase text-[#6E6656] block mb-1.5">Production Order</label>
+            <label className="text-[10.5px] font-semibold tracking-[0.1em] uppercase text-[#475569] block mb-1.5">Production Order</label>
             <select
               value={selectedOrderId}
               onChange={e => setSelectedOrderId(e.target.value)}
-              className="w-full h-10 bg-white border border-[#D0C8B4] px-3 text-sm text-[#26231D] focus:outline-none focus:border-[#B8763F] focus:ring-2 focus:ring-[#B8763F]/15"
+              className="w-full h-10 bg-white border border-[#E6DDCE] px-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-2 focus:ring-[#B48259]/15"
             >
               <option value="">— Select Order —</option>
               {orders.map(o => (
@@ -365,11 +365,11 @@ export function LineBalancePage() {
             </select>
           </div>
           <div>
-            <label className="text-[10.5px] font-semibold tracking-[0.1em] uppercase text-[#6E6656] block mb-1.5">Shift</label>
+            <label className="text-[10.5px] font-semibold tracking-[0.1em] uppercase text-[#475569] block mb-1.5">Shift</label>
             <select
               value={selectedShiftId}
               onChange={e => setSelectedShiftId(e.target.value)}
-              className="w-full h-10 bg-white border border-[#D0C8B4] px-3 text-sm text-[#26231D] focus:outline-none focus:border-[#B8763F] focus:ring-2 focus:ring-[#B8763F]/15"
+              className="w-full h-10 bg-white border border-[#E6DDCE] px-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-2 focus:ring-[#B48259]/15"
             >
               {shifts.map(s => (
                 <option key={s.id} value={s.id}>{s.shiftName} ({s.startTime}–{s.endTime})</option>
@@ -396,22 +396,22 @@ export function LineBalancePage() {
         </div>
 
         {/* Calculated KPIs */}
-        <div className="px-6 pb-6 grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-[#E0D8C0] pt-5">
+        <div className="px-6 pb-6 grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-[#F0EAE0] pt-5">
           <div className="text-center">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-[#8A8270] font-semibold">Shift Duration</p>
-            <p className="font-mono text-xl font-bold text-[#26231D] mt-1">{shiftDurationMins}<span className="text-sm font-normal ml-1">min</span></p>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[#8C7E6E] font-semibold">Shift Duration</p>
+            <p className="font-mono text-xl font-bold text-[#221912] mt-1">{shiftDurationMins}<span className="text-sm font-normal ml-1">min</span></p>
           </div>
           <div className="text-center">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-[#8A8270] font-semibold">Available Time</p>
-            <p className="font-mono text-xl font-bold text-[#26231D] mt-1">{availableTimeMins.toFixed(0)}<span className="text-sm font-normal ml-1">min</span></p>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[#8C7E6E] font-semibold">Available Time</p>
+            <p className="font-mono text-xl font-bold text-[#221912] mt-1">{availableTimeMins.toFixed(0)}<span className="text-sm font-normal ml-1">min</span></p>
           </div>
-          <div className="text-center border-x border-[#E0D8C0]">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-[#8A8270] font-semibold">Takt Time</p>
-            <p className="font-mono text-2xl font-bold text-[#B8763F] mt-1">{taktTime.toFixed(3)}<span className="text-sm font-normal ml-1">min</span></p>
+          <div className="text-center border-x border-[#F0EAE0]">
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[#8C7E6E] font-semibold">Takt Time</p>
+            <p className="font-mono text-2xl font-bold text-[#B48259] mt-1">{taktTime.toFixed(3)}<span className="text-sm font-normal ml-1">min</span></p>
           </div>
           <div className="text-center">
-            <p className="text-[10px] uppercase tracking-[0.12em] text-[#8A8270] font-semibold">Total SMV</p>
-            <p className="font-mono text-xl font-bold text-[#26231D] mt-1">{totalSMV.toFixed(2)}<span className="text-sm font-normal ml-1">min</span></p>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[#8C7E6E] font-semibold">Total SMV</p>
+            <p className="font-mono text-xl font-bold text-[#221912] mt-1">{totalSMV.toFixed(2)}<span className="text-sm font-normal ml-1">min</span></p>
           </div>
         </div>
       </DataCard>
@@ -441,30 +441,30 @@ export function LineBalancePage() {
               subtitle="Assign a sewing operator to each operation in the bulletin"
               count={assignedCount}
             />
-            <div className="divide-y divide-[#EDE8DF] max-h-[600px] overflow-y-auto">
+            <div className="divide-y divide-[#F0EAE0] max-h-[600px] overflow-y-auto">
               {stationData.map((station, i) => (
                 <motion.div
                   key={station.bulletinLineId}
-                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#FBF8F3] transition-colors"
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#FEFCF9] transition-colors"
                   initial={{ opacity: 0, x: -6 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.025 }}
                 >
                   {/* Station number */}
-                  <div className={`w-8 h-8 shrink-0 flex items-center justify-center text-[10px] font-bold font-mono rounded-sm border ${station.isBottleneck ? "bg-amber-50 border-amber-300 text-amber-700" : station.assigned ? "bg-[#F0EAE0] border-[#D0C8B4] text-[#6E6656]" : "bg-white border-[#E0D8C0] text-[#8A8270]"}`}>
+                  <div className={`w-8 h-8 shrink-0 flex items-center justify-center text-[10px] font-bold font-mono rounded-sm border ${station.isBottleneck ? "bg-amber-50 border-amber-300 text-amber-700" : station.assigned ? "bg-[#F0EAE0] border-[#E6DDCE] text-[#475569]" : "bg-white border-[#F0EAE0] text-[#8C7E6E]"}`}>
                     {station.stationNum}
                   </div>
 
                   {/* Operation info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-[9px] text-[#B8763F] font-bold bg-[#FBF4EC] px-1.5 py-0.5 rounded-sm">{station.code}</span>
-                      <p className="text-sm font-medium text-[#1E1B16] truncate">{station.label}</p>
+                      <span className="font-mono text-[9px] text-[#B48259] font-bold bg-[#FBF4EC] px-1.5 py-0.5 rounded-sm">{station.code}</span>
+                      <p className="text-sm font-medium text-[#221912] truncate">{station.label}</p>
                     </div>
                     <div className="flex gap-4">
-                      <p className="text-[10px] text-[#8A8270] mt-0.5">SMV: <span className="font-mono">{station.smv.toFixed(2)}</span></p>
+                      <p className="text-[10px] text-[#8C7E6E] mt-0.5">SMV: <span className="font-mono">{station.smv.toFixed(2)}</span></p>
                       {station.assigned && (
-                        <p className="text-[10px] text-[#8A8270] mt-0.5">Efficiency: <span className="font-mono text-[#3C5245] font-semibold">{station.efficiency.toFixed(1)}%</span></p>
+                        <p className="text-[10px] text-[#8C7E6E] mt-0.5">Efficiency: <span className="font-mono text-[#3C5245] font-semibold">{station.efficiency.toFixed(1)}%</span></p>
                       )}
                     </div>
                   </div>
@@ -474,7 +474,7 @@ export function LineBalancePage() {
                     <select
                       value={station.operatorId || ""}
                       onChange={e => handleAssign(station.bulletinLineId, e.target.value)}
-                      className="w-full text-xs bg-white border border-[#D0C8B4] px-2 py-1.5 text-[#26231D] focus:outline-none focus:border-[#B8763F] focus:ring-1 focus:ring-[#B8763F]/20 transition-all"
+                      className="w-full text-xs bg-white border border-[#E6DDCE] px-2 py-1.5 text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20 transition-all"
                     >
                       <option value="">— Unassigned —</option>
                       {operators.map(op => (
@@ -490,7 +490,7 @@ export function LineBalancePage() {
                         <p className={`font-mono text-sm font-bold ${station.isBottleneck ? "text-amber-600" : "text-[#3C5245]"}`}>
                           {station.actualTime.toFixed(3)}
                         </p>
-                        <p className="text-[9px] text-[#8A8270]">min / pc</p>
+                        <p className="text-[9px] text-[#8C7E6E]">min / pc</p>
                         {station.isBottleneck && (
                           <div className="flex items-center justify-end gap-0.5 mt-0.5">
                             <AlertTriangle className="h-3 w-3 text-amber-500" />
@@ -499,21 +499,21 @@ export function LineBalancePage() {
                         )}
                       </div>
                     ) : (
-                      <span className="text-xs text-[#8A8270] italic">—</span>
+                      <span className="text-xs text-[#8C7E6E] italic">—</span>
                     )}
                   </div>
                 </motion.div>
               ))}
               
               {stationData.length === 0 && (
-                <div className="p-8 text-center text-[#8A8270] text-sm">
+                <div className="p-8 text-center text-[#8C7E6E] text-sm">
                   No operations found. Please check if an Order and its corresponding Operation Bulletin exist.
                 </div>
               )}
             </div>
-            <div className="px-5 py-2.5 border-t border-[#E0D8C0] bg-[#FAF7F2] flex justify-between items-center">
-              <span className="text-[11px] font-mono text-[#8A8270]">{assignedCount} of {stationData.length} assigned</span>
-              <span className="text-[11px] text-[#8A8270]">
+            <div className="px-5 py-2.5 border-t border-[#F0EAE0] bg-[#FAFAF8] flex justify-between items-center">
+              <span className="text-[11px] font-mono text-[#8C7E6E]">{assignedCount} of {stationData.length} assigned</span>
+              <span className="text-[11px] text-[#8C7E6E]">
                 Required Operators = ⌈CT ÷ Takt⌉
               </span>
             </div>
@@ -529,7 +529,7 @@ export function LineBalancePage() {
               action={
                 <button
                   onClick={() => setShowChart(p => !p)}
-                  className="text-[10px] text-[#8A8270] hover:text-[#26231D] flex items-center gap-1 transition-colors"
+                  className="text-[10px] text-[#8C7E6E] hover:text-[#221912] flex items-center gap-1 transition-colors"
                 >
                   {showChart ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                   {showChart ? "Hide" : "Show"}
@@ -550,7 +550,7 @@ export function LineBalancePage() {
                 </motion.div>
               )}
               {showChart && stationData.length === 0 && (
-                <div className="p-8 text-center text-[#8A8270] text-sm italic">
+                <div className="p-8 text-center text-[#8C7E6E] text-sm italic">
                   Chart will appear once order is selected.
                 </div>
               )}
@@ -561,14 +561,14 @@ export function LineBalancePage() {
           <DataCard>
             <div className="p-5 space-y-3">
               <div className="flex items-center gap-2 mb-3">
-                <Zap className="h-4 w-4 text-[#B8763F]" />
-                <h4 className="text-sm font-semibold text-[#1E1B16]">How Line Balancing Works</h4>
+                <Zap className="h-4 w-4 text-[#B48259]" />
+                <h4 className="text-sm font-semibold text-[#221912]">How Line Balancing Works</h4>
               </div>
-              <div className="space-y-2.5 text-[11.5px] text-[#6E6656] leading-relaxed">
-                <p><strong className="text-[#26231D] font-semibold">Takt Time</strong> = Available Time ÷ Target Output</p>
-                <p><strong className="text-[#26231D] font-semibold">Actual Time</strong> = SMV ÷ Operator Efficiency</p>
-                <p><strong className="text-[#26231D] font-semibold">Required Ops</strong> = ⌈Actual Time ÷ Takt Time⌉</p>
-                <div className="h-px bg-[#E0D8C0] my-2" />
+              <div className="space-y-2.5 text-[11.5px] text-[#475569] leading-relaxed">
+                <p><strong className="text-[#221912] font-semibold">Takt Time</strong> = Available Time ÷ Target Output</p>
+                <p><strong className="text-[#221912] font-semibold">Actual Time</strong> = SMV ÷ Operator Efficiency</p>
+                <p><strong className="text-[#221912] font-semibold">Required Ops</strong> = ⌈Actual Time ÷ Takt Time⌉</p>
+                <div className="h-px bg-[#F0EAE0] my-2" />
                 <p className="text-[10.5px]">Assign operators so all bars fall below the dashed Takt Time line. Red bars indicate bottlenecks that will prevent the target from being met.</p>
               </div>
               {bottleneckCount === 0 && assignedCount > 0 && assignedCount === stationData.length && (
@@ -588,3 +588,6 @@ export function LineBalancePage() {
     </div>
   );
 }
+
+
+

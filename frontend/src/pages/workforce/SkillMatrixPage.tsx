@@ -16,7 +16,7 @@ function SkillCell({ skill, onClick }: { skill?: SkillAssessment; onClick: () =>
     return (
       <button 
         onClick={onClick}
-        className="w-full h-full min-h-[40px] flex items-center justify-center text-[#D0C8B4] hover:bg-[#F0EAE0] transition-colors"
+        className="w-full h-full min-h-[40px] flex items-center justify-center text-[#E6DDCE] hover:bg-[#F0EAE0] transition-colors"
       >
         <span className="text-[10px] opacity-0 group-hover:opacity-100">+</span>
       </button>
@@ -28,7 +28,7 @@ function SkillCell({ skill, onClick }: { skill?: SkillAssessment; onClick: () =>
     2: "bg-teal-50 text-teal-700 border-teal-200",
     3: "bg-amber-50 text-amber-700 border-amber-200",
     4: "bg-blue-50 text-blue-700 border-blue-200",
-    5: "bg-[#FBF4EC] text-[#9B5A32] border-[#D89A5C]",
+    5: "bg-[#FBF4EC] text-[#9B5A32] border-[#FFE5BF]",
   };
 
   return (
@@ -39,13 +39,13 @@ function SkillCell({ skill, onClick }: { skill?: SkillAssessment; onClick: () =>
       <div className={`w-6 h-6 rounded-sm border flex items-center justify-center text-[11px] font-bold font-mono ${colors[skill.rating]}`}>
         {skill.rating}
       </div>
-      <span className="text-[9px] text-[#8A8270] mt-0.5 font-mono">{skill.cycleTimeSeconds}s</span>
+      <span className="text-[9px] text-[#8C7E6E] mt-0.5 font-mono">{skill.cycleTimeSeconds}s</span>
       
       {/* Tooltip on hover */}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-20 w-max bg-[#26231D] text-white text-[10px] px-2 py-1 rounded-sm shadow-lg pointer-events-none">
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-20 w-max bg-[#221912] text-white text-[10px] px-2 py-1 rounded-sm shadow-lg pointer-events-none">
         <p>Revision: {skill.revision}</p>
         <p>Effective: {skill.effectiveDate}</p>
-        {skill.notes && <p className="text-[#D89A5C] mt-0.5 max-w-[150px] truncate">{skill.notes}</p>}
+        {skill.notes && <p className="text-[#FFE5BF] mt-0.5 max-w-[150px] truncate">{skill.notes}</p>}
       </div>
     </button>
   );
@@ -90,10 +90,10 @@ export function SkillMatrixPage() {
   );
 
   return (
-    <div className="space-y-7 max-w-full mx-auto px-4 md:px-8">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
         eyebrow="Workforce"
-        title="Swing Skill Matrix"
+        title="Sewing Skill Matrix"
         description="Track operator skill ratings (1-5) and cycle times for each operation. Updates create new revisions."
       />
 
@@ -121,20 +121,20 @@ export function SkillMatrixPage() {
           subtitle="Click any cell to record a new assessment"
           action={
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8A8270]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8C7E6E]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search operators..."
-                className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#D0C8B4] text-[#26231D] placeholder-[#B8A898] w-52 focus:outline-none focus:border-[#B8763F] focus:ring-1 focus:ring-[#B8763F]/20"
+                className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#E6DDCE] text-[#221912] placeholder-[#B8A898] w-52 focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20"
               />
             </div>
           }
         />
         
         {loading ? (
-          <div className="p-12 text-center text-[#6E6656]">Loading matrix...</div>
+          <div className="p-12 text-center text-[#475569]">Loading matrix...</div>
         ) : filteredOperators.length === 0 ? (
           <EmptyState title="No operators found" />
         ) : (
@@ -142,14 +142,14 @@ export function SkillMatrixPage() {
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-[#FAF7F2] border-b-2 border-r-2 border-[#E0D8C0] p-4 text-left w-64 min-w-[250px] shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
-                    <span className="text-[10px] font-semibold tracking-widest text-[#8A8270] uppercase">Operators</span>
+                  <th className="sticky left-0 z-10 bg-[#FAFAF8] border-b-2 border-r-2 border-[#F0EAE0] p-4 text-left w-64 min-w-[250px] shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
+                    <span className="text-[10px] font-semibold tracking-widest text-[#8C7E6E] uppercase">Operators</span>
                   </th>
                   {operations.map(op => (
-                    <th key={op.id} className="bg-[#FAF7F2] border-b-2 border-r border-[#E0D8C0] p-3 text-center min-w-[100px] w-[100px]">
+                    <th key={op.id} className="bg-[#FAFAF8] border-b-2 border-r border-[#F0EAE0] p-3 text-center min-w-[100px] w-[100px]">
                       <div className="flex flex-col items-center">
-                        <span className="font-mono text-[9px] text-[#B8763F] font-bold bg-white px-1 py-0.5 rounded-sm border border-[#E0D8C0] mb-1">{op.code}</span>
-                        <span className="text-[10px] font-medium text-[#26231D] leading-tight line-clamp-2" title={op.name}>{op.name}</span>
+                        <span className="font-mono text-[9px] text-[#B48259] font-bold bg-white px-1 py-0.5 rounded-sm border border-[#F0EAE0] mb-1">{op.code}</span>
+                        <span className="text-[10px] font-medium text-[#221912] leading-tight line-clamp-2" title={op.name}>{op.name}</span>
                       </div>
                     </th>
                   ))}
@@ -157,17 +157,17 @@ export function SkillMatrixPage() {
               </thead>
               <tbody>
                 {filteredOperators.map(operator => (
-                  <tr key={operator.id} className="border-b border-[#EDE8DF] hover:bg-[#FBF8F3] transition-colors group">
-                    <td className="sticky left-0 z-10 bg-white group-hover:bg-[#FBF8F3] border-r-2 border-[#E0D8C0] p-3 shadow-[2px_0_4px_rgba(0,0,0,0.02)] transition-colors">
+                  <tr key={operator.id} className="border-b border-[#F0EAE0] hover:bg-[#FEFCF9] transition-colors group">
+                    <td className="sticky left-0 z-10 bg-white group-hover:bg-[#FEFCF9] border-r-2 border-[#F0EAE0] p-3 shadow-[2px_0_4px_rgba(0,0,0,0.02)] transition-colors">
                       <div className="flex flex-col">
-                        <span className="font-semibold text-sm text-[#1E1B16] truncate">{operator.name}</span>
-                        <span className="font-mono text-[10px] text-[#8A8270]">{operator.employeeId} · {operator.department}</span>
+                        <span className="font-semibold text-sm text-[#221912] truncate">{operator.name}</span>
+                        <span className="font-mono text-[10px] text-[#8C7E6E]">{operator.employeeId} · {operator.department}</span>
                       </div>
                     </td>
                     {operations.map(op => {
                       const skill = matrix.find(m => String(m.operatorId) === String(operator.id) && String(m.operationId) === String(op.id));
                       return (
-                        <td key={op.id} className="border-r border-[#EDE8DF] p-0 relative">
+                        <td key={op.id} className="border-r border-[#F0EAE0] p-0 relative">
                           <SkillCell 
                             skill={skill} 
                             onClick={() => setActiveCell({
@@ -190,3 +190,5 @@ export function SkillMatrixPage() {
     </div>
   );
 }
+
+

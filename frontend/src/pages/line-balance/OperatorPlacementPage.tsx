@@ -91,15 +91,15 @@ export function OperatorPlacementPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center space-y-3">
-          <div className="w-8 h-8 border-4 border-[#D89A5C] border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-[#8A8270]">Loading layout...</p>
+          <div className="w-8 h-8 border-4 border-[#FFE5BF] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-[#8C7E6E]">Loading layout...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-7 max-w-7xl mx-auto">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
         eyebrow="Line Balancing"
         title="Operator Placement"
@@ -107,13 +107,13 @@ export function OperatorPlacementPage() {
       />
 
       <DataCard>
-        <div className="p-6 border-b border-[#E0D8C0] bg-[#FAF7F2]">
+        <div className="p-6 border-b border-[#F0EAE0] bg-[#FAFAF8]">
           <div className="max-w-sm">
-            <label className="text-[10.5px] font-semibold tracking-[0.1em] uppercase text-[#6E6656] block mb-1.5">View Placement For Order</label>
+            <label className="text-[10.5px] font-semibold tracking-[0.1em] uppercase text-[#475569] block mb-1.5">View Placement For Order</label>
             <select
               value={selectedOrderId}
               onChange={e => setSelectedOrderId(e.target.value)}
-              className="w-full h-10 bg-white border border-[#D0C8B4] px-3 text-sm text-[#26231D] focus:outline-none focus:border-[#B8763F] focus:ring-2 focus:ring-[#B8763F]/15"
+              className="w-full h-10 bg-white border border-[#E6DDCE] px-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-2 focus:ring-[#B48259]/15"
             >
               <option value="">— Select Order —</option>
               {orders.map(o => (
@@ -123,7 +123,7 @@ export function OperatorPlacementPage() {
           </div>
         </div>
 
-        <div className="p-6 bg-[#FBF8F3]">
+        <div className="p-6 bg-[#FEFCF9]">
           {!linePlan ? (
             <EmptyState 
               title="No Line Plan Found" 
@@ -134,8 +134,8 @@ export function OperatorPlacementPage() {
           ) : (
             <div className="space-y-8">
               <div className="flex items-center gap-2 mb-2">
-                <Users className="h-4 w-4 text-[#B8763F]" />
-                <h3 className="text-sm font-semibold text-[#1E1B16]">Line Floor Plan (Sequential Layout)</h3>
+                <Users className="h-4 w-4 text-[#B48259]" />
+                <h3 className="text-sm font-semibold text-[#221912]">Line Floor Plan (Sequential Layout)</h3>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -145,38 +145,38 @@ export function OperatorPlacementPage() {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: idx * 0.05 }}
-                    className={`relative p-5 rounded-sm border bg-white shadow-sm flex flex-col h-full ${station.isAssigned ? 'border-[#E0D8C0]' : 'border-amber-200 bg-amber-50/30'}`}
+                    className={`relative p-5 rounded-sm border bg-white shadow-sm flex flex-col h-full ${station.isAssigned ? 'border-[#F0EAE0]' : 'border-amber-200 bg-amber-50/30'}`}
                   >
                     <div className="flex justify-between items-start mb-4">
-                      <div className="w-8 h-8 rounded-sm bg-[#F0EAE0] text-[#6E6656] flex items-center justify-center font-mono text-[10px] font-bold shrink-0">
+                      <div className="w-8 h-8 rounded-sm bg-[#F0EAE0] text-[#475569] flex items-center justify-center font-mono text-[10px] font-bold shrink-0">
                         S-{station.sequence}
                       </div>
-                      <span className="text-[9px] uppercase tracking-wider font-semibold text-[#8A8270] bg-[#FAF7F2] px-1.5 py-0.5 rounded border border-[#E0D8C0]">
+                      <span className="text-[9px] uppercase tracking-wider font-semibold text-[#8C7E6E] bg-[#FAFAF8] px-1.5 py-0.5 rounded border border-[#F0EAE0]">
                         {station.machineType}
                       </span>
                     </div>
 
                     <div className="mb-4 flex-1">
-                      <span className="font-mono text-[9px] text-[#B8763F] font-bold">{station.operationCode}</span>
-                      <h4 className="text-sm font-medium text-[#1E1B16] leading-tight mt-1">{station.operationName}</h4>
+                      <span className="font-mono text-[9px] text-[#B48259] font-bold">{station.operationCode}</span>
+                      <h4 className="text-sm font-medium text-[#221912] leading-tight mt-1">{station.operationName}</h4>
                     </div>
 
-                    <div className={`p-3 rounded-sm border flex items-center gap-3 mt-auto ${station.isAssigned ? 'bg-[#FAF7F2] border-[#E0D8C0]' : 'bg-white border-dashed border-amber-300'}`}>
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center overflow-hidden shrink-0 ${station.isAssigned ? 'bg-[#E0D8C0]' : 'bg-amber-100 text-amber-500'}`}>
+                    <div className={`p-3 rounded-sm border flex items-center gap-3 mt-auto ${station.isAssigned ? 'bg-[#FAFAF8] border-[#F0EAE0]' : 'bg-white border-dashed border-amber-300'}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center overflow-hidden shrink-0 ${station.isAssigned ? 'bg-[#F0EAE0]' : 'bg-amber-100 text-amber-500'}`}>
                         <User className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
-                        <p className={`text-xs font-semibold truncate ${station.isAssigned ? 'text-[#26231D]' : 'text-amber-700 italic'}`}>
+                        <p className={`text-xs font-semibold truncate ${station.isAssigned ? 'text-[#221912]' : 'text-amber-700 italic'}`}>
                           {station.operatorName}
                         </p>
                         {station.operatorId && (
-                          <p className="text-[10px] text-[#8A8270] font-mono">{station.operatorId}</p>
+                          <p className="text-[10px] text-[#8C7E6E] font-mono">{station.operatorId}</p>
                         )}
                       </div>
                     </div>
 
                     {idx < placementData.length - 1 && (
-                      <div className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 items-center justify-center bg-white rounded-full border border-[#E0D8C0] text-[#B8763F] shadow-sm">
+                      <div className="hidden lg:flex absolute -right-3 top-1/2 -translate-y-1/2 z-10 w-6 h-6 items-center justify-center bg-white rounded-full border border-[#F0EAE0] text-[#B48259] shadow-sm">
                         <ArrowRight className="w-3 h-3" />
                       </div>
                     )}
@@ -190,3 +190,6 @@ export function OperatorPlacementPage() {
     </div>
   );
 }
+
+
+

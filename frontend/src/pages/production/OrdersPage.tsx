@@ -46,12 +46,12 @@ export function OrdersPage() {
     loadData();
   };
   
-  const handleStatusChange = async (id: string, status: string) => {
+  const handleStatusChange = async (id: string | number, status: string) => {
     await ordersApi.updateOrderStatus(id, status as OrderStatus);
     loadData();
   };
 
-  const getStyleName = (id: string) => styles.find(s => s.id === id)?.styleNo || "Unknown Style";
+  const getStyleName = (id: string | number) => styles.find(s => s.id === id)?.styleNo || "Unknown Style";
 
   const filteredOrders = orders.filter(o => 
     o.orderNo.toLowerCase().includes(search.toLowerCase()) || 
@@ -60,7 +60,7 @@ export function OrdersPage() {
   );
 
   return (
-    <div className="space-y-7 max-w-7xl mx-auto">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
         eyebrow="Production"
         title="Order Details"
@@ -91,13 +91,13 @@ export function OrdersPage() {
           count={filteredOrders.length} 
           action={
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8A8270]" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8C7E6E]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search orders..."
-                className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#D0C8B4] text-[#26231D] placeholder-[#B8A898] w-64 focus:outline-none focus:border-[#B8763F] focus:ring-1 focus:ring-[#B8763F]/20 transition-all rounded-sm"
+                className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#E6DDCE] text-[#221912] placeholder-[#B8A898] w-64 focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20 transition-all rounded-sm"
               />
             </div>
           }
@@ -124,30 +124,30 @@ export function OrdersPage() {
               {filteredOrders.map((order, index) => (
                 <motion.tr
                   key={order.id}
-                  className="group bg-white hover:bg-[#FBF8F3] border-b border-[#EDE8DF] last:border-0 transition-colors duration-100"
+                  className="group bg-white hover:bg-[#FEFCF9] border-b border-[#F0EAE0] last:border-0 transition-colors duration-100"
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.03, duration: 0.2 }}
                 >
                   <TableCell>
-                    <span className="font-mono text-sm font-bold text-[#1E1B16] tracking-wide">{order.orderNo}</span>
+                    <span className="font-mono text-sm font-bold text-[#221912] tracking-wide">{order.orderNo}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="font-semibold text-[#B8763F] text-xs">{getStyleName(order.styleId)}</span>
-                      <span className="text-[10px] text-[#8A8270] mt-0.5">{order.color}</span>
+                      <span className="font-semibold text-[#B48259] text-xs">{getStyleName(order.styleId)}</span>
+                      <span className="text-[10px] text-[#8C7E6E] mt-0.5">{order.color}</span>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm text-[#26231D]">{order.buyer}</span>
+                    <span className="text-sm text-[#221912]">{order.buyer}</span>
                   </TableCell>
                   <TableCell className="text-right">
                     <span className="font-mono font-bold text-[#3C5245] text-sm">{order.totalQuantity.toLocaleString()}</span>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col text-[10px] font-mono">
-                      <span className="text-[#8A8270]">Ord: {order.orderDate}</span>
-                      <span className="text-[#1E1B16] font-semibold mt-0.5">Del: {order.deliveryDate}</span>
+                      <span className="text-[#8C7E6E]">Ord: {order.orderDate}</span>
+                      <span className="text-[#221912] font-semibold mt-0.5">Del: {order.deliveryDate}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -168,7 +168,7 @@ export function OrdersPage() {
                     </select>
                   </TableCell>
                   <TableCell className="text-right">
-                    <button className="text-[#D0C8B4] hover:text-[#B8763F] transition-colors p-1">
+                    <button className="text-[#E6DDCE] hover:text-[#B48259] transition-colors p-1">
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </TableCell>
@@ -181,3 +181,6 @@ export function OrdersPage() {
     </div>
   );
 }
+
+
+

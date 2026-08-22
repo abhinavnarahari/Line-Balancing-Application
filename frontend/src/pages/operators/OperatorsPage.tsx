@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { PageHeader } from "../../components/ui/PremiumUI";
+import { PageHeader, RecentActivityLog } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { OperatorList } from "../../features/operators/OperatorList";
 import { OperatorForm } from "../../features/operators/OperatorForm";
@@ -12,6 +13,7 @@ export function OperatorsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingOperator, setEditingOperator] = useState<Operator | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => { loadOperators(); }, []);
 
@@ -29,13 +31,14 @@ export function OperatorsPage() {
     setEditingOperator(null);
   };
 
-  const handleEdit = (op: Operator) => { setEditingOperator(op); setIsFormOpen(true); };
+  const handleEdit = (op: Operator) => { navigate(`/settings/operators/${op.employeeId}`); };
   const handleToggleActive = async (id: string) => { await operatorsApi.toggleActive(id); await loadOperators(); };
   const handleClose = () => { setIsFormOpen(false); setEditingOperator(null); };
 
   return (
-    <div className="space-y-7 max-w-7xl mx-auto">
+    <div className="space-y-7 w-full p-6 lg:p-8">
       <PageHeader
+        showImportExport={true}
         eyebrow="Masters"
         title="Sewing Operators"
         description="Register and manage all sewing operators on the factory floor."
@@ -59,6 +62,8 @@ export function OperatorsPage() {
       </Modal>
 
       <OperatorList operators={operators} onEdit={handleEdit} onToggleActive={handleToggleActive} loading={loading} />
+    
+      <RecentActivityLog />
     </div>
   );
 }

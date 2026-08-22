@@ -38,7 +38,7 @@ const navigation: NavGroup[] = [
     items: [
       { name: "Shift Assignment", href: "/shift-assignment", icon: UserCheck },
       { name: "Daily Attendance", href: "/attendance", icon: CalendarCheck },
-      { name: "Swing Skill Matrix", href: "/skill-matrix", icon: Star },
+      { name: "Sewing Skill Matrix", href: "/skill-matrix", icon: Star },
     ],
   },
   {
@@ -67,22 +67,22 @@ export function Sidebar() {
       : location.pathname.startsWith(href);
 
   return (
-    <div className="flex h-full w-64 flex-col bg-white border-r border-[#E0D8C0] relative z-20 shadow-sm">
+    <div className="flex h-full w-64 flex-col bg-[#06202B] border-r border-[#0A2947] relative z-20 shadow-sm">
       {/* Logo */}
-      <div className="flex h-16 shrink-0 items-center px-5 border-b border-[#E0D8C0]">
+      <div className="flex h-16 shrink-0 items-center px-5 border-b border-[#0A2947]">
         <div className="flex items-center gap-3">
           <div
             className="w-7 h-7 flex items-center justify-center rounded"
-            style={{ background: "linear-gradient(135deg, #B8763F, #8B4A3C)" }}
+            style={{ background: "linear-gradient(135deg, #FFE5BF, #B48259)" }}
           >
-            <span className="text-[#FBF8F0] font-bold text-sm">Q</span>
+            <span className="text-[#06202B] font-bold text-sm">Q</span>
           </div>
           <div>
-            <span className="text-sm font-semibold text-[#26231D] tracking-tight block leading-tight">
-              QTech
+            <span className="text-sm font-semibold text-white tracking-tight block leading-tight">
+              QTexPro
             </span>
-            <span className="text-[10px] text-[#8A8270] tracking-wide leading-tight">
-              Swing Line Balancing
+            <span className="text-[10px] text-slate-400 tracking-wide leading-tight">
+              Line Balancing
             </span>
           </div>
         </div>
@@ -94,7 +94,7 @@ export function Sidebar() {
           {navigation.map((section, sectionIndex) => (
             <div key={section.group || "main"}>
               {section.group && (
-                <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.18em] text-[#B8763F] uppercase">
+                <p className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.18em] text-[#D3D4C0] uppercase">
                   {section.group}
                 </p>
               )}
@@ -114,16 +114,16 @@ export function Sidebar() {
                       <Link
                         to={item.href}
                         className={cn(
-                          "group flex items-center px-3 py-2 text-sm font-medium transition-colors relative overflow-hidden rounded-sm",
+                          "group flex items-center px-3 py-2.5 text-sm font-semibold transition-colors relative overflow-hidden rounded-xl",
                           active
-                            ? "text-[#B8763F] bg-[#FBF8F0]"
-                            : "text-[#6E6656] hover:text-[#26231D] hover:bg-[#FBF8F0]"
+                            ? "text-[#221912] bg-[#F6F1E8]"
+                            : "text-slate-400 hover:text-white hover:bg-[#0A2947]"
                         )}
                       >
                         {active && (
                           <motion.div
                             layoutId="sidebar-active"
-                            className="absolute left-0 top-0 w-0.5 h-full bg-[#B8763F]"
+                            className="absolute inset-0 bg-[#F6F1E8] rounded-xl -z-10"
                             initial={false}
                             transition={{ type: "spring", stiffness: 300, damping: 30 }}
                           />
@@ -131,7 +131,7 @@ export function Sidebar() {
                         <item.icon
                           className={cn(
                             "mr-3 h-4 w-4 flex-shrink-0 transition-colors",
-                            active ? "text-[#B8763F]" : "text-[#8A8270] group-hover:text-[#6E6656]"
+                            active ? "text-[#221912]" : "text-slate-400 group-hover:text-white"
                           )}
                           aria-hidden="true"
                           strokeWidth={active ? 2 : 1.5}
@@ -147,17 +147,17 @@ export function Sidebar() {
         </nav>
       </div>
 
-      <div className="p-3 border-t border-[#E0D8C0]">
+      <div className="p-3 border-t border-[#0A2947]">
         <Link 
           to="/settings"
           className={cn(
-            "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors rounded-sm",
+            "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors rounded-xl",
             isActive("/settings")
-              ? "text-[#B8763F] bg-[#FBF8F0]"
-              : "text-[#6E6656] hover:text-[#26231D] hover:bg-[#FBF8F0]"
+              ? "text-[#221912] bg-[#F6F1E8]"
+              : "text-slate-400 hover:text-white hover:bg-[#0A2947]"
           )}
         >
-          <Settings className={cn("w-4 h-4", isActive("/settings") ? "text-[#B8763F]" : "text-[#8A8270]")} strokeWidth={1.5} />
+          <Settings className={cn("w-4 h-4", isActive("/settings") ? "text-[#221912]" : "text-slate-400")} strokeWidth={1.5} />
           <span>Settings</span>
         </Link>
       </div>

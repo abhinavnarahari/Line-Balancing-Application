@@ -114,15 +114,15 @@ export function StyleForm({ initialData, onSubmit, onCancel }: StyleFormProps) {
             name="active"
             checked={formData.active}
             onChange={handleChange}
-            className="rounded-sm border-[#D0C8B4] text-[#B8763F] focus:ring-[#B8763F]"
+            className="rounded-sm border-[#E6DDCE] text-[#B48259] focus:ring-[#B48259]"
           />
-          <label htmlFor="active" className="text-sm text-[#26231D] font-medium cursor-pointer">
+          <label htmlFor="active" className="text-sm text-[#221912] font-medium cursor-pointer">
             Active Status
           </label>
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-5 border-t border-[#E0D8C0]">
+      <div className="flex justify-end gap-3 pt-5 border-t border-[#F0EAE0]">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={loading}>Cancel</Button>
         <Button type="submit" variant="primary" loading={loading}>
           {initialData ? "Update Style" : "Create Style"}
@@ -131,3 +131,4 @@ export function StyleForm({ initialData, onSubmit, onCancel }: StyleFormProps) {
     </form>
   );
 }
+
