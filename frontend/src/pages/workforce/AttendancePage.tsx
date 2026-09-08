@@ -97,7 +97,13 @@ export function AttendancePage() {
           shiftsApi.getShifts(true),
           shiftAssignmentApi.getAssignments()
         ]);
-        setOperators(opData.filter(o => o.active));
+        setOperators(
+          opData
+            .filter(o => o.active)
+            .sort((a, b) =>
+              (a.employeeId || "").localeCompare(b.employeeId || "", undefined, { numeric: true, sensitivity: "base" })
+            )
+        );
         setShifts(shiftData);
         setAssignments(assignData);
       } catch (err) {

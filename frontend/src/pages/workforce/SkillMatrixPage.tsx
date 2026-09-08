@@ -75,7 +75,13 @@ export function SkillMatrixPage() {
       setMatrix(mat);
       setPerformanceLogs(perfLogs);
       setOperations((ops as any[]).filter((o: any) => o.active).sort((a: any, b: any) => a.sequence - b.sequence));
-      setOperators((oprs as any[]).filter((o: any) => o.active));
+      setOperators(
+        (oprs as any[])
+          .filter((o: any) => o.active)
+          .sort((a: any, b: any) =>
+            (a.employeeId || "").localeCompare(b.employeeId || "", undefined, { numeric: true, sensitivity: "base" })
+          )
+      );
     } finally {
       setLoading(false);
     }

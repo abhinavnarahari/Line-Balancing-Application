@@ -30,7 +30,13 @@ export function ShiftAssignmentPage() {
         shiftsApi.getShifts(),
       ]);
       setAssignments(assData);
-      setOperators(opData.filter(o => o.active));
+      setOperators(
+        opData
+          .filter(o => o.active)
+          .sort((a, b) =>
+            (a.employeeId || "").localeCompare(b.employeeId || "", undefined, { numeric: true, sensitivity: "base" })
+          )
+      );
       setShifts(shData.filter(s => s.active));
     } catch (err) {
       console.error(err);
