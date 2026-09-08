@@ -33,5 +33,7 @@ public class OperatorRequest {
     @PastOrPresent(message = "Joining date must be in the past or today")
     private LocalDate joiningDate;
 
+    private Operator.OperatorRole role;
+
     private boolean active = true;
 }

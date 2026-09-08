@@ -27,6 +27,10 @@ public class Shift extends AuditableEntity {
     @Column(name = "end_time", nullable = false)
     private LocalTime endTime;
 
+    @Column(name = "break_duration_minutes", nullable = false)
+    @Builder.Default
+    private Integer breakDurationMinutes = 60;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;

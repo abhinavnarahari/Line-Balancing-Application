@@ -37,6 +37,9 @@ public class Order extends AuditableEntity {
     @Column(name = "delivery_date", nullable = false)
     private LocalDate deliveryDate;
 
+    @Column(name = "planned_completion_date")
+    private LocalDate plannedCompletionDate;
+
     @Column(nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     @Builder.Default

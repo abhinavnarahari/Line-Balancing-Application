@@ -1,13 +1,16 @@
 import { api } from "../../lib/api";
 
+export type OperatorRole = "OPERATOR" | "HELPER" | "FLOATER" | "LINE_SUPERVISOR" | "QUALITY_CHECKER";
+
 export interface Operator {
-  id: string; // The backend returns Long, which translates to number, but we can treat as string for URL paths. Wait, backend returns number? We can cast or use string in our TS.
+  id: string;
   employeeId: string;
   name: string;
   age: number;
   gender: "Male" | "Female" | "Other";
   department: string;
   joiningDate: string;
+  role?: OperatorRole;
   active: boolean;
   createdAt?: string;
   updatedAt?: string;

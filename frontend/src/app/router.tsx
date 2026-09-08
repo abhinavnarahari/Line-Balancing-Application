@@ -4,6 +4,8 @@ import { Dashboard } from "../pages/Dashboard";
 
 // Masters
 import { ShiftsPage } from "../pages/shifts/ShiftsPage";
+import { LinesPage } from "../pages/lines/LinesPage";
+import { MachinesPage } from "../pages/machines/MachinesPage";
 import { OperatorsPage } from "../pages/operators/OperatorsPage";
 import { OperatorDetailPage } from "../pages/operators/OperatorDetailPage";
 import { OperationsPage } from "../pages/operations/OperationsPage";
@@ -25,6 +27,7 @@ import { BulletinsPage } from "../pages/production/BulletinsPage";
 
 
 import { SkillMatrixLogsPage } from "../pages/workforce/SkillMatrixLogsPage";
+import { ImmediateActionsPage } from "../pages/workforce/ImmediateActionsPage";
 
 export const router = createBrowserRouter([
   {
@@ -41,6 +44,8 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <ShiftsPage /> }, // Default to shifts
           { path: "shifts",      element: <ShiftsPage /> },
+          { path: "lines",       element: <LinesPage /> },
+          { path: "machines",    element: <MachinesPage /> },
           { path: "operators",   element: <OperatorsPage /> },
           { path: "operations",  element: <OperationsPage /> },
           { path: "sizes",       element: <SizesPage /> },
@@ -52,6 +57,7 @@ export const router = createBrowserRouter([
       { path: "settings/operators/:id", element: <OperatorDetailPage /> },
       { path: "shift-assignment", element: <ShiftAssignmentPage /> },
       { path: "attendance",       element: <AttendancePage /> },
+      { path: "immediate-actions", element: <ImmediateActionsPage /> },
       { path: "skill-matrix",     element: <SkillMatrixPage /> },
       { path: "skill-matrix/logs", element: <SkillMatrixLogsPage /> },
 
@@ -60,9 +66,14 @@ export const router = createBrowserRouter([
       { path: "operation-bulletins",element: <BulletinsPage /> },
 
       // Line Balancing
-      { path: "line-balance",      element: <LineBalancePage /> },
-      { path: "operator-placement", element: <OperatorPlacementPage /> },
-      { path: "monitoring",         element: <ProductionMonitoringPage /> },
+      { path: "line-balance",            element: <LineBalancePage fixedMode="DELIVERY" /> },
+      { path: "planned-lines",           element: <LineBalancePage fixedMode="DELIVERY" /> },
+      { path: "fixed-shift-target",      element: <LineBalancePage fixedMode="SHIFT_TARGET" /> },
+      { path: "shift-target",            element: <LineBalancePage fixedMode="SHIFT_TARGET" /> },
+      { path: "operator-placement",       element: <OperatorPlacementPage /> },
+      { path: "monitoring",               element: <ProductionMonitoringPage /> },
+      { path: "production-monitoring",    element: <ProductionMonitoringPage /> },
+      { path: "hourly-board",             element: <ProductionMonitoringPage /> },
     ],
   },
 ]);

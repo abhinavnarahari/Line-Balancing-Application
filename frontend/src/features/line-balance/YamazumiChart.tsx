@@ -19,23 +19,23 @@ export function YamazumiChart({ data, taktTime }: YamazumiChartProps) {
   const taktTimePercent = (taktTime / maxTime) * 100;
 
   return (
-    <div className="bg-white border border-[#F0EAE0] shadow-sm p-6 h-[400px] flex flex-col relative">
-      <h3 className="font-serif text-xl text-[#221912] mb-6">Line Balance (Yamazumi)</h3>
+    <div className="bg-white border border-[#F1F5F9] shadow-sm p-6 h-[400px] flex flex-col relative">
+      <h3 className="font-sans text-xl text-[#0F172A] mb-6">Line Balance (Yamazumi)</h3>
       
       <div className="flex-1 relative flex items-end justify-between px-4 pb-8 pt-4">
         
         {/* Takt Time Line */}
         <div 
-          className="absolute left-0 right-0 border-t-2 border-dashed border-[#8B4A3C] z-10 flex items-end transition-all duration-500"
+          className="absolute left-0 right-0 border-t-2 border-dashed border-[#2563EB] z-10 flex items-end transition-all duration-500"
           style={{ bottom: `calc(${taktTimePercent}% + 32px)` }}
         >
-          <span className="absolute -top-6 right-0 text-xs font-semibold text-[#8B4A3C] bg-white px-2">
+          <span className="absolute -top-6 right-0 text-xs font-semibold text-[#2563EB] bg-white px-2">
             Takt Time: {taktTime.toFixed(2)}m
           </span>
         </div>
 
         {/* Y-Axis scale markers (rough approximations for visual aid) */}
-        <div className="absolute left-0 top-0 bottom-8 border-r border-[#F0EAE0] w-8 flex flex-col justify-between text-[10px] text-[#8C7E6E] pb-2 pt-4">
+        <div className="absolute left-0 top-0 bottom-8 border-r border-[#F1F5F9] w-8 flex flex-col justify-between text-[10px] text-[#F8FAFC]0 pb-2 pt-4">
           <span>{maxTime.toFixed(1)}</span>
           <span>{(maxTime/2).toFixed(1)}</span>
           <span>0</span>
@@ -51,7 +51,7 @@ export function YamazumiChart({ data, taktTime }: YamazumiChartProps) {
             return (
               <div key={station.stationNumber} className="relative flex flex-col items-center group w-full max-w-[60px] h-full justify-end">
                 {/* Tooltip on hover */}
-                <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-[#221912] text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-20 pointer-events-none">
+                <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition-opacity bg-[#0F172A] text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-20 pointer-events-none">
                   {station.operatorName || "Unassigned"}<br/>
                   {station.actualTime.toFixed(2)} min
                 </div>
@@ -62,7 +62,7 @@ export function YamazumiChart({ data, taktTime }: YamazumiChartProps) {
                   transition={{ type: "spring", stiffness: 60, damping: 15 }}
                   className={`w-full max-w-[40px] rounded-t-sm shadow-sm ${
                     isUnassigned ? 'bg-transparent' :
-                    isBottleneck ? 'bg-[#FFE5BF]' : 'bg-[#3C5245]'
+                    isBottleneck ? 'bg-[#DBEAFE]' : 'bg-[#059669]'
                   }`}
                   style={{
                     opacity: isUnassigned ? 0 : 1
@@ -71,7 +71,7 @@ export function YamazumiChart({ data, taktTime }: YamazumiChartProps) {
                   {/* Highlight the portion above takt time in a different color */}
                   {isBottleneck && (
                     <motion.div 
-                      className="w-full bg-[#8B4A3C] rounded-t-sm"
+                      className="w-full bg-[#2563EB] rounded-t-sm"
                       initial={{ height: 0 }}
                       animate={{ height: `${((station.actualTime - taktTime) / station.actualTime) * 100}%` }}
                       transition={{ delay: 0.3 }}

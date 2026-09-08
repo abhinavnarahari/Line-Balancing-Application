@@ -11,6 +11,9 @@ import java.util.List;
 @Repository
 public interface OperatorPerformanceLogRepository extends JpaRepository<OperatorPerformanceLog, Long> {
 
+    /** All logs across all operators, newest first. */
+    List<OperatorPerformanceLog> findAllByOrderByLogDateDesc();
+
     /** All logs for a specific operator, newest first. */
     List<OperatorPerformanceLog> findByOperatorIdOrderByLogDateDesc(Long operatorId);
 

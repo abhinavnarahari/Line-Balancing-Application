@@ -16,6 +16,9 @@ public interface SkillAssessmentRepository extends JpaRepository<SkillAssessment
     /** All current (latest revision) assessments. */
     List<SkillAssessment> findByIsCurrentTrueOrderByOperatorIdAscOperationIdAsc();
 
+    /** Current (latest revision) assessments for a specific operator. */
+    List<SkillAssessment> findByOperatorIdAndIsCurrentTrue(Long operatorId);
+
     /** Current assessment for a specific operator+operation. */
     @Query("SELECT sa FROM SkillAssessment sa WHERE sa.operator.id = :opId AND sa.operation.id = :opnId AND sa.isCurrent = true")
     Optional<SkillAssessment> findCurrentByOperatorAndOperation(

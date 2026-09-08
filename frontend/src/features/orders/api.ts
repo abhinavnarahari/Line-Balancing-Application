@@ -11,6 +11,7 @@ export interface Order {
   color: string;
   orderDate: string;
   deliveryDate: string;
+  plannedCompletionDate?: string;
   status: OrderStatus;
   sizeLines: { sizeId: string | number; quantity: number }[];
   totalQuantity?: number;
@@ -31,5 +32,13 @@ export const ordersApi = {
   
   updateOrderStatus: async (id: string | number, status: OrderStatus): Promise<Order> => {
     return await api.patch(`/orders/${id}/status`, null, { params: { status } });
+  },
+
+  updateOrder: async (id: string | number, data: CreateOrderDTO): Promise<Order> => {
+    return await api.put(`/orders/${id}`, data);
+  },
+
+  deleteOrder: async (id: string | number): Promise<void> => {
+    await api.delete(`/orders/${id}`);
   }
 };

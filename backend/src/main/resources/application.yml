@@ -3,19 +3,26 @@ spring:
     name: qtech-line-balancing
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/qtech_linebalancing
-    username: postgres
-    password: 1234
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/qtech_linebalancing}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:1234}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 20000
 
   jpa:
     hibernate:
       ddl-auto: validate
     show-sql: false
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: false
         default_schema: public
 
   flyway:
@@ -26,12 +33,25 @@ spring:
     out-of-order: true
 
 server:
-  port: 8085
+  port: ${PORT:8085}
   servlet:
     context-path: /
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173}
+
 logging:
   level:
-    com.qtech.linebalancing: DEBUG
+    com.qtech.linebalancing: ${LOGGING_LEVEL_APP:INFO}
     org.flywaydb: INFO
     org.springframework.web: INFO

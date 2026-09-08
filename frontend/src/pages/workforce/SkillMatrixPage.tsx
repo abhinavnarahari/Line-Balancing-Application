@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
-import { Search, Upload, RefreshCw, ExternalLink, Activity } from "lucide-react";
+import { Search, Upload, RefreshCw, ExternalLink, Activity, Download } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { PageHeader, DataCard, DataCardHeader, EmptyState } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
 
-import { skillApi, type SkillAssessment } from "../../features/skill-matrix/api";
-import { operationsApi, type Operation } from "../../features/operations/mockApi";
-import { operatorsApi, type Operator } from "../../features/operators/mockApi";
+import { skillApi, cycleTimeToRating, type SkillAssessment } from "../../features/skill-matrix/api";
+import { operationsApi, type Operation } from "../../features/operations/api";
+import { operatorsApi, type Operator } from "../../features/operators/api";
+import { exportToExcel } from "../../utils/excel";
 
 // Read-only skill badge — clear at a glance
 function SkillBadge({ rating }: { rating?: number }) {
@@ -20,16 +21,16 @@ function SkillBadge({ rating }: { rating?: number }) {
     );
   }
   const config: Record<number, { bg: string; text: string; label: string }> = {
-    1: { bg: "bg-slate-100",        text: "text-slate-600",   label: "Beginner" },
-    2: { bg: "bg-teal-50",          text: "text-teal-700",    label: "Basic" },
-    3: { bg: "bg-amber-50",         text: "text-amber-700",   label: "Standard" },
-    4: { bg: "bg-blue-50",          text: "text-blue-700",    label: "Good" },
-    5: { bg: "bg-[#FBF4EC]",        text: "text-[#9B5A32]",   label: "Expert" },
+    1: { bg: "bg-[#F6F1E8]", text: "text-[#8C7E6E]", label: "Beginner" },
+    2: { bg: "bg-[#fffbeb]", text: "text-[#b45309]", label: "Basic" },
+    3: { bg: "bg-[#EFE9DF]", text: "text-[#8B5E3C]", label: "Intermediate" },
+    4: { bg: "bg-[#F6F1E8]", text: "text-[#9C5B3C]", label: "Skilled" },
+    5: { bg: "bg-[#F3F5F2]", text: "text-[#77876F]", label: "Expert" },
   };
-  const c = config[rating];
+  const c = config[rating] || config[1];
   return (
     <div className="w-full h-10 flex items-center justify-center">
-      <div className={`w-8 h-8 rounded-lg ${c.bg} ${c.text} flex items-center justify-center text-sm font-bold`} title={c.label}>
+      <div className={`w-8 h-8 rounded-xl ${c.bg} ${c.text} border border-[#E6DDCE] flex items-center justify-center text-xs font-black shadow-2xs`} title={c.label}>
         {rating}
       </div>
     </div>
@@ -38,17 +39,18 @@ function SkillBadge({ rating }: { rating?: number }) {
 
 // Rating level legend
 const RATING_LEGEND = [
-  { rating: 1, label: "Beginner",  color: "bg-slate-200 text-slate-700" },
-  { rating: 2, label: "Basic",     color: "bg-teal-100 text-teal-800" },
-  { rating: 3, label: "Standard",  color: "bg-amber-100 text-amber-800" },
-  { rating: 4, label: "Good",      color: "bg-blue-100 text-blue-800" },
-  { rating: 5, label: "Expert",    color: "bg-[#FFE5BF] text-[#9B5A32]" },
+  { rating: 1, label: "Beginner",     color: "bg-[#F6F1E8] text-[#8C7E6E] border border-[#E6DDCE]" },
+  { rating: 2, label: "Basic",        color: "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]" },
+  { rating: 3, label: "Intermediate", color: "bg-[#EFE9DF] text-[#8B5E3C] border border-[#D8C9B8]" },
+  { rating: 4, label: "Skilled",      color: "bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE]" },
+  { rating: 5, label: "Expert",       color: "bg-[#F3F5F2] text-[#77876F] border border-[#d1d8cd]" },
 ];
 
 export function SkillMatrixPage() {
   const [matrix, setMatrix] = useState<SkillAssessment[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
+  const [performanceLogs, setPerformanceLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -64,17 +66,44 @@ export function SkillMatrixPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [mat, ops, oprs] = await Promise.all([
+      const [mat, ops, oprs, perfLogs] = await Promise.all([
         skillApi.getCurrentMatrix(),
         operationsApi.getOperations(),
         operatorsApi.getOperators(),
+        skillApi.getPerformanceLogs().catch(() => []),
       ]);
       setMatrix(mat);
+      setPerformanceLogs(perfLogs);
       setOperations((ops as any[]).filter((o: any) => o.active).sort((a: any, b: any) => a.sequence - b.sequence));
       setOperators((oprs as any[]).filter((o: any) => o.active));
     } finally {
       setLoading(false);
     }
+  };
+
+  const getEffectiveRating = (opId: string | number, operId: string | number) => {
+    const targetOp = operations.find(o => String(o.id) === String(operId));
+    const opName = targetOp?.name || "";
+    const opSmv = targetOp?.standardSmv;
+
+    const submitted = performanceLogs.filter(
+      l => String(l.operatorId) === String(opId) &&
+           String(l.operationId) === String(operId) &&
+           (l.status === "SUBMITTED" || !l.status)
+    );
+
+    if (submitted.length > 0) {
+      const avg = submitted.reduce((a, b) => a + b.actualCycleTimeSeconds, 0) / submitted.length;
+      return cycleTimeToRating(avg, opName, opSmv);
+    }
+
+    const skill = matrix.find(
+      m => String(m.operatorId) === String(opId) && String(m.operationId) === String(operId)
+    );
+    if (skill?.cycleTimeSeconds && skill.cycleTimeSeconds > 0) {
+      return cycleTimeToRating(skill.cycleTimeSeconds, opName, opSmv);
+    }
+    return skill?.rating;
   };
 
   useEffect(() => { loadData(); }, []);
@@ -130,6 +159,24 @@ export function SkillMatrixPage() {
   const filledCells = matrix.length;
   const coveragePct = totalCells > 0 ? Math.round((filledCells / totalCells) * 100) : 0;
 
+  const handleExportFullMatrix = () => {
+    const rows = filteredOperators.map((operator: any) => {
+      const row: Record<string, any> = {
+        "Employee ID": operator.employeeId,
+        "Employee Name": operator.name,
+        "Department": operator.department || "Sewing",
+      };
+      operations.forEach((op: any) => {
+        const rating = getEffectiveRating(operator.id, op.id);
+        const colHeader = `${op.name} (${op.code || op.operationCode || `OP-${op.id}`})`;
+        row[colHeader] = rating && rating > 0 ? rating : "-";
+      });
+      return row;
+    });
+
+    exportToExcel(rows, `Sewing_Skill_Matrix_${new Date().toISOString().split("T")[0]}`);
+  };
+
   return (
     <div className="space-y-6 w-full p-6 lg:p-8">
       <PageHeader
@@ -138,17 +185,21 @@ export function SkillMatrixPage() {
         description="Live view of operator skill ratings. To update a rating, open the employee's profile page."
         action={
           <div className="flex items-center gap-2">
+            <Button variant="outline" size="md" onClick={handleExportFullMatrix} className="border-[#E6DDCE] text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8]">
+              <Download className="h-4 w-4 mr-1.5" />
+              Export Excel
+            </Button>
             <Link to="/skill-matrix/logs">
-              <Button variant="outline" size="md">
+              <Button variant="outline" size="md" className="border-[#E6DDCE] text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8]">
                 <Activity className="h-4 w-4 mr-1.5" />
                 History Logs
               </Button>
             </Link>
-            <Button variant="outline" size="md" onClick={() => setIsPerfModalOpen(true)}>
+            <Button variant="outline" size="md" onClick={() => setIsPerfModalOpen(true)} className="border-[#E6DDCE] text-[#9C5B3C] hover:bg-[#F6F1E8]">
               <Upload className="h-4 w-4 mr-1.5" />
               Upload Daily Performance
             </Button>
-            <Button variant="outline" size="md" onClick={handleBulkAutoUpdate} disabled={autoUpdating}>
+            <Button size="md" onClick={handleBulkAutoUpdate} disabled={autoUpdating} className="bg-[#9C5B3C] hover:bg-[#B06C49] text-white">
               <RefreshCw className={`h-4 w-4 mr-1.5 ${autoUpdating ? "animate-spin" : ""}`} />
               {autoUpdating ? "Updating..." : "Auto-Update All"}
             </Button>
@@ -162,14 +213,14 @@ export function SkillMatrixPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide mb-1.5">Operator *</label>
-              <select value={perfForm.operatorId} onChange={e => setPerfForm(f => ({ ...f, operatorId: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-sm px-3 text-sm text-[#221912] bg-white focus:outline-none focus:border-[#B48259]">
+              <select value={perfForm.operatorId} onChange={e => setPerfForm(f => ({ ...f, operatorId: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-xl px-3 text-xs text-[#221912] bg-white focus:outline-none focus:border-[#9C5B3C]">
                 <option value="">Select operator...</option>
                 {operators.map((op: any) => (<option key={op.id} value={op.id}>{op.name} ({op.employeeId})</option>))}
               </select>
             </div>
             <div>
               <label className="block text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide mb-1.5">Operation *</label>
-              <select value={perfForm.operationId} onChange={e => setPerfForm(f => ({ ...f, operationId: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-sm px-3 text-sm text-[#221912] bg-white focus:outline-none focus:border-[#B48259]">
+              <select value={perfForm.operationId} onChange={e => setPerfForm(f => ({ ...f, operationId: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-xl px-3 text-xs text-[#221912] bg-white focus:outline-none focus:border-[#9C5B3C]">
                 <option value="">Select operation...</option>
                 {operations.map((op: any) => (<option key={op.id} value={op.id}>{op.name}</option>))}
               </select>
@@ -178,26 +229,26 @@ export function SkillMatrixPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide mb-1.5">Date *</label>
-              <input type="date" value={perfForm.logDate} onChange={e => setPerfForm(f => ({ ...f, logDate: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-sm px-3 text-sm bg-white focus:outline-none focus:border-[#B48259]" />
+              <input type="date" value={perfForm.logDate} onChange={e => setPerfForm(f => ({ ...f, logDate: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-xl px-3 text-xs text-[#221912] bg-white focus:outline-none focus:border-[#9C5B3C]" />
             </div>
             <div>
               <label className="block text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide mb-1.5">Actual Cycle Time (seconds) *</label>
-              <input type="number" min="1" placeholder="e.g. 28" value={perfForm.actualCycleTimeSeconds} onChange={e => setPerfForm(f => ({ ...f, actualCycleTimeSeconds: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-sm px-3 text-sm bg-white focus:outline-none focus:border-[#B48259]" />
+              <input type="number" min="1" placeholder="e.g. 28" value={perfForm.actualCycleTimeSeconds} onChange={e => setPerfForm(f => ({ ...f, actualCycleTimeSeconds: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-xl px-3 text-xs text-[#221912] bg-white focus:outline-none focus:border-[#9C5B3C]" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide mb-1.5">Logged By</label>
-              <input type="text" placeholder="Manager / IE Engineer..." value={perfForm.recordedBy} onChange={e => setPerfForm(f => ({ ...f, recordedBy: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-sm px-3 text-sm bg-white focus:outline-none focus:border-[#B48259]" />
+              <input type="text" placeholder="Manager / IE Engineer..." value={perfForm.recordedBy} onChange={e => setPerfForm(f => ({ ...f, recordedBy: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-xl px-3 text-xs text-[#221912] bg-white focus:outline-none focus:border-[#9C5B3C]" />
             </div>
             <div>
               <label className="block text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide mb-1.5">Notes</label>
-              <input type="text" placeholder="Any observations..." value={perfForm.notes} onChange={e => setPerfForm(f => ({ ...f, notes: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-sm px-3 text-sm bg-white focus:outline-none focus:border-[#B48259]" />
+              <input type="text" placeholder="Any observations..." value={perfForm.notes} onChange={e => setPerfForm(f => ({ ...f, notes: e.target.value }))} className="w-full h-9 border border-[#E6DDCE] rounded-xl px-3 text-xs text-[#221912] bg-white focus:outline-none focus:border-[#9C5B3C]" />
             </div>
           </div>
           <div className="flex gap-3 pt-2">
-            <button onClick={() => setIsPerfModalOpen(false)} className="flex-1 h-9 text-sm font-semibold text-[#8C7E6E] border border-[#E6DDCE] rounded-sm hover:bg-[#FAFAF8]">Cancel</button>
-            <button onClick={handlePerfLog} disabled={perfSaving || !perfForm.operatorId || !perfForm.operationId || !perfForm.actualCycleTimeSeconds} className="flex-1 h-9 text-sm font-semibold text-white bg-[#B48259] rounded-sm hover:bg-[#9B6B44] disabled:opacity-50">
+            <button onClick={() => setIsPerfModalOpen(false)} className="flex-1 h-9 text-xs font-semibold text-[#8C7E6E] border border-[#E6DDCE] rounded-xl hover:bg-[#F6F1E8]">Cancel</button>
+            <button onClick={handlePerfLog} disabled={perfSaving || !perfForm.operatorId || !perfForm.operationId || !perfForm.actualCycleTimeSeconds} className="flex-1 h-9 text-xs font-semibold text-white bg-[#9C5B3C] rounded-xl hover:bg-[#B06C49] disabled:opacity-50">
               {perfSaving ? "Saving..." : "Save Log Entry"}
             </button>
           </div>
@@ -208,17 +259,17 @@ export function SkillMatrixPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-6">
           <div className="text-center">
-            <div className="text-2xl font-bold text-[#221912]">{operators.length}</div>
+            <div className="text-2xl font-bold text-[#221912] font-mono">{operators.length}</div>
             <div className="text-[11px] text-[#8C7E6E] font-medium">Operators</div>
           </div>
           <div className="w-px h-8 bg-[#E6DDCE]" />
           <div className="text-center">
-            <div className="text-2xl font-bold text-[#221912]">{operations.length}</div>
+            <div className="text-2xl font-bold text-[#221912] font-mono">{operations.length}</div>
             <div className="text-[11px] text-[#8C7E6E] font-medium">Operations</div>
           </div>
           <div className="w-px h-8 bg-[#E6DDCE]" />
           <div className="text-center">
-            <div className="text-2xl font-bold text-[#B48259]">{coveragePct}%</div>
+            <div className="text-2xl font-bold text-[#9C5B3C] font-mono">{coveragePct}%</div>
             <div className="text-[11px] text-[#8C7E6E] font-medium">Coverage</div>
           </div>
         </div>
@@ -230,41 +281,41 @@ export function SkillMatrixPage() {
               <span className="font-mono">{l.rating}</span> {l.label}
             </span>
           ))}
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#FAFAF8] text-[#B8A898] border border-[#F0EAE0]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#D1C9BF] inline-block" /> Not Rated
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#F6F1E8] text-[#8C7E6E] border border-[#E6DDCE]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#8C7E6E] inline-block" /> Not Rated
           </span>
         </div>
       </div>
 
-      <DataCard noPad>
+      <DataCard noPad className="border border-[#E6DDCE] shadow-[0_1px_3px_rgba(34,25,18,0.05)] rounded-2xl overflow-hidden bg-white">
         <DataCardHeader
           title="Skill Matrix"
           subtitle="Read-only view. Click an operator name to open their profile and update ratings."
           action={
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#8C7E6E]" />
-              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search operators..." className="pl-8 pr-4 py-1.5 text-[11px] bg-white border border-[#E6DDCE] text-[#221912] placeholder-[#B8A898] w-52 focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20 rounded-sm" />
+              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search operators..." className="pl-8 pr-4 py-1.5 text-xs bg-white border border-[#E6DDCE] text-[#221912] placeholder-[#8C7E6E]/60 w-52 focus:outline-none focus:border-[#9C5B3C] focus:ring-1 focus:ring-[#9C5B3C]/20 rounded-xl" />
             </div>
           }
         />
 
         {loading ? (
-          <div className="p-12 text-center text-[#475569]">Loading matrix...</div>
+          <div className="p-12 text-center text-[#8C7E6E]">Loading matrix...</div>
         ) : filteredOperators.length === 0 ? (
           <EmptyState title="No operators found" />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-[#FAFAF8] border-b-2 border-r-2 border-[#F0EAE0] p-4 text-left w-52 min-w-[200px] shadow-[2px_0_4px_rgba(0,0,0,0.02)]">
+                  <th className="sticky left-0 z-10 bg-[#F8FAFC]/90 border-b-2 border-r-2 border-[#E6DDCE] p-4 text-left w-52 min-w-[200px] shadow-[2px_0_4px_rgba(34,25,18,0.03)]">
                     <span className="text-[10px] font-bold tracking-widest text-[#8C7E6E] uppercase">Operator</span>
                   </th>
                   {operations.map((op: any) => (
-                    <th key={op.id} className="bg-[#FAFAF8] border-b-2 border-r border-[#F0EAE0] px-2 py-3 text-center min-w-[88px] w-[88px]">
+                    <th key={op.id} className="bg-[#F8FAFC]/90 border-b-2 border-r border-[#E6DDCE] px-2 py-3 text-center min-w-[88px] w-[88px]">
                       <div className="flex flex-col items-center gap-1">
-                        <span className="font-mono text-[9px] text-[#B48259] font-bold bg-white px-1.5 py-0.5 rounded border border-[#F0EAE0]">{op.code || op.operationCode}</span>
-                        <span className="text-[10px] font-medium text-[#221912] leading-tight line-clamp-2 max-w-[76px]" title={op.name}>{op.name}</span>
+                        <span className="font-mono text-[9px] text-[#9C5B3C] font-bold bg-white px-1.5 py-0.5 rounded-md border border-[#E6DDCE]">{op.code || op.operationCode}</span>
+                        <span className="text-[10.5px] font-semibold text-[#221912] leading-tight line-clamp-2 max-w-[76px]" title={op.name}>{op.name}</span>
                       </div>
                     </th>
                   ))}
@@ -272,37 +323,33 @@ export function SkillMatrixPage() {
               </thead>
               <tbody>
                 {filteredOperators.map((operator: any) => {
-                  const ratedCount = operations.filter(op =>
-                    matrix.some(m => String(m.operatorId) === String(operator.id) && String(m.operationId) === String((op as any).id))
-                  ).length;
+                  const ratedCount = operations.filter(op => {
+                    const r = getEffectiveRating(operator.id, (op as any).id);
+                    return r && r > 0;
+                  }).length;
                   return (
                     <tr key={operator.id} className="border-b border-[#F0EAE0] hover:bg-[#FEFCF9] transition-colors group">
-                      <td className="sticky left-0 z-10 bg-white group-hover:bg-[#FEFCF9] border-r-2 border-[#F0EAE0] p-3 shadow-[2px_0_4px_rgba(0,0,0,0.02)] transition-colors">
+                      <td className="sticky left-0 z-10 bg-white group-hover:bg-[#FEFCF9] border-r-2 border-[#E6DDCE] p-3 shadow-[2px_0_4px_rgba(34,25,18,0.03)] transition-colors">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#FFE5BF] to-[#8B4A3C]/60 flex items-center justify-center text-xs font-bold text-white shrink-0">
-                            {operator.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                          <div className="w-8 h-8 rounded-xl bg-[#F6F1E8] border border-[#E6DDCE] flex items-center justify-center text-xs font-bold text-[#9C5B3C] shrink-0 shadow-2xs">
+                            {operator.name.slice(0, 2).toUpperCase()}
                           </div>
-                          <div className="min-w-0">
-                            <Link to={`/settings/operators/${operator.employeeId}`} className="flex items-center gap-1 font-semibold text-sm text-[#221912] hover:text-[#B48259] transition-colors group/link">
-                              <span className="truncate">{operator.name}</span>
-                              <ExternalLink className="w-3 h-3 opacity-0 group-hover/link:opacity-100 shrink-0 transition-opacity" />
+                          <div>
+                            <Link to={`/settings/operators/${operator.employeeId}`} className="font-bold text-xs text-[#221912] hover:text-[#9C5B3C] flex items-center gap-1 transition-colors">
+                              {operator.name}
+                              <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                             </Link>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="font-mono text-[10px] text-[#8C7E6E]">{operator.employeeId}</span>
-                              <span className="text-[10px] text-[#B8A898]">|</span>
-                              <span className="text-[10px] text-[#8C7E6E]">{ratedCount}/{operations.length} rated</span>
-                            </div>
+                            <span className="text-[10px] font-mono text-[#8C7E6E] block">
+                              {operator.employeeId} · {ratedCount}/{operations.length} rated
+                            </span>
                           </div>
                         </div>
                       </td>
-                      {operations.map((op: any) => {
-                        const skill = matrix.find(m => String(m.operatorId) === String(operator.id) && String(m.operationId) === String(op.id));
-                        return (
-                          <td key={op.id} className="border-r border-[#F0EAE0] p-0">
-                            <SkillBadge rating={skill?.rating} />
-                          </td>
-                        );
-                      })}
+                      {operations.map((op: any) => (
+                        <td key={op.id} className="border-r border-[#F0EAE0] p-1 text-center">
+                          <SkillBadge rating={getEffectiveRating(operator.id, op.id)} />
+                        </td>
+                      ))}
                     </tr>
                   );
                 })}
@@ -313,8 +360,8 @@ export function SkillMatrixPage() {
       </DataCard>
 
       {/* Info callout */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-[#FEFCF9] border border-[#F0EAE0] rounded-xl text-sm text-[#8C7E6E]">
-        <ExternalLink className="w-4 h-4 text-[#B48259] shrink-0" />
+      <div className="flex items-center gap-3 px-4 py-3 bg-white border border-[#E6DDCE] rounded-xl text-sm text-[#8C7E6E]">
+        <ExternalLink className="w-4 h-4 text-[#9C5B3C] shrink-0" />
         <span>To update an operator skill rating, open their <strong className="text-[#221912]">Employee Profile</strong> (click the name) and go to the <strong className="text-[#221912]">Skill Matrix</strong> tab.</span>
       </div>
     </div>

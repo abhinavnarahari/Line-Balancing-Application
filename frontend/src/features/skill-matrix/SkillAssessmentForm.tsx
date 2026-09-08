@@ -34,9 +34,9 @@ export function SkillAssessmentForm({ operatorId, operationId, operatorName, ope
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="bg-[#FAFAF8] p-4 rounded-sm border border-[#F0EAE0] mb-6">
-        <p className="text-[11px] uppercase tracking-wider text-[#8C7E6E] font-semibold mb-1">Assessment Target</p>
-        <p className="text-sm text-[#221912]">
+      <div className="bg-[#F8FAFC] p-4 rounded-sm border border-[#F1F5F9] mb-6">
+        <p className="text-[11px] uppercase tracking-wider text-[#F8FAFC]0 font-semibold mb-1">Assessment Target</p>
+        <p className="text-sm text-[#0F172A]">
           <span className="font-semibold">{operatorName}</span> on <span className="font-semibold">{operationName}</span>
         </p>
       </div>
@@ -50,8 +50,8 @@ export function SkillAssessmentForm({ operatorId, operationId, operatorName, ope
                 key={r}
                 className={`flex-1 flex flex-col items-center justify-center p-3 rounded-sm border cursor-pointer transition-all ${
                   formData.rating === r
-                    ? "bg-[#FBF4EC] border-[#B48259] text-[#B48259] ring-1 ring-[#B48259]"
-                    : "bg-white border-[#E6DDCE] text-[#475569] hover:border-[#B8A898]"
+                    ? "bg-[#EFF6FF] border-[#2563EB] text-[#2563EB] ring-1 ring-[#2563EB]"
+                    : "bg-white border-[#E2E8F0] text-[#475569] hover:border-[#94A3B8]"
                 }`}
               >
                 <input
@@ -102,7 +102,7 @@ export function SkillAssessmentForm({ operatorId, operationId, operatorName, ope
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-5 border-t border-[#F0EAE0]">
+      <div className="flex justify-end gap-3 pt-5 border-t border-[#F1F5F9]">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button type="submit" variant="primary">Save Assessment</Button>
       </div>

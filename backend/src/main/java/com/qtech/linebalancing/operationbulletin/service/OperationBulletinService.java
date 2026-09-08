@@ -21,7 +21,10 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -92,9 +95,8 @@ public class OperationBulletinService {
         bulletin.getStyles().clear();
         attachStyles(bulletin, request.getStyleIds());
 
-        // Replace lines
-        bulletin.getLines().clear();
-        buildLines(bulletin, request.getLines());
+        // Replace lines safely using in-place update & synchronization
+        updateLinesInPlace(bulletin, request.getLines());
         bulletin.setTotalSmv(computeTotalSmv(bulletin.getLines()));
 
         return toResponse(bulletinRepository.save(bulletin));
@@ -105,6 +107,68 @@ public class OperationBulletinService {
         OperationBulletin bulletin = findOrThrow(id);
         bulletin.setStatus(newStatus);
         return toResponse(bulletinRepository.save(bulletin));
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        OperationBulletin bulletin = findOrThrow(id);
+        bulletinRepository.delete(bulletin);
+        log.info("Deleted operation bulletin '{}' (id={})", bulletin.getBulletinCode(), id);
+    }
+
+    @Transactional
+    public BulletinResponse cloneBulletin(Long id, String newCode, String newName) {
+        OperationBulletin source = findOrThrow(id);
+
+        String targetCode = (newCode != null && !newCode.isBlank())
+                ? newCode.trim().toUpperCase()
+                : source.getBulletinCode() + "-COPY";
+        String targetName = (newName != null && !newName.isBlank())
+                ? newName.trim()
+                : source.getName() + " (Copy)";
+        int targetVersion = 1;
+
+        // If cloning under the same code, increment version
+        if (targetCode.equalsIgnoreCase(source.getBulletinCode())) {
+            targetVersion = source.getVersion() + 1;
+        }
+
+        if (bulletinRepository.existsByBulletinCodeIgnoreCaseAndVersion(targetCode, targetVersion)) {
+            targetCode = targetCode + "-" + (System.currentTimeMillis() % 10000);
+        }
+
+        OperationBulletin clone = OperationBulletin.builder()
+                .bulletinCode(targetCode)
+                .name(targetName)
+                .description(source.getDescription())
+                .version(targetVersion)
+                .status(OperationBulletin.Status.DRAFT)
+                .effectiveFrom(source.getEffectiveFrom())
+                .effectiveTo(source.getEffectiveTo())
+                .totalSmv(source.getTotalSmv())
+                .build();
+
+        // Copy styles
+        clone.setStyles(new HashSet<>(source.getStyles()));
+
+        // Copy lines
+        List<BulletinLine> clonedLines = new ArrayList<>();
+        for (BulletinLine srcLine : source.getLines()) {
+            clonedLines.add(BulletinLine.builder()
+                    .bulletin(clone)
+                    .sequence(srcLine.getSequence())
+                    .operation(srcLine.getOperation())
+                    .smv(srcLine.getSmv())
+                    .machineType(srcLine.getMachineType())
+                    .skillRatingRequired(srcLine.getSkillRatingRequired())
+                    .notes(srcLine.getNotes())
+                    .build());
+        }
+        clone.setLines(clonedLines);
+
+        log.info("Cloned bulletin '{}' to '{}' v{} with {} lines",
+                source.getBulletinCode(), clone.getBulletinCode(), clone.getVersion(), clone.getLines().size());
+        return toResponse(bulletinRepository.save(clone));
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
@@ -134,6 +198,44 @@ public class OperationBulletinService {
             lines.add(line);
         }
         bulletin.setLines(lines);
+    }
+
+    private void updateLinesInPlace(OperationBulletin bulletin, List<BulletinLineRequest> lineRequests) {
+        if (lineRequests == null || lineRequests.isEmpty()) {
+            bulletin.getLines().clear();
+            return;
+        }
+
+        Map<Integer, BulletinLine> existingBySeq = bulletin.getLines().stream()
+                .collect(Collectors.toMap(BulletinLine::getSequence, Function.identity(), (a, b) -> a));
+
+        List<BulletinLine> updatedLines = new ArrayList<>();
+        for (BulletinLineRequest req : lineRequests) {
+            Operation operation = operationService.findEntityById(req.getOperationId());
+            BulletinLine existing = existingBySeq.remove(req.getSequence());
+            if (existing != null) {
+                existing.setOperation(operation);
+                existing.setSmv(req.getSmv());
+                existing.setMachineType(req.getMachineType());
+                existing.setSkillRatingRequired(req.getSkillRatingRequired());
+                existing.setNotes(req.getNotes());
+                updatedLines.add(existing);
+            } else {
+                BulletinLine newLine = BulletinLine.builder()
+                        .bulletin(bulletin)
+                        .sequence(req.getSequence())
+                        .operation(operation)
+                        .smv(req.getSmv())
+                        .machineType(req.getMachineType())
+                        .skillRatingRequired(req.getSkillRatingRequired())
+                        .notes(req.getNotes())
+                        .build();
+                updatedLines.add(newLine);
+            }
+        }
+
+        bulletin.getLines().clear();
+        bulletin.getLines().addAll(updatedLines);
     }
 
     private BigDecimal computeTotalSmv(List<BulletinLine> lines) {

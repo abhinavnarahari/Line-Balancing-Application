@@ -1,8 +1,12 @@
 import axios from "axios";
 
+// Determine the base API URL dynamically from environment or fallback to localhost
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8085/api";
+export const BACKEND_ROOT_URL = API_BASE_URL.replace(/\/api\/?$/, "");
+
 // Create a central Axios instance pointing to our Spring Boot backend
 export const api = axios.create({
-  baseURL: "http://localhost:8085/api",
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },

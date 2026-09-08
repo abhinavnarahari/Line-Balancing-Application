@@ -7,6 +7,9 @@ export interface Operation {
   description: string;
   sequence: number;
   active: boolean;
+  standardSmv?: number;
+  machineType?: string;
+  skillLevel?: number;
 }
 
 export const operationsApi = {
@@ -25,5 +28,9 @@ export const operationsApi = {
 
   toggleActive: async (id: string | number): Promise<void> => {
     return await api.patch(`/operations/${id}/toggle-status`);
+  },
+
+  deleteOperation: async (id: string | number): Promise<void> => {
+    return await api.delete(`/operations/${id}`);
   },
 };

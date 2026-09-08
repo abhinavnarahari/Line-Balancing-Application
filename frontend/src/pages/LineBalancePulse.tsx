@@ -10,20 +10,20 @@ export function LineBalancePulse({ className }: LineBalancePulseProps) {
       <svg viewBox="0 0 244 128" className="w-full h-full overflow-visible">
         
         {/* Soft background spotlight */}
-        <circle cx="110" cy="64" r="50" fill="#FFE5BF" fillOpacity="0.08" filter="blur(8px)" />
+        <circle cx="110" cy="64" r="50" fill="#DBEAFE" fillOpacity="0.08" filter="blur(8px)" />
 
         {/* --- THE OPERATOR (PERSON) --- */}
         {/* Torso/Shirt */}
         <path 
           d="M 160 128 L 160 65 Q 165 40 190 35 L 220 35 Q 240 35 244 55 L 244 128 Z" 
-          fill="#FAFAF8" 
-          stroke="#F0EAE0" 
+          fill="#F8FAFC" 
+          stroke="#F1F5F9" 
           strokeWidth="2" 
         />
         {/* Head/Face Silhouette */}
-        <circle cx="205" cy="22" r="14" fill="#FFE5BF" />
+        <circle cx="205" cy="22" r="14" fill="#DBEAFE" />
         {/* Hair / Bun */}
-        <circle cx="218" cy="15" r="7" fill="#8B4A3C" />
+        <circle cx="218" cy="15" r="7" fill="#4F46E5" />
         
         {/* Left Arm (Background) guiding fabric behind needle */}
         <g opacity="0.6">
@@ -36,7 +36,7 @@ export function LineBalancePulse({ className }: LineBalancePulseProps) {
         <motion.path
           d="M 230 135 C 190 100 130 87 45 87 C 20 87 0 97 -20 107"
           fill="none"
-          stroke="#3C5245" /* Deep sage green dress */
+          stroke="#059669" /* Deep sage green dress */
           strokeWidth="14"
           strokeOpacity="0.85"
           strokeLinecap="round"
@@ -50,13 +50,13 @@ export function LineBalancePulse({ className }: LineBalancePulseProps) {
 
         {/* --- THE SEWING MACHINE --- */}
         {/* Table/Base */}
-        <rect x="25" y="86" width="115" height="7" rx="2" fill="#221912" />
+        <rect x="25" y="86" width="115" height="7" rx="2" fill="#0F172A" />
         
         {/* Main Body (Pillar & Arm) */}
         <path 
           d="M 125 86 L 125 25 Q 125 15 110 15 L 55 15 Q 40 15 40 25 L 40 65" 
           fill="none" 
-          stroke="#221912" 
+          stroke="#0F172A" 
           strokeWidth="16" 
           strokeLinecap="round" 
           strokeLinejoin="round" 
@@ -65,15 +65,15 @@ export function LineBalancePulse({ className }: LineBalancePulseProps) {
         {/* Hand Wheel (Static) */}
         <circle 
           cx="135" cy="45" r="9" 
-          fill="none" stroke="#8C7E6E" strokeWidth="3" strokeDasharray="6 4"
+          fill="none" stroke="#64748B" strokeWidth="3" strokeDasharray="6 4"
         />
 
         {/* Thread Spool on top */}
-        <rect x="95" y="0" width="4" height="15" fill="#8C7E6E" rx="1" />
-        <rect x="93" y="3" width="8" height="10" fill="#B48259" rx="1" />
+        <rect x="95" y="0" width="4" height="15" fill="#64748B" rx="1" />
+        <rect x="93" y="3" width="8" height="10" fill="#2563EB" rx="1" />
         
         {/* Thread feeding into machine */}
-        <path d="M 95 5 L 95 0 Q 60 -5 45 60" fill="none" stroke="#B48259" strokeWidth="1" />
+        <path d="M 95 5 L 95 0 Q 60 -5 45 60" fill="none" stroke="#2563EB" strokeWidth="1" />
 
         {/* Needle Mechanism (Rapidly moving up and down) */}
         <motion.g
@@ -81,7 +81,7 @@ export function LineBalancePulse({ className }: LineBalancePulseProps) {
           transition={{ duration: 0.15, repeat: Infinity, ease: "linear" }}
         >
           {/* Needle Bar */}
-          <rect x="44" y="55" width="2" height="25" fill="#8C7E6E" rx="1" />
+          <rect x="44" y="55" width="2" height="25" fill="#64748B" rx="1" />
           {/* Sharp Needle Tip */}
           <path d="M 44 80 L 46 80 L 45 86 Z" fill="#475569" />
         </motion.g>
@@ -89,7 +89,7 @@ export function LineBalancePulse({ className }: LineBalancePulseProps) {
         {/* Motion/Speed lines around needle to give it energy */}
         <motion.path 
           d="M 34 75 L 34 60 M 30 70 L 30 65" 
-          stroke="#8C7E6E" 
+          stroke="#64748B" 
           strokeWidth="1" 
           strokeLinecap="round"
           animate={{ opacity: [0, 0.6, 0], y: [0, -4, 0] }}
@@ -99,7 +99,7 @@ export function LineBalancePulse({ className }: LineBalancePulseProps) {
         {/* Dashed Stitches appearing on the fabric */}
         <motion.line
           x1="45" y1="85" x2="-20" y2="95"
-          stroke="#B48259"
+          stroke="#2563EB"
           strokeWidth="1.5"
           strokeDasharray="4 4"
           animate={{ strokeDashoffset: [0, -8] }}
@@ -109,9 +109,9 @@ export function LineBalancePulse({ className }: LineBalancePulseProps) {
         {/* --- OPERATOR RIGHT ARM (Foreground) --- */}
         {/* Right arm overlapping the fabric and machine to show depth */}
         <g strokeLinecap="round" strokeLinejoin="round">
-          <path d="M 190 45 L 165 70" stroke="#FFE5BF" strokeWidth="8" />
-          <path d="M 165 70 Q 145 82 125 85" stroke="#FFE5BF" strokeWidth="7" />
-          <circle cx="122" cy="85" r="3.5" fill="#FFE5BF" />
+          <path d="M 190 45 L 165 70" stroke="#DBEAFE" strokeWidth="8" />
+          <path d="M 165 70 Q 145 82 125 85" stroke="#DBEAFE" strokeWidth="7" />
+          <circle cx="122" cy="85" r="3.5" fill="#DBEAFE" />
         </g>
       </svg>
     </div>

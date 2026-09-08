@@ -42,6 +42,11 @@ public class OperatorPerformanceLog extends AuditableEntity {
     @Column(name = "recorded_by", length = 100)
     private String recordedBy;
 
+    /** ERPNext style status: DRAFT or SUBMITTED */
+    @Column(name = "status", length = 30)
+    @Builder.Default
+    private String status = "DRAFT";
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 }

@@ -41,14 +41,14 @@ export function ShiftAssignmentPage() {
 
   useEffect(() => { loadData(); }, []);
 
-  const handleSubmit = async (data: Omit<ShiftAssignment, "id" | "status" | "createdAt">) => {
+  const handleSubmit = async (assignments: Omit<ShiftAssignment, "id" | "status" | "createdAt">[]) => {
     setError(null);
     try {
-      await shiftAssignmentApi.assignShift(data);
+      await Promise.all(assignments.map(data => shiftAssignmentApi.assignShift(data)));
       setIsFormOpen(false);
       loadData();
     } catch (err: any) {
-      setError(err.message || "Failed to assign shift");
+      setError(err.message || "Failed to assign shifts");
     }
   };
 
@@ -58,6 +58,16 @@ export function ShiftAssignmentPage() {
       loadData();
     } catch (err) {
       console.error("Failed to end assignment", err);
+    }
+  };
+
+  const handleUpdateAssignment = async (id: string | number, data: any) => {
+    try {
+      await shiftAssignmentApi.updateAssignment(id, data);
+      loadData();
+    } catch (err) {
+      console.error("Failed to update assignment", err);
+      throw err;
     }
   };
 
@@ -89,6 +99,7 @@ export function ShiftAssignmentPage() {
         <AssignmentForm 
           operators={operators} 
           shifts={shifts} 
+          assignments={assignments}
           onSubmit={handleSubmit} 
           onCancel={() => setIsFormOpen(false)} 
         />
@@ -99,6 +110,7 @@ export function ShiftAssignmentPage() {
         operators={operators} 
         shifts={shifts} 
         onEndAssignment={handleEndAssignment}
+        onUpdateAssignment={handleUpdateAssignment}
         loading={loading} 
       />
     </div>

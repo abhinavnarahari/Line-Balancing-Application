@@ -23,5 +23,7 @@ public class PerformanceLogRequest {
 
     private String recordedBy;
 
+    private String status; // "DRAFT" or "SUBMITTED"
+
     private String notes;
 }

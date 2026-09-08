@@ -22,6 +22,9 @@ public class AuditLog {
     @Column(nullable = false, length = 50)
     private String action; // CREATE, UPDATE, DELETE
     
+    @Column(name = "details", length = 500)
+    private String details;
+
     @Column(name = "performed_by", nullable = false)
     private String performedBy; // "System" or "Admin" for now
     

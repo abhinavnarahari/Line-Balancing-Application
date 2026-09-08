@@ -17,6 +17,7 @@ public class OrderResponse {
     private String color;
     private LocalDate orderDate;
     private LocalDate deliveryDate;
+    private LocalDate plannedCompletionDate;
     private Order.Status status;
     private Integer totalQuantity;
     private List<OrderSizeLineResponse> sizeLines;

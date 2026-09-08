@@ -24,5 +24,7 @@ public class ShiftRequest {
     @NotNull(message = "End time is required")
     private LocalTime endTime;
 
+    private Integer breakDurationMinutes;
+
     private boolean active = true;
 }

@@ -32,6 +32,8 @@ public class OrderRequest {
     @NotNull(message = "Delivery date is required")
     private LocalDate deliveryDate;
 
+    private LocalDate plannedCompletionDate;
+
     private Order.Status status = Order.Status.PLANNED;
 
     @NotEmpty(message = "At least one size quantity is required")

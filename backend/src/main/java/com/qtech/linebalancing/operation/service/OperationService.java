@@ -40,6 +40,8 @@ public class OperationService {
                 .description(request.getDescription())
                 .sequence(request.getSequence())
                 .active(request.isActive())
+                .standardSmv(request.getStandardSmv())
+                .machineType(request.getMachineType() != null && !request.getMachineType().isBlank() ? request.getMachineType().trim() : "Single Needle Lockstitch")
                 .build();
         return toResponse(operationRepository.save(op));
     }
@@ -53,6 +55,10 @@ public class OperationService {
         op.setDescription(request.getDescription());
         op.setSequence(request.getSequence());
         op.setActive(request.isActive());
+        op.setStandardSmv(request.getStandardSmv());
+        if (request.getMachineType() != null) {
+            op.setMachineType(request.getMachineType().trim());
+        }
         return toResponse(operationRepository.save(op));
     }
 
@@ -61,6 +67,12 @@ public class OperationService {
         Operation op = findOrThrow(id);
         op.setActive(!op.isActive());
         return toResponse(operationRepository.save(op));
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        Operation op = findOrThrow(id);
+        operationRepository.delete(op);
     }
 
     public Operation findEntityById(Long id) {
@@ -92,6 +104,8 @@ public class OperationService {
         resp.setDescription(op.getDescription());
         resp.setSequence(op.getSequence());
         resp.setActive(op.isActive());
+        resp.setStandardSmv(op.getStandardSmv());
+        resp.setMachineType(op.getMachineType() != null ? op.getMachineType() : "Single Needle Lockstitch");
         resp.setCreatedAt(op.getCreatedAt());
         resp.setUpdatedAt(op.getUpdatedAt());
         return resp;

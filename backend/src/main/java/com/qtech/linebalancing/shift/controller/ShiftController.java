@@ -48,4 +48,16 @@ public class ShiftController {
     public ResponseEntity<ApiResponse<ShiftResponse>> toggleStatus(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Shift status updated", shiftService.toggleStatus(id)));
     }
+    
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+        try {
+            shiftService.delete(id);
+            return ResponseEntity.ok(ApiResponse.success("Shift deleted successfully", null));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new com.qtech.linebalancing.common.exception.BusinessRuleException("Cannot delete shift. It is in use.");
+        } catch (Exception e) {
+            throw new com.qtech.linebalancing.common.exception.BusinessRuleException("Delete failed: " + e.getMessage() + " " + e.getClass().getName());
+        }
+    }
 }

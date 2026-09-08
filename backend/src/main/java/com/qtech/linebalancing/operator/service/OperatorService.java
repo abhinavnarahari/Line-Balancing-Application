@@ -44,6 +44,7 @@ public class OperatorService {
                 .gender(request.getGender())
                 .department(request.getDepartment())
                 .joiningDate(request.getJoiningDate())
+                .role(request.getRole() != null ? request.getRole() : Operator.OperatorRole.OPERATOR)
                 .active(request.isActive())
                 .build();
         log.info("Creating operator: {}", operator.getEmployeeId());
@@ -63,6 +64,9 @@ public class OperatorService {
         operator.setGender(request.getGender());
         operator.setDepartment(request.getDepartment());
         operator.setJoiningDate(request.getJoiningDate());
+        if (request.getRole() != null) {
+            operator.setRole(request.getRole());
+        }
         operator.setActive(request.isActive());
         return toResponse(operatorRepository.save(operator));
     }
@@ -97,6 +101,7 @@ public class OperatorService {
         resp.setGender(op.getGender());
         resp.setDepartment(op.getDepartment());
         resp.setJoiningDate(op.getJoiningDate());
+        resp.setRole(op.getRole() != null ? op.getRole() : Operator.OperatorRole.OPERATOR);
         resp.setActive(op.isActive());
         resp.setCreatedAt(op.getCreatedAt());
         resp.setUpdatedAt(op.getUpdatedAt());

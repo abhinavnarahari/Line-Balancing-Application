@@ -48,4 +48,19 @@ public class OperationBulletinController {
             @RequestParam OperationBulletin.Status status) {
         return ResponseEntity.ok(ApiResponse.success("Bulletin status updated", bulletinService.updateStatus(id, status)));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+        bulletinService.delete(id);
+        return ResponseEntity.ok(ApiResponse.success("Bulletin deleted successfully", null));
+    }
+
+    @PostMapping("/{id}/clone")
+    public ResponseEntity<ApiResponse<BulletinResponse>> clone(
+            @PathVariable Long id,
+            @RequestParam(required = false) String newCode,
+            @RequestParam(required = false) String newName) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Bulletin cloned successfully", bulletinService.cloneBulletin(id, newCode, newName)));
+    }
 }

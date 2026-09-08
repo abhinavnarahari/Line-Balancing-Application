@@ -9,6 +9,7 @@ import com.qtech.linebalancing.lineplan.repository.LinePlanRepository;
 import com.qtech.linebalancing.operation.entity.Operation;
 import com.qtech.linebalancing.operation.repository.OperationRepository;
 import com.qtech.linebalancing.operationbulletin.entity.BulletinLine;
+import com.qtech.linebalancing.operationbulletin.repository.BulletinLineRepository;
 import com.qtech.linebalancing.operator.entity.Operator;
 import com.qtech.linebalancing.operator.repository.OperatorRepository;
 import com.qtech.linebalancing.order.entity.Order;
@@ -31,34 +32,53 @@ public class LinePlanService {
     private final LinePlanRepository linePlanRepository;
     private final OrderRepository orderRepository;
     private final ShiftRepository shiftRepository;
+    private final com.qtech.linebalancing.line.repository.SewingLineRepository sewingLineRepository;
     private final OperationRepository operationRepository;
     private final OperatorRepository operatorRepository;
-    // Assuming we have EntityManager or we just use references.
-    // Assuming we have EntityManager or we just use references. Let's use JpaRepository reference resolving via getReferenceById for simplicity if we don't validate strictly, or just save IDs.
-    // For strict validation, we would need OperationBulletinLineRepository.
-    
-    // To keep it simple and performant, we'll use findById on Order and Shift.
-    // For assignments, we'll map them.
+    private final BulletinLineRepository bulletinLineRepository;
+
+    public List<LinePlanResponse> getAllPlans() {
+        return linePlanRepository.findAll().stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    public LinePlanResponse getPlanById(Long id) {
+        return linePlanRepository.findById(id)
+                .map(this::mapToResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("Line plan not found with id: " + id));
+    }
 
     public LinePlanResponse getPlanForOrder(Long orderId) {
         return linePlanRepository.findByOrderId(orderId)
                 .map(this::mapToResponse)
-                .orElse(null); // Return null (or empty response) if not found, frontend expects null for 404/not found.
+                .orElse(null);
     }
 
     @Transactional
     public LinePlanResponse savePlan(LinePlanRequest request) {
         Order order = orderRepository.findById(request.getOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + request.getOrderId()));
         Shift shift = shiftRepository.findById(request.getShiftId())
-                .orElseThrow(() -> new ResourceNotFoundException("Shift not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Shift not found with id: " + request.getShiftId()));
+
+        com.qtech.linebalancing.line.entity.SewingLine line = null;
+        if (request.getLineId() != null) {
+            line = sewingLineRepository.findById(request.getLineId()).orElse(null);
+        }
 
         LinePlan plan = linePlanRepository.findByOrderId(order.getId()).orElse(new LinePlan());
         
         plan.setOrder(order);
         plan.setShift(shift);
-        plan.setAllowance(request.getAllowance());
-        plan.setTargetOutput(order.getTotalQuantity()); // Or pass from request if it can be overridden
+        plan.setLine(line);
+        plan.setAllowance(request.getAllowance() != null ? request.getAllowance() : 10);
+        if (request.getAllowancePfd() != null && !request.getAllowancePfd().isBlank()) {
+            plan.setAllowancePfd(request.getAllowancePfd());
+        }
+        plan.setTargetOutput(request.getTargetOutput() != null && request.getTargetOutput() > 0 
+                ? request.getTargetOutput() 
+                : (order.getTotalQuantity() != null && order.getTotalQuantity() > 0 ? order.getTotalQuantity() : 480));
         plan.setStatus("active");
         
         // Clear existing assignments to replace with new ones
@@ -68,20 +88,21 @@ public class LinePlanService {
             for (LinePlanRequest.LinePlanAssignmentRequest assignReq : request.getAssignments()) {
                 LinePlanAssignment assignment = new LinePlanAssignment();
                 
-                // For performance, we can use proxy objects if we don't need to load the full entity
-                BulletinLine bLine = new BulletinLine();
-                bLine.setId(assignReq.getBulletinLineId());
-                assignment.setBulletinLine(bLine);
+                if (assignReq.getBulletinLineId() != null) {
+                    BulletinLine bLine = bulletinLineRepository.findById(assignReq.getBulletinLineId()).orElse(null);
+                    assignment.setBulletinLine(bLine);
+                }
 
                 Operation op = operationRepository.findById(assignReq.getOperationId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Operation not found"));
+                        .orElseThrow(() -> new ResourceNotFoundException("Operation not found with id: " + assignReq.getOperationId()));
                 assignment.setOperation(op);
 
-                if (assignReq.getOperatorId() != null) {
-                    Operator operator = operatorRepository.findById(assignReq.getOperatorId())
-                            .orElseThrow(() -> new ResourceNotFoundException("Operator not found"));
+                if (assignReq.getOperatorId() != null && assignReq.getOperatorId() > 0) {
+                    Operator operator = operatorRepository.findById(assignReq.getOperatorId()).orElse(null);
                     assignment.setOperator(operator);
                 }
+
+                assignment.setIsQcCheckpoint(assignReq.getIsQcCheckpoint() != null && assignReq.getIsQcCheckpoint());
 
                 plan.addAssignment(assignment);
             }
@@ -91,21 +112,39 @@ public class LinePlanService {
         return mapToResponse(savedPlan);
     }
 
+    @Transactional
+    public void deletePlan(Long id) {
+        if (!linePlanRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Line plan not found with id: " + id);
+        }
+        linePlanRepository.deleteById(id);
+    }
+
+    @Transactional
+    public void deletePlanByOrderId(Long orderId) {
+        linePlanRepository.deleteByOrderId(orderId);
+    }
+
     private LinePlanResponse mapToResponse(LinePlan plan) {
         LinePlanResponse response = new LinePlanResponse();
         response.setId(plan.getId());
-        response.setOrderId(plan.getOrder().getId());
-        response.setShiftId(plan.getShift().getId());
+        response.setOrderId(plan.getOrder() != null ? plan.getOrder().getId() : null);
+        response.setShiftId(plan.getShift() != null ? plan.getShift().getId() : null);
+        response.setLineId(plan.getLine() != null ? plan.getLine().getId() : null);
+        response.setLineCode(plan.getLine() != null ? plan.getLine().getLineCode() : null);
+        response.setLineName(plan.getLine() != null ? plan.getLine().getLineName() : null);
         response.setTargetOutput(plan.getTargetOutput());
         response.setAllowance(plan.getAllowance());
+        response.setAllowancePfd(plan.getAllowancePfd());
         response.setStatus(plan.getStatus());
         
         List<LinePlanResponse.LinePlanAssignmentResponse> assignResps = plan.getAssignments().stream()
                 .map(a -> {
                     LinePlanResponse.LinePlanAssignmentResponse ar = new LinePlanResponse.LinePlanAssignmentResponse();
-                    ar.setBulletinLineId(a.getBulletinLine().getId());
-                    ar.setOperationId(a.getOperation().getId());
+                    ar.setBulletinLineId(a.getBulletinLine() != null ? a.getBulletinLine().getId() : null);
+                    ar.setOperationId(a.getOperation() != null ? a.getOperation().getId() : null);
                     ar.setOperatorId(a.getOperator() != null ? a.getOperator().getId() : null);
+                    ar.setIsQcCheckpoint(a.getIsQcCheckpoint() != null && a.getIsQcCheckpoint());
                     return ar;
                 }).collect(Collectors.toList());
                 

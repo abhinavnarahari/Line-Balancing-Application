@@ -15,6 +15,7 @@ public class OperatorResponse {
     private Operator.Gender gender;
     private String department;
     private LocalDate joiningDate;
+    private Operator.OperatorRole role;
     private boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

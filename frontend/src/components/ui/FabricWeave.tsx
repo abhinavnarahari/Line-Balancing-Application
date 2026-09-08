@@ -13,7 +13,7 @@ type FabricWeaveProps = {
 
 const FabricWeave = ({
     id,
-    color = '#221912',
+    color = '#0F172A',
     opacity = 0.035,
     size = 18,
     className = '',

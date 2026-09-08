@@ -1,22 +1,35 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import type { Style, CreateStyleDTO, UpdateStyleDTO } from "./api";
 
 interface StyleFormProps {
+  existingStyles?: Style[];
   initialData?: Style | null;
   onSubmit: (data: CreateStyleDTO | UpdateStyleDTO) => Promise<void>;
   onCancel: () => void;
 }
 
-export function StyleForm({ initialData, onSubmit, onCancel }: StyleFormProps) {
+export function StyleForm({ existingStyles = [], initialData, onSubmit, onCancel }: StyleFormProps) {
+  const sequentialCode = useMemo(() => {
+    const list = existingStyles || [];
+    const numbers = list
+      .map(s => {
+        const match = (s.styleNo || "").match(/\d+/g);
+        return match ? parseInt(match[match.length - 1], 10) : 0;
+      })
+      .filter(n => !isNaN(n) && n > 0);
+    const maxNum = numbers.length > 0 ? Math.max(...numbers) : list.length;
+    return `STY-${String(maxNum + 1).padStart(3, "0")}`;
+  }, [existingStyles]);
+
   const [formData, setFormData] = useState<CreateStyleDTO>({
-    styleNo: "",
-    buyer: "",
-    description: "",
-    season: "",
-    productType: "",
-    active: true,
+    styleNo: initialData?.styleNo || sequentialCode,
+    buyer: initialData?.buyer || "",
+    description: initialData?.description || "",
+    season: initialData?.season || "",
+    productType: initialData?.productType || "",
+    active: initialData?.active ?? true,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,8 +44,10 @@ export function StyleForm({ initialData, onSubmit, onCancel }: StyleFormProps) {
         productType: initialData.productType,
         active: initialData.active,
       });
+    } else if (!formData.styleNo && sequentialCode) {
+      setFormData(prev => ({ ...prev, styleNo: sequentialCode }));
     }
-  }, [initialData]);
+  }, [initialData, sequentialCode]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -70,8 +85,8 @@ export function StyleForm({ initialData, onSubmit, onCancel }: StyleFormProps) {
           value={formData.styleNo}
           onChange={handleChange}
           required
-          placeholder="e.g. TS-1001"
-          hint="Must be unique"
+          placeholder="e.g. STY-001"
+          hint="Sequential style catalog identifier"
         />
         <Input
           label="Buyer / Client"
@@ -114,15 +129,15 @@ export function StyleForm({ initialData, onSubmit, onCancel }: StyleFormProps) {
             name="active"
             checked={formData.active}
             onChange={handleChange}
-            className="rounded-sm border-[#E6DDCE] text-[#B48259] focus:ring-[#B48259]"
+            className="rounded-sm border-[#E2E8F0] text-[#2563EB] focus:ring-[#2563EB]"
           />
-          <label htmlFor="active" className="text-sm text-[#221912] font-medium cursor-pointer">
+          <label htmlFor="active" className="text-sm text-[#0F172A] font-medium cursor-pointer">
             Active Status
           </label>
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pt-5 border-t border-[#F0EAE0]">
+      <div className="flex justify-end gap-3 pt-5 border-t border-[#F1F5F9]">
         <Button type="button" variant="ghost" onClick={onCancel} disabled={loading}>Cancel</Button>
         <Button type="submit" variant="primary" loading={loading}>
           {initialData ? "Update Style" : "Create Style"}

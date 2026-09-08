@@ -46,4 +46,10 @@ public class OperationController {
     public ResponseEntity<ApiResponse<OperationResponse>> toggleStatus(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success("Operation status updated", operationService.toggleStatus(id)));
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+        operationService.delete(id);
+        return ResponseEntity.ok(ApiResponse.success("Operation deleted", null));
+    }
 }

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 @Service
@@ -25,6 +26,7 @@ public class AttendanceService {
     private final AttendanceRepository attendanceRepository;
     private final OperatorService operatorService;
     private final ShiftRepository shiftRepository;
+    private final com.qtech.linebalancing.notification.service.NotificationService notificationService;
 
     public List<AttendanceResponse> getAttendanceForDate(LocalDate date, Long shiftId) {
         List<AttendanceRecord> records = (shiftId != null)
@@ -45,7 +47,7 @@ public class AttendanceService {
 
     /**
      * Upsert attendance: update if exists for same date+operator+shift, otherwise insert.
-     * This is the correct pattern for daily attendance marking.
+     * Automatically triggers a high-priority manager notification if check-in is late.
      */
     @Transactional
     public AttendanceResponse markAttendance(AttendanceRequest request) {
@@ -62,12 +64,41 @@ public class AttendanceService {
                         .shift(shift)
                         .build());
 
-        record.setStatus(request.getStatus());
+        LocalTime checkIn = request.getCheckInTime();
+        LocalTime shiftStart = shift.getStartTime();
+        boolean isLateArrival = false;
+        long lateMins = 0;
+
+        if (checkIn != null && shiftStart != null) {
+            if (checkIn.isAfter(shiftStart)) {
+                isLateArrival = true;
+                lateMins = java.time.Duration.between(shiftStart, checkIn).toMinutes();
+            }
+        } else if (request.getStatus() == AttendanceRecord.Status.LATE) {
+            isLateArrival = true;
+            lateMins = 15;
+        }
+
+        if (isLateArrival && request.getStatus() != AttendanceRecord.Status.ABSENT && request.getStatus() != AttendanceRecord.Status.ON_LEAVE) {
+            record.setStatus(AttendanceRecord.Status.LATE);
+        } else {
+            record.setStatus(request.getStatus());
+        }
+
         record.setCheckInTime(request.getCheckInTime());
         record.setCheckOutTime(request.getCheckOutTime());
         record.setRemarks(request.getRemarks());
 
-        return toResponse(attendanceRepository.save(record));
+        AttendanceRecord saved = attendanceRepository.save(record);
+
+        // Real-time dispatch to Manager Notification System
+        if (isLateArrival || saved.getStatus() == AttendanceRecord.Status.LATE) {
+            notificationService.createLateAttendanceNotification(
+                    operator, shift, checkIn != null ? checkIn : LocalTime.now(), Math.max(1, lateMins), saved.getId()
+            );
+        }
+
+        return toResponse(saved);
     }
 
     @Transactional
@@ -92,13 +123,18 @@ public class AttendanceService {
             } else {
                 // Fallback to default shift (ID 1) if no assignment exists
                 shift = shiftRepository.findById(1L).orElse(null);
-                if (shift == null) continue; // If even default shift doesn't exist, skip
+                if (shift == null) continue;
             }
+
             AttendanceRecord.Status status = AttendanceRecord.Status.PRESENT;
+            boolean isLateArrival = false;
+            long lateMins = 0;
             
             if (req.getCheckInTime() != null && shift.getStartTime() != null) {
-                if (req.getCheckInTime().isAfter(shift.getStartTime().plusMinutes(15))) {
+                if (req.getCheckInTime().isAfter(shift.getStartTime())) {
                     status = AttendanceRecord.Status.LATE;
+                    isLateArrival = true;
+                    lateMins = java.time.Duration.between(shift.getStartTime(), req.getCheckInTime()).toMinutes();
                 }
             } else if (req.getCheckInTime() == null) {
                 status = AttendanceRecord.Status.ABSENT;
@@ -115,14 +151,22 @@ public class AttendanceService {
 
             // Do not override manual remarks unless empty
             if (record.getRemarks() == null) {
-                record.setRemarks("Synced from Biometric");
+                record.setRemarks(isLateArrival ? "Late check-in via Biometric Sync" : "Synced from Biometric");
             }
             
             record.setStatus(status);
             if (req.getCheckInTime() != null) record.setCheckInTime(req.getCheckInTime());
             if (req.getCheckOutTime() != null) record.setCheckOutTime(req.getCheckOutTime());
 
-            responses.add(toResponse(attendanceRepository.save(record)));
+            AttendanceRecord saved = attendanceRepository.save(record);
+
+            if (isLateArrival) {
+                notificationService.createLateAttendanceNotification(
+                        operator, shift, req.getCheckInTime(), Math.max(1, lateMins), saved.getId()
+                );
+            }
+
+            responses.add(toResponse(saved));
         }
         return responses;
     }
@@ -144,6 +188,18 @@ public class AttendanceService {
         resp.setRemarks(r.getRemarks());
         resp.setCreatedAt(r.getCreatedAt());
         resp.setUpdatedAt(r.getUpdatedAt());
+
+        if (r.getShift() != null && r.getShift().getStartTime() != null) {
+            resp.setScheduledStartTime(r.getShift().getStartTime());
+            if (r.getCheckInTime() != null && r.getCheckInTime().isAfter(r.getShift().getStartTime())) {
+                resp.setLateMinutes(java.time.Duration.between(r.getShift().getStartTime(), r.getCheckInTime()).toMinutes());
+            } else {
+                resp.setLateMinutes(0L);
+            }
+        } else if (r.getStatus() == AttendanceRecord.Status.LATE) {
+            resp.setLateMinutes(15L);
+        }
+
         return resp;
     }
 }

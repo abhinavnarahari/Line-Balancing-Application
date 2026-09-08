@@ -34,11 +34,20 @@ public class Operator extends AuditableEntity {
     @Column(name = "joining_date", nullable = false)
     private LocalDate joiningDate;
 
+    @Column(nullable = false, length = 50)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private OperatorRole role = OperatorRole.OPERATOR;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
 
     public enum Gender {
         Male, Female, Other
+    }
+
+    public enum OperatorRole {
+        OPERATOR, HELPER, FLOATER, LINE_SUPERVISOR, QUALITY_CHECKER
     }
 }

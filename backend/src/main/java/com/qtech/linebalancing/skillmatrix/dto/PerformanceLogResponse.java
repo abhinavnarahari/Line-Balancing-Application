@@ -16,6 +16,7 @@ public class PerformanceLogResponse {
     private LocalDate logDate;
     private Integer actualCycleTimeSeconds;
     private String recordedBy;
+    private String status; // "DRAFT" or "SUBMITTED"
     private String notes;
     private LocalDateTime createdAt;
 }

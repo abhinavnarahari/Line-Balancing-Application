@@ -20,8 +20,8 @@ public class LinePlanAssignment extends AuditableEntity {
     @JoinColumn(name = "line_plan_id", nullable = false)
     private LinePlan linePlan;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "bulletin_line_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "bulletin_line_id")
     private BulletinLine bulletinLine;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -31,4 +31,8 @@ public class LinePlanAssignment extends AuditableEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "operator_id")
     private Operator operator; // Can be null if unassigned
+
+    @Column(name = "is_qc_checkpoint", nullable = false)
+    @Builder.Default
+    private Boolean isQcCheckpoint = false;
 }

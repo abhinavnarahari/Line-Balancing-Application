@@ -18,4 +18,8 @@ export const shiftsApi = {
   toggleActive: async (id: string | number): Promise<void> => {
     return await api.patch(`/shifts/${id}/toggle-status`);
   },
+
+  deleteShift: async (id: string | number): Promise<void> => {
+    return await api.delete(`/shifts/${id}`);
+  },
 };

@@ -19,6 +19,8 @@ public class AttendanceResponse {
     private AttendanceRecord.Status status;
     private LocalTime checkInTime;
     private LocalTime checkOutTime;
+    private LocalTime scheduledStartTime;
+    private Long lateMinutes;
     private String remarks;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

@@ -55,10 +55,10 @@ public class SkillMatrixController {
 
     // ── Performance Logs ──────────────────────────────────────────────────────
 
-    /** Get all daily performance logs for an operator. */
+    /** Get all daily performance logs. Optionally filter by operatorId. */
     @GetMapping("/performance-logs")
     public ResponseEntity<ApiResponse<List<PerformanceLogResponse>>> getPerformanceLogs(
-            @RequestParam Long operatorId) {
+            @RequestParam(required = false) Long operatorId) {
         return ResponseEntity.ok(ApiResponse.success(skillMatrixService.getPerformanceLogs(operatorId)));
     }
 
@@ -68,6 +68,41 @@ public class SkillMatrixController {
             @Valid @RequestBody PerformanceLogRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Performance log recorded", skillMatrixService.addPerformanceLog(request)));
+    }
+
+    /** Batch upload multiple performance logs (from multi-run test or Excel import). */
+    @PostMapping("/performance-logs/batch")
+    public ResponseEntity<ApiResponse<List<PerformanceLogResponse>>> batchAddPerformanceLogs(
+            @RequestBody List<PerformanceLogRequest> requests) {
+        List<PerformanceLogResponse> result = skillMatrixService.batchAddPerformanceLogs(requests);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Batch performance logs recorded and skill ratings updated", result));
+    }
+
+    /** Submit a draft performance log entry (ERPNext submit workflow). */
+    @PostMapping("/performance-logs/{id}/submit")
+    public ResponseEntity<ApiResponse<PerformanceLogResponse>> submitPerformanceLog(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success("Performance test submitted and skill matrix updated", skillMatrixService.submitPerformanceLog(id)));
+    }
+
+    /** Submit multiple draft performance logs in batch. */
+    @PostMapping("/performance-logs/submit-batch")
+    public ResponseEntity<ApiResponse<List<PerformanceLogResponse>>> submitBatchPerformanceLogs(@RequestBody List<Long> ids) {
+        return ResponseEntity.ok(ApiResponse.success("Performance tests submitted and skill matrix updated", skillMatrixService.submitBatchPerformanceLogs(ids)));
+    }
+
+    /** Delete a performance log entry. */
+    @DeleteMapping("/performance-logs/{id}")
+    public ResponseEntity<ApiResponse<Void>> deletePerformanceLog(@PathVariable Long id) {
+        skillMatrixService.deletePerformanceLog(id);
+        return ResponseEntity.ok(ApiResponse.success("Performance log deleted", null));
+    }
+
+    /** Clear all skill assessments, performance test logs, and history for an operator. */
+    @DeleteMapping("/operator/{operatorId}/clear")
+    public ResponseEntity<ApiResponse<Void>> clearOperatorSkillData(@PathVariable Long operatorId) {
+        skillMatrixService.clearOperatorSkillData(operatorId);
+        return ResponseEntity.ok(ApiResponse.success("Operator skill matrix and test history cleared successfully", null));
     }
 
     /**

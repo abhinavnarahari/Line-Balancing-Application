@@ -1,0 +1,1 @@
+ALTER TABLE operator_performance_logs ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'DRAFT';

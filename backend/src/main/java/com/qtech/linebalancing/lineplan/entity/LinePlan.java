@@ -26,12 +26,20 @@ public class LinePlan extends AuditableEntity {
     @JoinColumn(name = "shift_id", nullable = false)
     private Shift shift;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "line_id")
+    private com.qtech.linebalancing.line.entity.SewingLine line;
+
     @Column(name = "target_output", nullable = false)
     private Integer targetOutput;
 
     @Column(nullable = false)
     @Builder.Default
     private Integer allowance = 10;
+
+    @Column(name = "allowance_pfd", length = 100)
+    @Builder.Default
+    private String allowancePfd = "5,4,1";
 
     @Column(nullable = false, length = 50)
     @Builder.Default

@@ -2,6 +2,7 @@ package com.qtech.linebalancing.operation.dto;
 
 import jakarta.validation.constraints.*;
 import lombok.Data;
+import java.math.BigDecimal;
 
 @Data
 public class OperationRequest {
@@ -20,4 +21,10 @@ public class OperationRequest {
     private Integer sequence = 0;
 
     private boolean active = true;
+
+    @DecimalMin(value = "0.0", inclusive = false, message = "SMV must be greater than 0")
+    private BigDecimal standardSmv;
+
+    @Size(max = 100, message = "Machine type must not exceed 100 characters")
+    private String machineType;
 }

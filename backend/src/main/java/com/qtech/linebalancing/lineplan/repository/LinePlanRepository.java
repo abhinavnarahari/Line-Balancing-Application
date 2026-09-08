@@ -9,4 +9,6 @@ import java.util.Optional;
 @Repository
 public interface LinePlanRepository extends JpaRepository<LinePlan, Long> {
     Optional<LinePlan> findByOrderId(Long orderId);
+    boolean existsByOrderId(Long orderId);
+    void deleteByOrderId(Long orderId);
 }

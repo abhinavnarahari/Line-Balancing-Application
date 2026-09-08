@@ -12,14 +12,20 @@ import { shiftAssignmentApi, type ShiftAssignment } from "../../features/shift-a
 import { cn } from "../../utils/cn";
 
 // Utility for status styling
-const getStatusBadge = (status?: AttendanceStatus) => {
+// Utility for status styling
+const getStatusBadge = (status?: AttendanceStatus, lateMinutes?: number) => {
   switch (status) {
-    case "PRESENT": return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200"><Check className="w-3 h-3"/> Present</span>;
-    case "LATE": return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-bold uppercase bg-amber-50 text-amber-700 border border-amber-200"><Clock className="w-3 h-3"/> Late</span>;
-    case "ABSENT": return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-bold uppercase bg-red-50 text-red-700 border border-red-200"><X className="w-3 h-3"/> Absent</span>;
-    case "HALF_DAY": return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-bold uppercase bg-orange-50 text-orange-700 border border-orange-200"><Clock className="w-3 h-3"/> Half Day</span>;
-    case "ON_LEAVE": return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200"><Calendar className="w-3 h-3"/> On Leave</span>;
-    default: return <span className="inline-flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-bold uppercase bg-[#F0EAE0] text-[#475569] border border-[#E6DDCE]">Pending</span>;
+    case "PRESENT": return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-[#F3F5F2] text-[#77876F] border border-[#d4decb]"><Check className="w-3 h-3"/> Present</span>;
+    case "LATE": return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs">
+        <Clock className="w-3 h-3 text-amber-600"/>
+        Late {lateMinutes && lateMinutes > 0 ? `(+${lateMinutes}m)` : ""}
+      </span>
+    );
+    case "ABSENT": return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-[#fff1f2] text-[#be123c] border border-[#fecaca]"><X className="w-3 h-3"/> Absent</span>;
+    case "HALF_DAY": return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-[#fffbeb] text-[#d97706] border border-[#fde68a]"><Clock className="w-3 h-3"/> Half Day</span>;
+    case "ON_LEAVE": return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-[#EFE9DF] text-[#8B5E3C] border border-[#D8C9B8]"><Calendar className="w-3 h-3"/> On Leave</span>;
+    default: return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-[#F6F1E8] text-[#8C7E6E] border border-[#E6DDCE]">Pending</span>;
   }
 };
 
@@ -40,6 +46,8 @@ export function AttendancePage() {
   const [roster, setRoster] = useState<Operator[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [pendingAttendance, setPendingAttendance] = useState<Record<string | number, AttendanceStatus>>({});
+  const [customCheckInTimes, setCustomCheckInTimes] = useState<Record<string | number, string>>({});
+  const [notificationBanner, setNotificationBanner] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -109,6 +117,7 @@ export function AttendancePage() {
         const attData = await attendanceApi.getAttendanceForDate(date, "");
         setAttendance(attData);
         setPendingAttendance({}); // clear unsaved on date change
+        setCustomCheckInTimes({});
         setRoster(operators); // Start with all active operators
       } finally {
         setLoading(false);
@@ -136,26 +145,66 @@ export function AttendancePage() {
     }
   }, [activeTab]);
 
-  const handleMark = (operatorId: string | number, status: AttendanceStatus) => {
+  const handleMark = (operatorId: string | number, status: AttendanceStatus, customTime?: string) => {
     setPendingAttendance(prev => ({ ...prev, [operatorId]: status }));
+    
+    // Find assigned shift
+    const assignedShiftId = assignments.find(a => 
+      String(a.operatorId) === String(operatorId) && 
+      a.effectiveFrom <= date && 
+      (!a.effectiveTo || a.effectiveTo >= date)
+    )?.shiftId || (shiftFilter !== "ALL" ? shiftFilter : 1);
+    
+    const shiftObj = shifts.find(s => String(s.id) === String(assignedShiftId)) || shifts[0];
+    const shiftStart = shiftObj?.startTime || "07:00:00";
+
+    if (customTime) {
+      setCustomCheckInTimes(prev => ({ ...prev, [operatorId]: customTime }));
+    } else if (status === "LATE") {
+      // Default late check-in to 15 minutes past shift start (e.g. 07:15 if shift is 07:00)
+      const [sh = 7, sm = 0] = shiftStart.split(":").map(Number);
+      const lateM = (sm + 15) % 60;
+      const lateH = sh + Math.floor((sm + 15) / 60);
+      const timeStr = `${String(lateH).padStart(2, "0")}:${String(lateM).padStart(2, "0")}:00`;
+      setCustomCheckInTimes(prev => ({ ...prev, [operatorId]: timeStr }));
+    } else if (status === "PRESENT") {
+      setCustomCheckInTimes(prev => ({ ...prev, [operatorId]: shiftStart.slice(0, 5) + ":00" }));
+    }
   };
 
   const handleSubmit = async () => {
     if (Object.keys(pendingAttendance).length === 0) return;
     
     setLoading(true);
+    let lateCount = 0;
     try {
       for (const [operatorId, status] of Object.entries(pendingAttendance)) {
+        const assignedShiftId = assignments.find(a => 
+          String(a.operatorId) === String(operatorId) && 
+          a.effectiveFrom <= date && 
+          (!a.effectiveTo || a.effectiveTo >= date)
+        )?.shiftId || (shiftFilter !== "ALL" ? shiftFilter : 1);
+
+        const checkInTime = customCheckInTimes[operatorId];
+        if (status === "LATE") lateCount++;
+
         await attendanceApi.markAttendance({
           attendanceDate: date,
-          shiftId: 1, // Fallback dummy shift for manual override
+          shiftId: assignedShiftId || 1,
           operatorId,
-          status
+          status,
+          checkInTime: status === "ABSENT" || status === "ON_LEAVE" ? undefined : checkInTime
         });
       }
       setPendingAttendance({});
+      setCustomCheckInTimes({});
       const attData = await attendanceApi.getAttendanceForDate(date, "");
       setAttendance(attData);
+
+      if (lateCount > 0) {
+        setNotificationBanner(`✓ Saved. Manager notification dispatched for ${lateCount} late check-in(s).`);
+        setTimeout(() => setNotificationBanner(null), 5000);
+      }
     } finally {
       setLoading(false);
     }
@@ -171,9 +220,18 @@ export function AttendancePage() {
       const selected = shuffled.slice(0, Math.min(5, roster.length));
       
       const syncRequests = selected.map(op => {
-        const hour = 8 + Math.floor(Math.random() * 2);
-        const minute = Math.floor(Math.random() * 60);
-        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
+        // Find shift start time
+        const assignedShiftId = assignments.find(a => String(a.operatorId) === String(op.id))?.shiftId || 1;
+        const shiftObj = shifts.find(s => String(s.id) === String(assignedShiftId)) || shifts[0];
+        const [sh = 7, sm = 0] = (shiftObj?.startTime || "07:00").split(":").map(Number);
+
+        // 50% chance of on-time (7:00), 50% chance of late (7:15 to 7:45)
+        const isLate = Math.random() > 0.5;
+        const lateMinutes = isLate ? 15 + Math.floor(Math.random() * 30) : 0;
+        const totalMinutes = sm + lateMinutes;
+        const finalHour = sh + Math.floor(totalMinutes / 60);
+        const finalMin = totalMinutes % 60;
+        const timeStr = `${String(finalHour).padStart(2, "0")}:${String(finalMin).padStart(2, "0")}:00`;
         
         return {
           employeeId: op.employeeId,
@@ -187,6 +245,8 @@ export function AttendancePage() {
       // Reload data
       const attData = await attendanceApi.getAttendanceForDate(date, "");
       setAttendance(attData);
+      setNotificationBanner("✓ Biometric punch synced. Late check-ins automatically triggered Manager Alerts.");
+      setTimeout(() => setNotificationBanner(null), 6000);
     } catch (err) {
       console.error(err);
     } finally {
@@ -268,14 +328,14 @@ export function AttendancePage() {
       />
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#E6DDCE]">
+      <div className="flex items-center gap-2 border-b border-[#E2E8F0]">
         <button
           onClick={() => setActiveTab("TOOL")}
           className={cn(
             "px-4 py-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors",
             activeTab === "TOOL" 
-              ? "border-[#B48259] text-[#221912]" 
-              : "border-transparent text-[#8C7E6E] hover:text-[#475569] hover:border-[#E6DDCE]"
+              ? "border-[#2563EB] text-[#0F172A]" 
+              : "border-transparent text-[#64748B] hover:text-[#475569] hover:border-[#E2E8F0]"
           )}
         >
           <CalendarDays className="w-4 h-4" />
@@ -286,8 +346,8 @@ export function AttendancePage() {
           className={cn(
             "px-4 py-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors",
             activeTab === "HISTORY" 
-              ? "border-[#B48259] text-[#221912]" 
-              : "border-transparent text-[#8C7E6E] hover:text-[#475569] hover:border-[#E6DDCE]"
+              ? "border-[#2563EB] text-[#0F172A]" 
+              : "border-transparent text-[#64748B] hover:text-[#475569] hover:border-[#E2E8F0]"
           )}
         >
           <History className="w-4 h-4" />
@@ -299,9 +359,9 @@ export function AttendancePage() {
         <>
           {/* KPI Ribbon */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-            <div className="bg-white border border-[#F0EAE0] rounded-sm p-4 flex flex-col justify-center items-center shadow-sm">
-              <span className="text-[10px] uppercase font-semibold text-[#8C7E6E] tracking-wider mb-1">Total Roster</span>
-              <span className="text-2xl font-bold text-[#221912]">{filteredRoster.length}</span>
+            <div className="bg-white border border-[#F1F5F9] rounded-sm p-4 flex flex-col justify-center items-center shadow-sm">
+              <span className="text-[10px] uppercase font-semibold text-[#64748B] tracking-wider mb-1">Total Roster</span>
+              <span className="text-2xl font-bold text-[#0F172A]">{filteredRoster.length}</span>
             </div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-sm p-4 flex flex-col justify-center items-center shadow-sm">
               <span className="text-[10px] uppercase font-semibold text-emerald-700 tracking-wider mb-1">Present</span>
@@ -323,9 +383,9 @@ export function AttendancePage() {
               <span className="text-[10px] uppercase font-semibold text-blue-700 tracking-wider mb-1">On Leave</span>
               <span className="text-2xl font-bold text-blue-800">{leaveCount}</span>
             </div>
-            <div className="bg-[#FEFCF9] border border-[#E6DDCE] rounded-sm p-4 flex flex-col justify-center items-center shadow-sm">
+            <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-sm p-4 flex flex-col justify-center items-center shadow-sm">
               <span className="text-[10px] uppercase font-semibold text-[#475569] tracking-wider mb-1">Pending</span>
-              <span className="text-2xl font-bold text-[#221912]">{pendingCount}</span>
+              <span className="text-2xl font-bold text-[#0F172A]">{pendingCount}</span>
             </div>
           </div>
 
@@ -339,7 +399,7 @@ export function AttendancePage() {
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="h-10 bg-white border border-[#E6DDCE] rounded-sm px-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20 w-full"
+                    className="h-10 bg-white border border-[#E2E8F0] rounded-sm px-3 text-sm text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/20 w-full"
                   />
                 </div>
                 
@@ -364,13 +424,13 @@ export function AttendancePage() {
                 <div className="flex-1 md:w-56">
                   <label className="text-[10.5px] font-semibold tracking-[0.1em] uppercase text-[#475569] block mb-1.5">Search</label>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8C7E6E]" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748B]" />
                     <input
                       type="text"
                       placeholder="Name or ID..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full h-10 bg-white border border-[#E6DDCE] rounded-sm pl-9 pr-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20"
+                      className="w-full h-10 bg-white border border-[#E2E8F0] rounded-sm pl-9 pr-3 text-sm text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/20"
                     />
                   </div>
                 </div>
@@ -388,12 +448,29 @@ export function AttendancePage() {
             </div>
           </DataCard>
 
+          {/* Manager Notification Toast Banner */}
+          {notificationBanner && (
+            <div className="p-3.5 bg-amber-50 border border-amber-300 text-amber-900 rounded-xl flex items-center justify-between shadow-2xs animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2.5 text-xs font-bold">
+                <Clock className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>{notificationBanner}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNotificationBanner(null)}
+                className="text-amber-700 hover:text-amber-950 p-1 rounded-md hover:bg-amber-100/60"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* Table View */}
           {loading && roster.length === 0 ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-center space-y-3">
-                <div className="w-8 h-8 border-4 border-[#FFE5BF] border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-sm text-[#8C7E6E]">Loading roster data...</p>
+                <div className="w-8 h-8 border-4 border-[#DBEAFE] border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-sm text-[#64748B]">Loading roster data...</p>
               </div>
             </div>
           ) : roster.length === 0 ? (
@@ -405,47 +482,67 @@ export function AttendancePage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-[#FEFCF9] border-b border-[#E6DDCE]">
-                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Employee ID</th>
-                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Name</th>
-                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Check In</th>
-                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Check Out</th>
-                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Status</th>
-                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase text-right">Actions</th>
+                    <tr className="bg-[#FFFFFF] border-b border-[#E2E8F0]">
+                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Employee ID</th>
+                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Name</th>
+                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Check In</th>
+                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Check Out</th>
+                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Status</th>
+                      <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#F0EAE0]">
+                  <tbody className="divide-y divide-[#F1F5F9]">
                     {paginatedRoster.map((operator) => {
                       const status = getCombinedStatus(operator.id);
                       const isUnsaved = !!pendingAttendance[operator.id];
                       const attRecord = attendance.find(a => String(a.operatorId) === String(operator.id));
+                      const isLate = status === "LATE";
 
                       return (
-                        <tr key={operator.id} className={cn("hover:bg-[#FEFCF9]/50 transition-colors", isUnsaved && "bg-orange-50/30")}>
+                        <tr key={operator.id} className={cn("hover:bg-[#FFFFFF]/50 transition-colors", isUnsaved && "bg-orange-50/30", isLate && "bg-amber-50/20")}>
                           <td className="py-3 px-4">
                             <span className="font-mono text-xs font-medium text-[#475569]">{operator.employeeId}</span>
-                            {isUnsaved && <span className="ml-2 w-2 h-2 inline-block rounded-full bg-[#B48259] animate-pulse" title="Unsaved Change"></span>}
+                            {isUnsaved && <span className="ml-2 w-2 h-2 inline-block rounded-full bg-[#2563EB] animate-pulse" title="Unsaved Change"></span>}
                           </td>
                           <td className="py-3 px-4">
-                            <div className="font-medium text-[#221912] text-sm">{operator.name}</div>
-                            <div className="text-[11px] text-[#8C7E6E]">{operator.department}</div>
+                            <div className="font-medium text-[#0F172A] text-sm">{operator.name}</div>
+                            <div className="text-[11px] text-[#64748B]">{operator.department}</div>
                           </td>
                           <td className="py-3 px-4">
-                            <span className="font-mono text-xs text-[#221912]">{attRecord?.checkInTime || '--:--:--'}</span>
+                            {attRecord?.checkInTime ? (
+                              <div className="flex items-center gap-1.5 font-mono text-xs">
+                                <span className={isLate ? "text-amber-800 font-bold" : "text-[#0F172A]"}>
+                                  {attRecord.checkInTime.slice(0, 5)}
+                                </span>
+                                {isLate && (
+                                  <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200">
+                                    +{attRecord.lateMinutes || 15}m
+                                  </span>
+                                )}
+                              </div>
+                            ) : customCheckInTimes[operator.id] && status !== "ABSENT" && status !== "ON_LEAVE" ? (
+                              <div className="flex items-center gap-1.5 font-mono text-xs">
+                                <span className="text-blue-700 font-bold">{customCheckInTimes[operator.id].slice(0, 5)}</span>
+                                <span className="text-[10px] text-slate-400 font-sans">(pending)</span>
+                              </div>
+                            ) : (
+                              <span className="font-mono text-xs text-slate-400">--:--</span>
+                            )}
                           </td>
                           <td className="py-3 px-4">
-                            <span className="font-mono text-xs text-[#221912]">{attRecord?.checkOutTime || '--:--:--'}</span>
+                            <span className="font-mono text-xs text-[#0F172A]">{attRecord?.checkOutTime ? attRecord.checkOutTime.slice(0, 5) : '--:--'}</span>
                           </td>
                           <td className="py-3 px-4">
-                            {getStatusBadge(status)}
+                            {getStatusBadge(status, attRecord?.lateMinutes)}
                           </td>
                           <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
                             <button
                               onClick={() => handleMark(operator.id, "PRESENT")}
                               className={cn(
                                 "px-2.5 py-1 text-[11px] font-semibold rounded-sm border transition-colors",
-                                status === "PRESENT" ? "bg-emerald-600 border-emerald-600 text-white" : "bg-white border-[#E6DDCE] text-[#475569] hover:bg-emerald-50 hover:text-emerald-700"
+                                status === "PRESENT" ? "bg-emerald-600 border-emerald-600 text-white" : "bg-white border-[#E2E8F0] text-[#475569] hover:bg-emerald-50 hover:text-emerald-700"
                               )}
+                              title="Mark Present on-time"
                             >
                               P
                             </button>
@@ -453,8 +550,9 @@ export function AttendancePage() {
                               onClick={() => handleMark(operator.id, "LATE")}
                               className={cn(
                                 "px-2.5 py-1 text-[11px] font-semibold rounded-sm border transition-colors",
-                                status === "LATE" ? "bg-amber-500 border-amber-500 text-white" : "bg-white border-[#E6DDCE] text-[#475569] hover:bg-amber-50 hover:text-amber-700"
+                                status === "LATE" ? "bg-amber-500 border-amber-500 text-white" : "bg-white border-[#E2E8F0] text-[#475569] hover:bg-amber-50 hover:text-amber-700"
                               )}
+                              title="Mark Late Check-in (triggers Manager Alert)"
                             >
                               L
                             </button>
@@ -462,8 +560,9 @@ export function AttendancePage() {
                               onClick={() => handleMark(operator.id, "ABSENT")}
                               className={cn(
                                 "px-2.5 py-1 text-[11px] font-semibold rounded-sm border transition-colors",
-                                status === "ABSENT" ? "bg-red-600 border-red-600 text-white" : "bg-white border-[#E6DDCE] text-[#475569] hover:bg-red-50 hover:text-red-700"
+                                status === "ABSENT" ? "bg-red-600 border-red-600 text-white" : "bg-white border-[#E2E8F0] text-[#475569] hover:bg-red-50 hover:text-red-700"
                               )}
+                              title="Mark Absent"
                             >
                               A
                             </button>
@@ -471,8 +570,9 @@ export function AttendancePage() {
                               onClick={() => handleMark(operator.id, "ON_LEAVE")}
                               className={cn(
                                 "px-2.5 py-1 text-[11px] font-semibold rounded-sm border transition-colors",
-                                status === "ON_LEAVE" ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-[#E6DDCE] text-[#475569] hover:bg-blue-50 hover:text-blue-700"
+                                status === "ON_LEAVE" ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-[#E2E8F0] text-[#475569] hover:bg-blue-50 hover:text-blue-700"
                               )}
+                              title="Mark On Leave"
                             >
                               LV
                             </button>
@@ -484,13 +584,13 @@ export function AttendancePage() {
                 </table>
               </div>
               
-              <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-[#F0EAE0] rounded-b-2xl">
+              <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-[#F1F5F9] rounded-b-2xl">
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] font-semibold tracking-[0.1em] text-[#8C7E6E] uppercase">Rows per page:</span>
+                  <span className="text-[11px] font-semibold tracking-[0.1em] text-[#64748B] uppercase">Rows per page:</span>
                   <select 
                     value={rosterPageSize} 
                     onChange={(e) => { setRosterPageSize(Number(e.target.value)); setRosterPage(1); }}
-                    className="text-xs bg-white border border-[#E6DDCE] rounded-sm h-7 px-2 focus:ring-[#B48259] focus:border-[#B48259] text-[#221912]"
+                    className="text-xs bg-white border border-[#E2E8F0] rounded-sm h-7 px-2 focus:ring-[#2563EB] focus:border-[#2563EB] text-[#0F172A]"
                   >
                     <option value={25}>25</option>
                     <option value={50}>50</option>
@@ -499,7 +599,7 @@ export function AttendancePage() {
                   </select>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-xs font-medium text-[#8C7E6E]">
+                  <span className="text-xs font-medium text-[#64748B]">
                     {filteredRoster.length === 0 ? 0 : (rosterPage - 1) * rosterPageSize + 1}-{Math.min(filteredRoster.length, rosterPage * rosterPageSize)} of {filteredRoster.length}
                   </span>
                   <div className="flex items-center gap-1">
@@ -514,17 +614,17 @@ export function AttendancePage() {
       ) : (
         /* History Tab */
         <DataCard>
-          <div className="p-4 md:p-5 flex flex-col md:flex-row gap-4 items-center justify-between border-b border-[#E6DDCE] bg-white">
-            <h3 className="font-semibold text-[#221912] text-sm">Recent Attendance Records</h3>
+          <div className="p-4 md:p-5 flex flex-col md:flex-row gap-4 items-center justify-between border-b border-[#E2E8F0] bg-white">
+            <h3 className="font-semibold text-[#0F172A] text-sm">Recent Attendance Records</h3>
             <div className="flex items-center gap-4 w-full md:w-auto">
               <div className="relative w-full md:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8C7E6E]" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748B]" />
                 <input
                   type="text"
                   placeholder="Search Name or ID..."
                   value={historySearchQuery}
                   onChange={(e) => setHistorySearchQuery(e.target.value)}
-                  className="w-full h-9 bg-white border border-[#E6DDCE] rounded-sm pl-9 pr-3 text-sm text-[#221912] focus:outline-none focus:border-[#B48259] focus:ring-1 focus:ring-[#B48259]/20"
+                  className="w-full h-9 bg-white border border-[#E2E8F0] rounded-sm pl-9 pr-3 text-sm text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/20"
                 />
               </div>
               <Button variant="outline" size="sm" onClick={() => setHistoryLoading(true)}>
@@ -534,7 +634,7 @@ export function AttendancePage() {
           </div>
           {historyLoading ? (
              <div className="flex items-center justify-center h-64">
-              <div className="w-8 h-8 border-4 border-[#FFE5BF] border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-4 border-[#DBEAFE] border-t-transparent rounded-full animate-spin" />
             </div>
           ) : history.filter(h => !historySearchQuery || (h.operatorName && h.operatorName.toLowerCase().includes(historySearchQuery.toLowerCase())) || (h.employeeId && h.employeeId.toLowerCase().includes(historySearchQuery.toLowerCase()))).length === 0 ? (
             <EmptyState title="No historical records found" description="Try adjusting your search query." />
@@ -542,47 +642,63 @@ export function AttendancePage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-[#FEFCF9] border-b border-[#E6DDCE]">
-                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Date</th>
-                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Employee ID</th>
-                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Name</th>
-                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Status</th>
-                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Check In</th>
-                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#8C7E6E] uppercase">Check Out</th>
+                  <tr className="bg-[#FFFFFF] border-b border-[#E2E8F0]">
+                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Date</th>
+                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Employee ID</th>
+                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Name</th>
+                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Status</th>
+                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Check In</th>
+                    <th className="py-3 px-4 text-[10px] font-bold tracking-wider text-[#64748B] uppercase">Check Out</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#F0EAE0]">
-                  {history.filter(h => !historySearchQuery || (h.operatorName && h.operatorName.toLowerCase().includes(historySearchQuery.toLowerCase())) || (h.employeeId && h.employeeId.toLowerCase().includes(historySearchQuery.toLowerCase()))).slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize).map((record) => (
-                    <tr key={record.id} className="hover:bg-[#FEFCF9]/50 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="font-semibold text-sm text-[#221912]">{record.attendanceDate}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-mono text-xs text-[#475569]">{record.employeeId || `ID: ${record.operatorId}`}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-sm font-medium text-[#221912]">{record.operatorName || 'Unknown'}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        {getStatusBadge(record.status)}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-mono text-xs text-[#475569]">{record.checkInTime || '--:--:--'}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-mono text-xs text-[#475569]">{record.checkOutTime || '--:--:--'}</span>
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-[#F1F5F9]">
+                  {history.filter(h => !historySearchQuery || (h.operatorName && h.operatorName.toLowerCase().includes(historySearchQuery.toLowerCase())) || (h.employeeId && h.employeeId.toLowerCase().includes(historySearchQuery.toLowerCase()))).slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize).map((record) => {
+                    const isLate = record.status === "LATE";
+                    return (
+                      <tr key={record.id} className={cn("hover:bg-[#FFFFFF]/50 transition-colors", isLate && "bg-amber-50/20")}>
+                        <td className="py-3 px-4">
+                          <span className="font-semibold text-sm text-[#0F172A]">{record.attendanceDate}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-mono text-xs text-[#475569]">{record.employeeId || `ID: ${record.operatorId}`}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="text-sm font-medium text-[#0F172A]">{record.operatorName || 'Unknown'}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {getStatusBadge(record.status, record.lateMinutes)}
+                        </td>
+                        <td className="py-3 px-4">
+                          {record.checkInTime ? (
+                            <div className="flex items-center gap-1.5 font-mono text-xs">
+                              <span className={isLate ? "text-amber-800 font-bold" : "text-[#475569]"}>
+                                {record.checkInTime.slice(0, 5)}
+                              </span>
+                              {isLate && (
+                                <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200">
+                                  +{record.lateMinutes || 15}m
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="font-mono text-xs text-slate-400">--:--</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-mono text-xs text-[#475569]">{record.checkOutTime ? record.checkOutTime.slice(0, 5) : '--:--'}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-              <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-[#F0EAE0] rounded-b-2xl">
+              <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-[#F1F5F9] rounded-b-2xl">
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] font-semibold tracking-[0.1em] text-[#8C7E6E] uppercase">Rows per page:</span>
+                  <span className="text-[11px] font-semibold tracking-[0.1em] text-[#64748B] uppercase">Rows per page:</span>
                   <select 
                     value={historyPageSize} 
                     onChange={(e) => { setHistoryPageSize(Number(e.target.value)); setHistoryPage(1); }}
-                    className="text-xs bg-white border border-[#E6DDCE] rounded-sm h-7 px-2 focus:ring-[#B48259] focus:border-[#B48259] text-[#221912]"
+                    className="text-xs bg-white border border-[#E2E8F0] rounded-sm h-7 px-2 focus:ring-[#2563EB] focus:border-[#2563EB] text-[#0F172A]"
                   >
                     <option value={25}>25</option>
                     <option value={50}>50</option>
@@ -591,7 +707,7 @@ export function AttendancePage() {
                   </select>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-xs font-medium text-[#8C7E6E]">
+                  <span className="text-xs font-medium text-[#64748B]">
                     {(() => {
                       const filteredHistory = history.filter(h => !historySearchQuery || (h.operatorName && h.operatorName.toLowerCase().includes(historySearchQuery.toLowerCase())) || (h.employeeId && h.employeeId.toLowerCase().includes(historySearchQuery.toLowerCase())));
                       if (filteredHistory.length === 0) return 0;

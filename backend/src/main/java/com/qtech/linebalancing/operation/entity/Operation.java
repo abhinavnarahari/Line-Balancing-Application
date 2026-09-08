@@ -3,6 +3,7 @@ package com.qtech.linebalancing.operation.entity;
 import com.qtech.linebalancing.common.audit.AuditableEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "operations")
@@ -29,4 +30,10 @@ public class Operation extends AuditableEntity {
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    @Column(name = "standard_smv", precision = 8, scale = 4)
+    private BigDecimal standardSmv;
+
+    @Column(name = "machine_type", length = 100)
+    private String machineType;
 }

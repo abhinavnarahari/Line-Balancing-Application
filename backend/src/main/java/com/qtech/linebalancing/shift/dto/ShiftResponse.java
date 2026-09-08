@@ -12,6 +12,7 @@ public class ShiftResponse {
     private String shiftName;
     private LocalTime startTime;
     private LocalTime endTime;
+    private Integer breakDurationMinutes;
     private boolean active;
     private boolean overnightShift;
     private LocalDateTime createdAt;

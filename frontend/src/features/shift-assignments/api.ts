@@ -26,6 +26,10 @@ export const shiftAssignmentApi = {
     return await api.patch(`/shift-assignments/${id}/end`, null, { params: { endDate } });
   },
 
+  updateAssignment: async (id: string | number, data: AssignShiftDTO): Promise<ShiftAssignment> => {
+    return await api.put(`/shift-assignments/${id}`, data);
+  },
+
   deleteAssignment: async (id: string | number): Promise<void> => {
     return await api.delete(`/shift-assignments/${id}`);
   },
