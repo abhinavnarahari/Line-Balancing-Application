@@ -25,7 +25,7 @@ public class Operator extends AuditableEntity {
     private Integer age;
 
     @Column(nullable = false, length = 10)
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = com.qtech.linebalancing.operator.converter.GenderConverter.class)
     private Gender gender;
 
     @Column(nullable = false, length = 100)
@@ -35,7 +35,7 @@ public class Operator extends AuditableEntity {
     private LocalDate joiningDate;
 
     @Column(nullable = false, length = 50)
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = com.qtech.linebalancing.operator.converter.OperatorRoleConverter.class)
     @Builder.Default
     private OperatorRole role = OperatorRole.OPERATOR;
 

@@ -27,7 +27,7 @@ public interface OperatorRepository extends JpaRepository<Operator, Long> {
                    OR LOWER(o.name) LIKE LOWER(CONCAT('%', :search, '%'))
                    OR LOWER(o.employeeId) LIKE LOWER(CONCAT('%', :search, '%'))
                    OR LOWER(o.department) LIKE LOWER(CONCAT('%', :search, '%')))
-            ORDER BY o.name ASC
+            ORDER BY o.employeeId ASC, o.name ASC
             """)
     List<Operator> searchOperators(@Param("search") String search, @Param("active") Boolean active);
 }

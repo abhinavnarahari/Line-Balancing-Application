@@ -40,16 +40,18 @@ export function OperatorList({ operators, onEdit, onToggleActive, loading }: Ope
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
 
-  const filtered = operators.filter((op) => {
-    const s = search.toLowerCase();
-    const matchesSearch =
-      op.name.toLowerCase().includes(s) ||
-      op.employeeId.toLowerCase().includes(s) ||
-      (op.department && op.department.toLowerCase().includes(s));
-    const matchesFilter =
-      filter === "all" || (filter === "active" && op.active) || (filter === "inactive" && !op.active);
-    return matchesSearch && matchesFilter;
-  });
+  const filtered = operators
+    .filter((op) => {
+      const s = search.toLowerCase();
+      const matchesSearch =
+        op.name.toLowerCase().includes(s) ||
+        op.employeeId.toLowerCase().includes(s) ||
+        (op.department && op.department.toLowerCase().includes(s));
+      const matchesFilter =
+        filter === "all" || (filter === "active" && op.active) || (filter === "inactive" && !op.active);
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => (a.employeeId || "").localeCompare(b.employeeId || "", undefined, { numeric: true, sensitivity: "base" }));
 
   return (
     <DataCard noPad className="border border-slate-200/90 shadow-sm rounded-2xl overflow-hidden bg-white">
