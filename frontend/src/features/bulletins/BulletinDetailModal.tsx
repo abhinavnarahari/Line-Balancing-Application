@@ -123,6 +123,18 @@ export function BulletinDetailModal({
     return { eff100, eff85, eff70, eff60, taktSec };
   }, [metrics.totalSmv, targetManpower]);
 
+  const pitchTime = useMemo(() => {
+    if (targetManpower <= 0 || metrics.totalSmv <= 0) return 0;
+    return metrics.totalSmv / targetManpower;
+  }, [metrics.totalSmv, targetManpower]);
+
+  const balanceEfficiency = useMemo(() => {
+    const bSmv = Number(metrics.bottleneckLine?.smv) || 0;
+    const count = bulletin?.lines?.length || 0;
+    if (count === 0 || bSmv <= 0 || metrics.totalSmv <= 0) return 0;
+    return Math.min(100, Math.round(((metrics.totalSmv / (count * bSmv)) * 100) * 10) / 10);
+  }, [bulletin?.lines?.length, metrics.bottleneckLine, metrics.totalSmv]);
+
   if (!isOpen || !bulletin || !mounted) return null;
 
   // Handle Status Switch
@@ -159,9 +171,11 @@ export function BulletinDetailModal({
     });
 
     const summaryRows = [
-      { "Seq #": "", "Operation Code": "TOTAL GARMENT SMV", "Operation Name": "", "Machine Type": "", "SMV (min)": Number(metrics.totalSmv.toFixed(3)), "% Work Share": "100%", "Skill Required": `Avg L${metrics.avgSkill}`, "Notes & Quality Points": "" },
+      { "Seq #": "", "Operation Code": "TOTAL GARMENT SMV (SAM)", "Operation Name": "", "Machine Type": "", "SMV (min)": Number(metrics.totalSmv.toFixed(3)), "% Work Share": "100%", "Skill Required": `Avg L${metrics.avgSkill}`, "Notes & Quality Points": `${bulletin.lines?.length || 0} operations` },
+      { "Seq #": "", "Operation Code": "TARGET PITCH TIME", "Operation Name": `${pitchTime.toFixed(2)} min/pc`, "Machine Type": "", "SMV (min)": Number(pitchTime.toFixed(2)), "% Work Share": "", "Skill Required": `Target: ${targetManpower} Ops`, "Notes & Quality Points": `Takt: ${hourlyOutput.taktSec}s` },
+      { "Seq #": "", "Operation Code": "LINE BALANCING EFFICIENCY", "Operation Name": `${balanceEfficiency.toFixed(1)}% Smoothness Index`, "Machine Type": "", "SMV (min)": "", "% Work Share": "", "Skill Required": balanceEfficiency >= 85 ? "Well Balanced" : "Imbalanced", "Notes & Quality Points": "" },
       { "Seq #": "", "Operation Code": "BOTTLENECK OPERATION", "Operation Name": metrics.bottleneckLine?.operationName || "—", "Machine Type": metrics.bottleneckLine?.machineType || "—", "SMV (min)": metrics.bottleneckLine?.smv || 0, "% Work Share": "", "Skill Required": "", "Notes & Quality Points": "Critical Pace Constraint" },
-      { "Seq #": "", "Operation Code": "EST. HOURLY TARGET (85% Eff)", "Operation Name": `${hourlyOutput.eff85} pcs/hr with ${targetManpower} operators`, "Machine Type": "", "SMV (min)": "", "% Work Share": "", "Skill Required": "", "Notes & Quality Points": `Takt Time: ${hourlyOutput.taktSec}s` },
+      { "Seq #": "", "Operation Code": "EST. HOURLY TARGET (85% Eff)", "Operation Name": `${hourlyOutput.eff85} pcs/hr with ${targetManpower} operators`, "Machine Type": "", "SMV (min)": "", "% Work Share": "", "Skill Required": "", "Notes & Quality Points": `At 100% Eff: ${hourlyOutput.eff100} pcs/hr` },
     ];
 
     const allRows = [...rows, {}, ...summaryRows];
@@ -232,11 +246,11 @@ export function BulletinDetailModal({
         <div className="p-5 sm:p-6 overflow-y-auto space-y-5 custom-scrollbar flex-1">
           
           {/* Executive IE Metrics Ribbon */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {/* Total Garment SMV */}
             <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
               <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" /> Total SMV
+                <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" /> Total SMV (SAM)
               </span>
               <div className="mt-1.5 flex items-baseline gap-1">
                 <span className="text-2xl sm:text-3xl font-black font-mono text-[#9C5B3C]">
@@ -249,9 +263,48 @@ export function BulletinDetailModal({
               </p>
             </div>
 
+            {/* Target Pitch Time */}
+            <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-sky-800 flex items-center gap-1">
+                <Sliders className="w-3.5 h-3.5 text-sky-600" /> Pitch Time
+              </span>
+              <div className="mt-1.5 flex items-baseline gap-1">
+                <span className="text-2xl sm:text-3xl font-black font-mono text-sky-800">
+                  {pitchTime.toFixed(2)}
+                </span>
+                <span className="text-xs text-[#8C7E6E] font-bold font-mono">min/pc</span>
+              </div>
+              <p className="text-[11px] text-sky-600 mt-0.5 font-medium">
+                For {targetManpower} Line Ops (Takt: {hourlyOutput.taktSec}s)
+              </p>
+            </div>
+
+            {/* Line Balancing Efficiency */}
+            <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" /> Line Efficiency
+              </span>
+              <div className="mt-1.5 flex items-baseline gap-1">
+                <span className={`text-2xl sm:text-3xl font-black font-mono ${
+                  balanceEfficiency >= 85 ? "text-emerald-700" : balanceEfficiency >= 70 ? "text-amber-700" : "text-rose-700"
+                }`}>
+                  {balanceEfficiency.toFixed(1)}%
+                </span>
+              </div>
+              <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase mt-0.5 ${
+                balanceEfficiency >= 85 
+                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200" 
+                  : balanceEfficiency >= 70 
+                    ? "bg-amber-50 text-amber-800 border border-amber-200" 
+                    : "bg-rose-50 text-rose-800 border border-rose-200"
+              }`}>
+                {balanceEfficiency >= 85 ? "Well Balanced" : balanceEfficiency >= 70 ? "Moderate Imbalance" : "Bottleneck"}
+              </span>
+            </div>
+
             {/* Bottleneck Operation */}
             <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 flex items-center gap-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 flex items-center gap-1">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Bottleneck Step
               </span>
               <div className="mt-1.5">
@@ -263,7 +316,7 @@ export function BulletinDetailModal({
                     {metrics.bottleneckLine?.smv || 0} min
                   </span>
                   <span className="text-[10.5px] text-[#8C7E6E] truncate max-w-[90px]">
-                    {metrics.bottleneckLine?.machineType}
+                    {metrics.bottleneckLine?.machineType?.split(" ")[0]}
                   </span>
                 </div>
               </div>
@@ -271,8 +324,8 @@ export function BulletinDetailModal({
 
             {/* Unique Machine Count */}
             <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 flex items-center gap-1">
-                <Cpu className="w-3.5 h-3.5 text-indigo-600" /> Machine Types
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-800 flex items-center gap-1">
+                <Cpu className="w-3.5 h-3.5 text-indigo-600" /> Machinery Types
               </span>
               <div className="mt-1.5 flex items-baseline gap-1">
                 <span className="text-2xl sm:text-3xl font-black font-mono text-indigo-700">
@@ -282,22 +335,6 @@ export function BulletinDetailModal({
               </div>
               <p className="text-[11px] text-[#8C7E6E] mt-0.5 font-medium">
                 {bulletin.lines?.length || 0} total machine stations
-              </p>
-            </div>
-
-            {/* Average Skill Rating */}
-            <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Avg Skill Required
-              </span>
-              <div className="mt-1.5 flex items-baseline gap-1">
-                <span className="text-2xl sm:text-3xl font-black font-mono text-emerald-700">
-                  L{metrics.avgSkill}
-                </span>
-                <span className="text-xs text-[#8C7E6E] font-bold font-mono">/ 5.0</span>
-              </div>
-              <p className="text-[11px] text-[#8C7E6E] mt-0.5 font-medium">
-                Standard Matrix Level
               </p>
             </div>
           </div>

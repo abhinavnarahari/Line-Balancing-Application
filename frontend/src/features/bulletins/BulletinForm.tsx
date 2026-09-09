@@ -6,17 +6,31 @@ import {
   ArrowDown, 
   Clock, 
   Cpu, 
-  Sparkles,
+  Sparkles, 
   Check, 
   Layers, 
   Search, 
-  AlertTriangle
+  AlertTriangle,
+  Copy,
+  BarChart3,
+  TrendingUp,
+  Users,
+  ChevronDown,
+  ChevronUp,
+  Sliders,
+  ShieldCheck
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import type { CreateBulletinDTO, BulletinLine, OperationBulletin } from "./api";
 import type { Style } from "../styles/api";
 import type { Operation } from "../operations/api";
+import { machinesApi, type Machine } from "../machines/api";
+import { 
+  GARMENT_MACHINE_CATEGORIES, 
+  ALL_GARMENT_MACHINE_PRESETS, 
+  getUnifiedMachineTypes 
+} from "./garmentMachinery";
 
 interface BulletinFormProps {
   styles: Style[];
@@ -27,7 +41,14 @@ interface BulletinFormProps {
   onCancel: () => void;
 }
 
-export function BulletinForm({ styles, operations, existingBulletins = [], initialData, onSubmit, onCancel }: BulletinFormProps) {
+export function BulletinForm({ 
+  styles, 
+  operations, 
+  existingBulletins = [], 
+  initialData, 
+  onSubmit, 
+  onCancel 
+}: BulletinFormProps) {
   const sequentialCode = useMemo(() => {
     const list = existingBulletins || [];
     const numbers = list
@@ -68,6 +89,24 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
     return [];
   });
 
+  // Machine inventory from factory floor
+  const [inventoryMachines, setInventoryMachines] = useState<Machine[]>([]);
+  useEffect(() => {
+    machinesApi.getMachines({ active: true })
+      .then(res => setInventoryMachines(res || []))
+      .catch(() => []);
+  }, []);
+
+  const extraInventoryTypes = useMemo(() => {
+    const invTypes = new Set(inventoryMachines.map(m => m.machineType?.trim()).filter(Boolean));
+    ALL_GARMENT_MACHINE_PRESETS.forEach(p => invTypes.delete(p));
+    return Array.from(invTypes);
+  }, [inventoryMachines]);
+
+  // IE Line Balancing Parameters
+  const [targetOperators, setTargetOperators] = useState<number>(25);
+  const [showPitchChart, setShowPitchChart] = useState<boolean>(true);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isBulkPickerOpen, setIsBulkPickerOpen] = useState(false);
@@ -98,10 +137,18 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
   }, [initialData]);
 
   const activeStyles = useMemo(() => styles.filter(s => s.active !== false), [styles]);
-  const activeOps = useMemo(() => operations.filter(o => o.active !== false).sort((a, b) => (a.sequence || 0) - (b.sequence || 0)), [operations]);
+  const activeOps = useMemo(() => 
+    operations
+      .filter(o => o.active !== false)
+      .sort((a, b) => (a.sequence || 0) - (b.sequence || 0) || (a.operationCode || "").localeCompare(b.operationCode || "")), 
+    [operations]
+  );
 
-  // Live Calculations
-  const totalSMV = useMemo(() => lines.reduce((acc, curr) => acc + (Number(curr.smv) || 0), 0), [lines]);
+  // ── Industrial Engineering Metrics ──────────────────────────────────────────
+  const totalSMV = useMemo(() => 
+    lines.reduce((acc, curr) => acc + (Number(curr.smv) || 0), 0), 
+    [lines]
+  );
 
   const bottleneck = useMemo(() => {
     if (lines.length === 0) return null;
@@ -112,10 +159,35 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
     return max;
   }, [lines]);
 
+  // Target Pitch Time (min/pc) = Total SMV / Target Operators
+  const pitchTime = useMemo(() => {
+    if (targetOperators <= 0 || totalSMV <= 0) return 0;
+    return totalSMV / targetOperators;
+  }, [totalSMV, targetOperators]);
+
+  // Line Balancing Efficiency % (Smoothness Index) = (Total SMV / (Steps * Bottleneck SMV)) * 100%
+  const balanceEfficiency = useMemo(() => {
+    const bottleneckSmv = Number(bottleneck?.smv) || 0;
+    if (lines.length === 0 || bottleneckSmv <= 0 || totalSMV <= 0) return 0;
+    const eff = (totalSMV / (lines.length * bottleneckSmv)) * 100;
+    return Math.min(100, Math.round(eff * 10) / 10);
+  }, [lines.length, totalSMV, bottleneck]);
+
+  // Target Production Output (Pieces per Hour)
+  const hourlyOutput = useMemo(() => {
+    if (totalSMV <= 0 || targetOperators <= 0) return { eff100: 0, eff85: 0, taktSec: "0.0" };
+    const availableMinutes = 60 * targetOperators;
+    const eff100 = Math.round(availableMinutes / totalSMV);
+    const eff85 = Math.round((availableMinutes * 0.85) / totalSMV);
+    const taktSec = eff85 > 0 ? (3600 / eff85).toFixed(1) : "0.0";
+    return { eff100, eff85, taktSec };
+  }, [totalSMV, targetOperators]);
+
+  // Machine counts breakdown
   const machineCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     lines.forEach(l => {
-      const m = (l.machineType || "Single Needle Lockstitch").trim();
+      const m = (l.machineType || "Single Needle Lockstitch (SNLS)").trim();
       counts[m] = (counts[m] || 0) + 1;
     });
     return counts;
@@ -138,9 +210,10 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
     });
   };
 
+  // Add fresh operation step
   const addLine = () => {
     const newLine: BulletinLine = {
-      id: `new-${Date.now()}`,
+      id: `new-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       sequence: lines.length + 1,
       operationId: "",
       smv: 0.50,
@@ -149,6 +222,20 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
       notes: "",
     };
     setLines([...lines, newLine]);
+  };
+
+  // Duplicate an existing step right after it
+  const duplicateLine = (index: number) => {
+    const source = lines[index];
+    if (!source) return;
+    const cloned: BulletinLine = {
+      ...source,
+      id: `clone-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      notes: source.notes ? `${source.notes} (Copy)` : "",
+    };
+    const nextLines = [...lines];
+    nextLines.splice(index + 1, 0, cloned);
+    setLines(nextLines.map((l, idx) => ({ ...l, sequence: idx + 1 })));
   };
 
   const updateLine = (id: string | number, field: keyof BulletinLine, value: any) => {
@@ -179,7 +266,7 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
       operationId: String(op.id),
       operationCode: op.operationCode,
       operationName: op.name,
-      smv: Number(op.standardSmv) || 0.60,
+      smv: Number(op.standardSmv) || 0.50,
       machineType: op.machineType || "Single Needle Lockstitch (SNLS)",
       skillRatingRequired: (Number(op.skillLevel) || 3) as 1 | 2 | 3 | 4 | 5,
       notes: "",
@@ -194,7 +281,7 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
     e.preventDefault();
     setError(null);
     if (!formData.bulletinCode.trim()) {
-      setError("Bulletin code is required (e.g. OB-TS-001).");
+      setError("Bulletin code is required (e.g. OB-001).");
       return;
     }
     if (!formData.name.trim()) {
@@ -222,7 +309,7 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
           sequence: idx + 1,
           operationId: l.operationId,
           smv: Number(l.smv) || 0.1,
-          machineType: l.machineType || "Single Needle Lockstitch",
+          machineType: l.machineType || "Single Needle Lockstitch (SNLS)",
           skillRatingRequired: Number(l.skillRatingRequired) || 3,
           notes: l.notes || "",
         })),
@@ -322,7 +409,7 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
         {/* Linked Styles Multi-Select */}
         <div className="space-y-1.5 pt-2">
           <label className="text-[11px] font-bold tracking-wider uppercase text-[#8C7E6E]">
-            Linked Styles ({formData.styleIds.length} Selected)
+            Linked Garment Styles ({formData.styleIds.length} Selected)
           </label>
           <div className="flex flex-wrap gap-2 p-3 border border-[#E6DDCE] rounded-xl bg-white max-h-28 overflow-y-auto custom-scrollbar">
             {activeStyles.map(s => {
@@ -352,43 +439,198 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
         </div>
       </div>
 
-      {/* ── 2. Live IE Metrics Strip ─────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#F6F1E8] p-3.5 rounded-2xl border border-[#E6DDCE]">
-        <div className="bg-white p-3 rounded-xl border border-[#E6DDCE] shadow-2xs">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" /> Total Work Content
-          </span>
-          <p className="text-2xl font-black font-mono text-[#9C5B3C] mt-1">
-            {totalSMV.toFixed(2)} <span className="text-xs text-[#8C7E6E] font-normal font-sans">min</span>
-          </p>
+      {/* ── 2. Live Industrial Engineering (IE) Metrics Ribbon ──────── */}
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-[#F6F1E8] p-3.5 rounded-2xl border border-[#E6DDCE]">
+          {/* Total Work Content (SAM/SMV) */}
+          <div className="bg-white p-3 rounded-xl border border-[#E6DDCE] shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" /> Total SMV (SAM)
+            </span>
+            <p className="text-2xl font-black font-mono text-[#9C5B3C] mt-1">
+              {totalSMV.toFixed(2)} <span className="text-xs text-[#8C7E6E] font-normal font-sans">min</span>
+            </p>
+            <p className="text-[10px] text-[#8C7E6E] mt-0.5">{lines.length} sequential operations</p>
+          </div>
+
+          {/* Target Pitch Time */}
+          <div className="bg-white p-3 rounded-xl border border-[#E6DDCE] shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-sky-800 flex items-center gap-1">
+                <Sliders className="w-3.5 h-3.5 text-sky-600" /> Pitch Time
+              </span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min="1"
+                  max="150"
+                  value={targetOperators}
+                  onChange={(e) => setTargetOperators(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-10 px-1 py-0.2 bg-[#F6F1E8] border border-[#E6DDCE] rounded text-[10px] font-bold font-mono text-center"
+                  title="Target Line Operators"
+                />
+                <span className="text-[9px] text-[#8C7E6E] font-bold">ops</span>
+              </div>
+            </div>
+            <p className="text-2xl font-black font-mono text-sky-800 mt-1">
+              {pitchTime.toFixed(2)} <span className="text-xs text-[#8C7E6E] font-normal font-sans">min/pc</span>
+            </p>
+            <p className="text-[10px] text-sky-600 font-medium mt-0.5">Takt: {hourlyOutput.taktSec}s</p>
+          </div>
+
+          {/* Line Balancing Efficiency % */}
+          <div className="bg-white p-3 rounded-xl border border-[#E6DDCE] shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-600" /> Line Efficiency
+            </span>
+            <div className="flex items-baseline gap-1 mt-1">
+              <span className={`text-2xl font-black font-mono ${
+                balanceEfficiency >= 85 ? "text-emerald-700" : balanceEfficiency >= 70 ? "text-amber-700" : "text-rose-700"
+              }`}>
+                {balanceEfficiency.toFixed(1)}%
+              </span>
+            </div>
+            <span className={`inline-block px-1.5 py-0.2 rounded text-[9px] font-extrabold uppercase mt-0.5 ${
+              balanceEfficiency >= 85 
+                ? "bg-emerald-50 text-emerald-800 border border-emerald-200" 
+                : balanceEfficiency >= 70 
+                  ? "bg-amber-50 text-amber-800 border border-amber-200" 
+                  : "bg-rose-50 text-rose-800 border border-rose-200"
+            }`}>
+              {balanceEfficiency >= 85 ? "Well Balanced" : balanceEfficiency >= 70 ? "Moderate Imbalance" : "Severe Bottleneck"}
+            </span>
+          </div>
+
+          {/* Bottleneck Operation */}
+          <div className="bg-white p-3 rounded-xl border border-[#E6DDCE] shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Bottleneck Step
+            </span>
+            <p className="text-xs font-bold text-[#221912] mt-1 truncate" title={bottleneck?.operationName || "None"}>
+              {bottleneck?.operationName || "—"}
+            </p>
+            <p className="text-xs font-mono font-extrabold text-amber-800 mt-0.5">
+              {bottleneck ? `${bottleneck.smv}m (${bottleneck.machineType?.split(" ")[0] || "SNLS"})` : "—"}
+            </p>
+          </div>
+
+          {/* Machine Diversity */}
+          <div className="bg-white p-3 rounded-xl border border-[#E6DDCE] shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-800 flex items-center gap-1">
+              <Cpu className="w-3.5 h-3.5 text-indigo-600" /> Machinery Types
+            </span>
+            <p className="text-2xl font-black font-mono text-indigo-700 mt-1">
+              {Object.keys(machineCounts).length} <span className="text-xs text-[#8C7E6E] font-normal font-sans">types</span>
+            </p>
+            <p className="text-[10px] text-[#8C7E6E] mt-0.5">
+              Est. Output: <span className="font-bold text-[#221912]">{hourlyOutput.eff85} pcs/hr</span> @ 85%
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white p-3 rounded-xl border border-[#E6DDCE] shadow-2xs">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 flex items-center gap-1">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Bottleneck Step
-          </span>
-          <p className="text-sm font-bold text-[#221912] mt-1 truncate" title={bottleneck?.operationName}>
-            {bottleneck ? `${bottleneck.smv}m (${bottleneck.machineType || "SNLS"})` : "—"}
-          </p>
-        </div>
+        {/* ── Visual SMV Pitch Balancing Diagram ────────────────────── */}
+        {lines.length > 0 && (
+          <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between border-b border-[#E6DDCE] pb-2">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-[#9C5B3C]" />
+                <span className="text-xs font-black uppercase tracking-wider text-[#221912]">
+                  Visual Line Balance &amp; Pitch Diagram (SMV vs. Target Pitch: {pitchTime.toFixed(2)}m)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPitchChart(!showPitchChart)}
+                className="text-xs font-bold text-[#8C7E6E] hover:text-[#221912] flex items-center gap-1 cursor-pointer"
+              >
+                {showPitchChart ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                <span>{showPitchChart ? "Hide Chart" : "Show Chart"}</span>
+              </button>
+            </div>
 
-        <div className="bg-white p-3 rounded-xl border border-[#E6DDCE] shadow-2xs">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-700 flex items-center gap-1">
-            <Cpu className="w-3.5 h-3.5 text-indigo-600" /> Machine Types
-          </span>
-          <p className="text-2xl font-black font-mono text-indigo-700 mt-1">
-            {Object.keys(machineCounts).length} <span className="text-xs text-[#8C7E6E] font-normal font-sans">types</span>
-          </p>
-        </div>
+            {showPitchChart && (
+              <div className="pt-2">
+                {/* Horizontal Bar Visualizer */}
+                <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-2">
+                  {lines.map((line, idx) => {
+                    const smvVal = Number(line.smv) || 0;
+                    const maxDisplaySmv = Math.max(...lines.map(l => Number(l.smv) || 0), pitchTime, 1.0);
+                    const widthPct = Math.min(100, Math.max(5, (smvVal / maxDisplaySmv) * 100));
+                    const pitchLinePct = Math.min(100, (pitchTime / maxDisplaySmv) * 100);
+                    const isExceedingPitch = smvVal > pitchTime && pitchTime > 0;
+                    const isBottleneck = bottleneck && bottleneck.id === line.id;
 
-        <div className="bg-white p-3 rounded-xl border border-[#E6DDCE] shadow-2xs">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
-            <Layers className="w-3.5 h-3.5 text-emerald-600" /> Total Operations
-          </span>
-          <p className="text-2xl font-black font-mono text-emerald-700 mt-1">
-            {lines.length} <span className="text-xs text-[#8C7E6E] font-normal font-sans">steps</span>
-          </p>
-        </div>
+                    return (
+                      <div key={line.id || idx} className="flex items-center gap-2 text-[11px]">
+                        <span className="w-6 text-right font-mono font-bold text-[#8C7E6E] shrink-0">
+                          {line.sequence}
+                        </span>
+                        <div className="w-44 truncate font-medium text-[#221912] shrink-0" title={line.operationName || line.operationCode}>
+                          {line.operationName || line.operationCode || `Step ${line.sequence}`}
+                        </div>
+
+                        <div className="flex-1 relative bg-[#F6F1E8] h-5 rounded-md overflow-hidden flex items-center">
+                          {/* Pitch Target Marker Line */}
+                          {pitchTime > 0 && (
+                            <div 
+                              className="absolute top-0 bottom-0 w-0.5 bg-sky-600 z-10"
+                              style={{ left: `${pitchLinePct}%` }}
+                              title={`Pitch Time: ${pitchTime.toFixed(2)}m`}
+                            />
+                          )}
+
+                          {/* SMV Bar */}
+                          <div 
+                            className={`h-full rounded-md transition-all duration-300 flex items-center px-2 ${
+                              isBottleneck 
+                                ? "bg-amber-500 text-white font-bold" 
+                                : isExceedingPitch 
+                                  ? "bg-rose-400 text-white" 
+                                  : "bg-[#9C5B3C] text-white"
+                            }`}
+                            style={{ width: `${widthPct}%` }}
+                          >
+                            <span className="text-[10px] font-mono leading-none drop-shadow-xs">
+                              {smvVal.toFixed(2)}m
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="w-24 shrink-0 text-right">
+                          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                            isBottleneck
+                              ? "bg-amber-100 text-amber-900 border border-amber-300"
+                              : isExceedingPitch
+                                ? "bg-rose-50 text-rose-800 border border-rose-200"
+                                : "text-[#8C7E6E]"
+                          }`}>
+                            {isBottleneck ? "Bottleneck" : isExceedingPitch ? `+${(smvVal - pitchTime).toFixed(2)}m` : "OK"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between text-[10.5px] text-[#8C7E6E] pt-2 border-t border-[#E6DDCE]">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded bg-[#9C5B3C]" /> Within Pitch Time
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded bg-rose-400" /> Exceeds Pitch Time
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded bg-amber-500" /> Max Bottleneck
+                    </span>
+                  </div>
+                  <span className="font-mono text-sky-800 font-bold">
+                    Target Pitch Line: {pitchTime.toFixed(2)} min ({hourlyOutput.eff85} pcs/hr)
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── 3. Operations Sequence Builder ───────────────────────────── */}
@@ -399,7 +641,7 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
               Sequential Operation Routing &amp; SMV Breakdown
             </h3>
             <p className="text-[11px] text-[#8C7E6E] mt-0.5">
-              Select operations from master catalog. SMVs and machine types will auto-populate.
+              Select operations from master catalog. SMVs, standard machine types, and skill levels will auto-populate.
             </p>
           </div>
 
@@ -407,7 +649,7 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
             <button
               type="button"
               onClick={() => setIsBulkPickerOpen(true)}
-              className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-bold rounded-xl border border-indigo-200 transition-all cursor-pointer flex items-center gap-1.5"
+              className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-bold rounded-xl border border-indigo-200 transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
             >
               <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
               <span>Bulk Add from Library</span>
@@ -429,144 +671,189 @@ export function BulletinForm({ styles, operations, existingBulletins = [], initi
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#FDFCFB] border-b border-[#E6DDCE] text-[10.5px] font-bold text-[#8C7E6E] uppercase">
-                <th className="py-3 px-3 w-14 text-center">Seq</th>
-                <th className="py-3 px-2 w-16 text-center">Move</th>
-                <th className="py-3 px-4 min-w-[220px]">Operation Catalog</th>
+                <th className="py-3 px-3 w-12 text-center">Seq</th>
+                <th className="py-3 px-2 w-20 text-center">Actions</th>
+                <th className="py-3 px-4 min-w-[240px]">Operation Catalog</th>
                 <th className="py-3 px-3 w-28 text-right">SMV (min)</th>
-                <th className="py-3 px-4 min-w-[180px]">Machine Type</th>
-                <th className="py-3 px-3 w-20 text-center">Req. Skill</th>
+                <th className="py-3 px-4 min-w-[220px]">Machine Type</th>
+                <th className="py-3 px-3 w-28 text-center">Req. Skill</th>
                 <th className="py-3 px-4 min-w-[160px]">Quality Notes</th>
-                <th className="py-3 px-3 w-12 text-center"></th>
+                <th className="py-3 px-2 w-10 text-center"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E6DDCE]">
-              {lines.map((line, index) => (
-                <tr key={line.id} className="hover:bg-[#FEFCF9] transition-colors group">
-                  {/* Sequence # */}
-                  <td className="py-2.5 px-3 text-center font-mono font-bold text-[#8C7E6E]">
-                    {line.sequence}
-                  </td>
+              {lines.map((line, index) => {
+                const isBottleneck = bottleneck && bottleneck.id === line.id && (Number(line.smv) || 0) > 0;
+                const isOverPitch = pitchTime > 0 && (Number(line.smv) || 0) > pitchTime;
 
-                  {/* Move Up/Down Controls */}
-                  <td className="py-2.5 px-2 text-center">
-                    <div className="inline-flex items-center gap-0.5">
+                return (
+                  <tr 
+                    key={line.id} 
+                    className={`hover:bg-[#FEFCF9] transition-colors group ${
+                      isBottleneck ? "bg-amber-50/30" : isOverPitch ? "bg-rose-50/20" : ""
+                    }`}
+                  >
+                    {/* Sequence # */}
+                    <td className="py-2.5 px-3 text-center font-mono font-bold text-[#8C7E6E]">
+                      {line.sequence}
+                    </td>
+
+                    {/* Move Up/Down & Clone Controls */}
+                    <td className="py-2.5 px-2 text-center">
+                      <div className="inline-flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => moveLine(index, "up")}
+                          className="p-1 rounded text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] disabled:opacity-20 cursor-pointer"
+                          title="Move Up"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === lines.length - 1}
+                          onClick={() => moveLine(index, "down")}
+                          className="p-1 rounded text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] disabled:opacity-20 cursor-pointer"
+                          title="Move Down"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => duplicateLine(index)}
+                          className="p-1 rounded text-[#8C7E6E] hover:text-[#9C5B3C] hover:bg-[#F6F1E8] cursor-pointer"
+                          title="Duplicate Step (Clone Row)"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+
+                    {/* Operation Catalog Dropdown: User selects ONLY the operation */}
+                    <td className="py-2.5 px-4">
+                      <select
+                        value={line.operationId}
+                        onChange={(e) => {
+                          const opId = e.target.value;
+                          const chosen = activeOps.find((o) => String(o.id) === String(opId));
+                          setLines((prev) =>
+                            prev.map((l) =>
+                              l.id === line.id
+                                ? {
+                                    ...l,
+                                    operationId: opId,
+                                    operationCode: chosen?.operationCode,
+                                    operationName: chosen?.name,
+                                    smv: chosen?.standardSmv ? Number(chosen.standardSmv) : (l.smv || 0.50),
+                                    machineType: chosen?.machineType || l.machineType || "Single Needle Lockstitch (SNLS)",
+                                    skillRatingRequired: (Number(chosen?.skillLevel) || l.skillRatingRequired || 3) as 1 | 2 | 3 | 4 | 5,
+                                  }
+                                : l
+                            )
+                          );
+                        }}
+                        className="w-full h-8.5 bg-white border border-[#E6DDCE] rounded-xl px-2.5 text-xs font-semibold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] shadow-2xs"
+                      >
+                        <option value="">-- Choose Operation from Catalog --</option>
+                        {activeOps.map((op) => (
+                          <option key={op.id} value={op.id}>
+                            {op.operationCode} — {op.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+
+                    {/* SMV (min) */}
+                    <td className="py-2.5 px-3">
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          value={line.smv || ""}
+                          onChange={(e) => updateLine(line.id, "smv", parseFloat(e.target.value) || 0)}
+                          className={`w-full h-8.5 bg-white border rounded-xl px-2 text-xs text-right font-mono font-bold focus:outline-hidden shadow-2xs ${
+                            isBottleneck 
+                              ? "border-amber-400 bg-amber-50/50 text-amber-900" 
+                              : "border-[#E6DDCE] text-[#221912] focus:border-[#9C5B3C]"
+                          }`}
+                        />
+                      </div>
+                    </td>
+
+                    {/* Machine Type Standardized Dropdown */}
+                    <td className="py-2.5 px-4">
+                      <select
+                        value={line.machineType || "Single Needle Lockstitch (SNLS)"}
+                        onChange={(e) => updateLine(line.id, "machineType", e.target.value)}
+                        className="w-full h-8.5 bg-white border border-[#E6DDCE] rounded-xl px-2 text-xs font-medium text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] shadow-2xs"
+                      >
+                        {/* If line has a custom type not in presets, keep it selected at top */}
+                        {line.machineType && !ALL_GARMENT_MACHINE_PRESETS.includes(line.machineType) && !extraInventoryTypes.includes(line.machineType) && (
+                          <option value={line.machineType}>Custom: {line.machineType}</option>
+                        )}
+                        {GARMENT_MACHINE_CATEGORIES.map((cat) => (
+                          <optgroup key={cat.category} label={cat.category}>
+                            {cat.types.map((mType) => (
+                              <option key={mType} value={mType}>
+                                {mType}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                        {extraInventoryTypes.length > 0 && (
+                          <optgroup label="Floor Inventory Machinery">
+                            {extraInventoryTypes.map((inv) => (
+                              <option key={inv} value={inv}>
+                                {inv}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    </td>
+
+                    {/* Required Skill Level Dropdown */}
+                    <td className="py-2.5 px-3 text-center">
+                      <select
+                        value={line.skillRatingRequired || 3}
+                        onChange={(e) => updateLine(line.id, "skillRatingRequired", parseInt(e.target.value))}
+                        className="w-full h-8.5 bg-white border border-[#E6DDCE] rounded-xl px-2 text-xs font-bold text-center text-emerald-800 focus:outline-hidden focus:border-[#9C5B3C] shadow-2xs"
+                      >
+                        <option value={1}>L1 (Basic / Helper)</option>
+                        <option value={2}>L2 (Standard)</option>
+                        <option value={3}>L3 (Skilled)</option>
+                        <option value={4}>L4 (Advanced)</option>
+                        <option value={5}>L5 (Expert / Master)</option>
+                      </select>
+                    </td>
+
+                    {/* Quality Notes */}
+                    <td className="py-2.5 px-4">
+                      <input
+                        type="text"
+                        value={line.notes || ""}
+                        onChange={(e) => updateLine(line.id, "notes", e.target.value)}
+                        placeholder="e.g. 1/4 inch gauge, 10-12 SPI..."
+                        className="w-full h-8.5 bg-white border border-[#E6DDCE] rounded-xl px-2 text-xs text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] shadow-2xs"
+                      />
+                    </td>
+
+                    {/* Delete Row */}
+                    <td className="py-2.5 px-2 text-center">
                       <button
                         type="button"
-                        disabled={index === 0}
-                        onClick={() => moveLine(index, "up")}
-                        className="p-1 rounded text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] disabled:opacity-20 cursor-pointer"
-                        title="Move Up"
+                        onClick={() => removeLine(line.id)}
+                        className="p-1 rounded text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                        title="Remove Step"
                       >
-                        <ArrowUp className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                      <button
-                        type="button"
-                        disabled={index === lines.length - 1}
-                        onClick={() => moveLine(index, "down")}
-                        className="p-1 rounded text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] disabled:opacity-20 cursor-pointer"
-                        title="Move Down"
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </td>
-
-                  {/* Operation Selector */}
-                  <td className="py-2.5 px-4">
-                    <select
-                      value={line.operationId}
-                      onChange={(e) => {
-                        const opId = e.target.value;
-                        const chosen = activeOps.find((o) => String(o.id) === String(opId));
-                        setLines((prev) =>
-                          prev.map((l) =>
-                            l.id === line.id
-                              ? {
-                                  ...l,
-                                  operationId: opId,
-                                  operationCode: chosen?.operationCode,
-                                  operationName: chosen?.name,
-                                  smv: chosen?.standardSmv ? Number(chosen.standardSmv) : l.smv,
-                                  machineType: chosen?.machineType || l.machineType || "Single Needle Lockstitch (SNLS)",
-                                  skillRatingRequired: (Number(chosen?.skillLevel) || l.skillRatingRequired || 3) as 1 | 2 | 3 | 4 | 5,
-                                }
-                              : l
-                          )
-                        );
-                      }}
-                      className="w-full h-8 bg-white border border-[#E6DDCE] rounded-xl px-2 text-xs font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-                    >
-                      <option value="">-- Choose Operation from Catalog --</option>
-                      {activeOps.map(op => (
-                        <option key={op.id} value={op.id}>
-                          {op.operationCode} - {op.name} ({op.machineType || "SNLS"}) · {op.standardSmv || 0.5}m
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-
-                  {/* SMV (min) */}
-                  <td className="py-2.5 px-3">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      value={line.smv || ""}
-                      onChange={(e) => updateLine(line.id, "smv", parseFloat(e.target.value) || 0)}
-                      className="w-full h-8 bg-white border border-[#E6DDCE] rounded-xl px-2 text-xs text-[#221912] text-right font-mono font-bold focus:outline-hidden focus:border-[#9C5B3C]"
-                    />
-                  </td>
-
-                  {/* Machine Type */}
-                  <td className="py-2.5 px-4">
-                    <input
-                      type="text"
-                      value={line.machineType || ""}
-                      onChange={(e) => updateLine(line.id, "machineType", e.target.value)}
-                      placeholder="e.g. 4-Thread Overlock"
-                      className="w-full h-8 bg-white border border-[#E6DDCE] rounded-xl px-2 text-xs text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-                    />
-                  </td>
-
-                  {/* Required Skill */}
-                  <td className="py-2.5 px-3 text-center">
-                    <select
-                      value={line.skillRatingRequired || 3}
-                      onChange={(e) => updateLine(line.id, "skillRatingRequired", parseInt(e.target.value))}
-                      className="w-full h-8 bg-white border border-[#E6DDCE] rounded-xl px-2 text-xs font-bold text-center text-emerald-800 focus:outline-hidden focus:border-[#9C5B3C]"
-                    >
-                      <option value={1}>L1 (Basic)</option>
-                      <option value={2}>L2 (Standard)</option>
-                      <option value={3}>L3 (Skilled)</option>
-                      <option value={4}>L4 (Advanced)</option>
-                      <option value={5}>L5 (Expert)</option>
-                    </select>
-                  </td>
-
-                  {/* Quality Notes */}
-                  <td className="py-2.5 px-4">
-                    <input
-                      type="text"
-                      value={line.notes || ""}
-                      onChange={(e) => updateLine(line.id, "notes", e.target.value)}
-                      placeholder="e.g. 1/4 inch gauge guide..."
-                      className="w-full h-8 bg-white border border-[#E6DDCE] rounded-xl px-2 text-xs text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-                    />
-                  </td>
-
-                  {/* Delete Row */}
-                  <td className="py-2.5 px-3 text-center">
-                    <button
-                      type="button"
-                      onClick={() => removeLine(line.id)}
-                      className="p-1 rounded text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                      title="Remove Step"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
 
               {lines.length === 0 && (
                 <tr>
