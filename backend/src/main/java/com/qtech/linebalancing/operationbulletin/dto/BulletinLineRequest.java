@@ -26,5 +26,15 @@ public class BulletinLineRequest {
     @Max(value = 5, message = "Skill rating required must be between 1 and 5")
     private Integer skillRatingRequired;
 
+    private String section;
+    private String predecessorIds;
+    private Boolean isParallelizable = true;
+    private Boolean splitAllowed = false;
+    private String splitType = "NONE";
+    private String stitchType;
+    private String seamType;
+    private String attachmentType;
+    private Integer wipThreshold;
+
     private String notes;
 }

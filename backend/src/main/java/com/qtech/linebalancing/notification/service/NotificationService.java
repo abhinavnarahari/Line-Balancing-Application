@@ -124,8 +124,9 @@ public class NotificationService {
         String order = orderNo != null ? orderNo : "Active Order";
 
         String title = String.format("Bottleneck Alert · %s", line);
-        String message = String.format("%s · %d station(s) exceed Takt (%.1fs): %s",
-                order, count, takt, bottleneckSummary != null ? bottleneckSummary : "Cycle time exceeds target");
+        String message = (bottleneckSummary != null && !bottleneckSummary.isBlank())
+                ? String.format("%s · %d bottleneck station(s) (Takt: %.1fs): %s", order, count, takt, bottleneckSummary)
+                : String.format("%s · %d station(s) exceed Takt pace (%.1fs)", order, count, takt);
 
         if (referenceId != null) {
             List<Notification> existingList = notificationRepository.findByTypeAndReferenceId("BOTTLENECK_ALERT", referenceId);

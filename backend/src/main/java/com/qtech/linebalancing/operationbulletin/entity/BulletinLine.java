@@ -35,6 +35,38 @@ public class BulletinLine {
     @Column(name = "skill_rating_required")
     private Integer skillRatingRequired;
 
+    @Column(length = 50)
+    @Builder.Default
+    private String section = "MAIN_ASSEMBLY";
+
+    @Column(name = "predecessor_ids", length = 255)
+    private String predecessorIds;
+
+    @Column(name = "is_parallelizable", nullable = false)
+    @Builder.Default
+    private Boolean isParallelizable = true;
+
+    @Column(name = "split_allowed", nullable = false)
+    @Builder.Default
+    private Boolean splitAllowed = false;
+
+    @Column(name = "split_type", length = 50)
+    @Builder.Default
+    private String splitType = "NONE";
+
+    @Column(name = "stitch_type", length = 100)
+    private String stitchType;
+
+    @Column(name = "seam_type", length = 100)
+    private String seamType;
+
+    @Column(name = "attachment_type", length = 100)
+    private String attachmentType;
+
+    @Column(name = "wip_threshold")
+    @Builder.Default
+    private Integer wipThreshold = 20;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 }

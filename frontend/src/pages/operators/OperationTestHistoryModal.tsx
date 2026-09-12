@@ -5,7 +5,7 @@ import { skillApi, cycleTimeToRating, type PerformanceLog, type SkillAssessment 
 import type { Operation } from "../../features/operations/api";
 import type { Operator } from "../../features/operators/api";
 
-import { getBenchmarkForOperation, getRatingRangeLabel } from "../../features/operations/ratingBenchmarks";
+import { getRatingRangeLabel } from "../../features/operations/ratingBenchmarks";
 
 interface OperationTestHistoryModalProps {
   isOpen: boolean;
@@ -25,7 +25,6 @@ export function OperationTestHistoryModal({
   currentRating = 0,
 }: OperationTestHistoryModalProps) {
   const [assessmentHistory, setAssessmentHistory] = useState<SkillAssessment[]>([]);
-  const benchmark = getBenchmarkForOperation(operation.name, operation.standardSmv);
 
   // Filter logs for this specific operation
   const opLogs = performanceLogs.filter(

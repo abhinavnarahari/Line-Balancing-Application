@@ -41,6 +41,10 @@ public class LinePlan extends AuditableEntity {
     @Builder.Default
     private String allowancePfd = "5,4,1";
 
+    @Column(name = "planned_efficiency")
+    @Builder.Default
+    private Double plannedEfficiency = 80.0;
+
     @Column(nullable = false, length = 50)
     @Builder.Default
     private String status = "draft"; // draft, active, completed

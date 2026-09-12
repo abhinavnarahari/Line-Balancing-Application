@@ -19,7 +19,7 @@ import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
 
 import { Button } from "../../components/ui/Button";
-import { PageHeader, DataCard, EmptyState, SkeletonTable, StatusBadge } from "../../components/ui/PremiumUI";
+import { PageHeader, DataCard, EmptyState, SkeletonTable } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 
 import { bulletinsApi, type OperationBulletin, type CreateBulletinDTO, type BulletinStatus } from "../../features/bulletins/api";
@@ -85,6 +85,7 @@ export function BulletinsPage() {
     
     const totalSmvSum = bulletins.reduce((acc, b) => acc + (Number(b.totalSmv) || 0), 0);
     const avgSmv = total > 0 ? (totalSmvSum / total).toFixed(2) : "0.00";
+    const avgSmvSec = total > 0 ? ((totalSmvSum * 60) / total).toFixed(1) : "0.0";
 
     const linkedStyleSet = new Set<string>();
     bulletins.forEach(b => {
@@ -97,6 +98,7 @@ export function BulletinsPage() {
       drafts,
       archived,
       avgSmv,
+      avgSmvSec,
       linkedStylesCount: linkedStyleSet.size,
     };
   }, [bulletins]);
@@ -208,6 +210,7 @@ export function BulletinsPage() {
       "Name": b.name,
       "Version": `v${b.version}`,
       "Status": b.status,
+      "Total SMV (sec)": Number(((b.totalSmv || 0) * 60).toFixed(1)),
       "Total SMV (min)": Number((b.totalSmv || 0).toFixed(2)),
       "Total Operations": b.lines?.length || 0,
       "Linked Styles": (b.styles || []).map(s => s.styleNo).join(", ") || "None",
@@ -289,11 +292,11 @@ export function BulletinsPage() {
             <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" /> Average Total SMV
           </span>
           <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-3xl font-black font-mono text-[#9C5B3C]">{kpis.avgSmv}</span>
-            <span className="text-xs text-[#8C7E6E] font-bold font-mono">min</span>
+            <span className="text-3xl font-black font-mono text-[#9C5B3C]">{kpis.avgSmvSec}</span>
+            <span className="text-xs text-[#8C7E6E] font-bold font-mono">sec</span>
           </div>
           <p className="text-[11px] text-[#8C7E6E] mt-1 font-medium">
-            Standard work content average
+            Standard work content average ({kpis.avgSmv} min)
           </p>
         </div>
 
@@ -447,7 +450,7 @@ export function BulletinsPage() {
                   <th className="py-4 px-6 w-36">Bulletin Code</th>
                   <th className="py-4 px-4 min-w-[220px]">Bulletin Name &amp; Description</th>
                   <th className="py-4 px-4 min-w-[180px]">Linked Garment Styles</th>
-                  <th className="py-4 px-4 w-32 text-right">Total SMV</th>
+                  <th className="py-4 px-4 w-32 text-right">Total SMV (sec)</th>
                   <th className="py-4 px-4 w-28 text-center">Operations</th>
                   <th className="py-4 px-4 w-28 text-center">Status</th>
                   <th className="py-4 px-6 text-right w-44">Actions</th>
@@ -521,9 +524,12 @@ export function BulletinsPage() {
                       {/* 4. Total SMV */}
                       <td className="py-4 px-4 text-right">
                         <span className="font-mono font-black text-sm text-[#221912]">
-                          {totalSmv.toFixed(2)}
+                          {(totalSmv * 60).toFixed(1)}
                         </span>
-                        <span className="text-[10px] text-[#8C7E6E] ml-1 font-mono font-bold">min</span>
+                        <span className="text-[10px] text-[#8C7E6E] ml-1 font-mono font-bold">sec</span>
+                        <span className="text-[9.5px] text-[#8C7E6E] block font-mono">
+                          ({totalSmv.toFixed(2)} min)
+                        </span>
                       </td>
 
                       {/* 5. Operation Count */}

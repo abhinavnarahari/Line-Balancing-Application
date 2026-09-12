@@ -85,6 +85,12 @@ export function ProductionMonitoringPage() {
   const [linePlan, setLinePlan] = useState<LinePlan | null>(null);
   const [hourlyOutput, setHourlyOutput] = useState<Record<number, number>>({});
 
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const currentLiveHour = new Date().getHours();
 
   const loadData = async () => {
@@ -122,6 +128,15 @@ export function ProductionMonitoringPage() {
 
   useEffect(() => {
     loadData();
+
+    // Background live polling every 8s for timesheets
+    const pollInterval = setInterval(() => {
+      pieceProductionApi.get24hTimesheet(selectedDate)
+        .then(ts => setTimesheetData(ts || []))
+        .catch(() => {});
+    }, 8000);
+
+    return () => clearInterval(pollInterval);
   }, [selectedDate]);
 
   useEffect(() => {
@@ -188,12 +203,60 @@ export function ProductionMonitoringPage() {
   const netWorkingMins = Math.max(60, grossShiftMins - breakDurationMins);
   const shiftHours = netWorkingMins / 60;
   const dailyNetWorkingSecs = netWorkingMins * 60;
-  const allowance = linePlan?.allowance ?? 10;
-  const dailyAvailableTimeSecs = dailyNetWorkingSecs * (1 - allowance / 100);
+  const dailyAvailableTimeSecs = dailyNetWorkingSecs;
 
   const targetOutput = linePlan?.targetOutput || selectedOrder?.totalQuantity || 480;
   const taktTimeSecs = targetOutput > 0 ? dailyAvailableTimeSecs / targetOutput : 0;
   const hourlyTarget = taktTimeSecs > 0 ? Math.round(3600 / taktTimeSecs) : Math.round(targetOutput / shiftHours);
+
+  // Real-Time Second-by-Second Shift Countdown & Available Production Seconds
+  const shiftScheduleMetrics = useMemo(() => {
+    const [sh = 8, sm = 0] = (activeShiftObj?.startTime || "08:00").split(":").map(Number);
+    const [eh = 17, em = 0] = (activeShiftObj?.endTime || "17:00").split(":").map(Number);
+
+    const now = currentTime;
+    const nowMs = now.getTime();
+
+    const shiftStartToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 0, 0);
+    const shiftEndToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0, 0);
+    if (shiftEndToday.getTime() <= shiftStartToday.getTime()) {
+      shiftEndToday.setDate(shiftEndToday.getDate() + 1);
+    }
+
+    const startMs = shiftStartToday.getTime();
+    const endMs = shiftEndToday.getTime();
+    const netRatio = grossShiftMins > 0 ? netWorkingMins / grossShiftMins : 1;
+    const fullShiftDurationGrossSecs = Math.max(1, (endMs - startMs) / 1000);
+
+    let remainingGrossSecs = 0;
+    let isShiftActive = false;
+
+    if (nowMs < startMs) {
+      remainingGrossSecs = fullShiftDurationGrossSecs;
+    } else if (nowMs >= startMs && nowMs <= endMs) {
+      remainingGrossSecs = Math.max(1, (endMs - nowMs) / 1000);
+      isShiftActive = true;
+    } else {
+      remainingGrossSecs = fullShiftDurationGrossSecs;
+    }
+
+    const liveShiftAvailableSecs = isShiftActive
+      ? Math.min(dailyNetWorkingSecs, Math.max(1, remainingGrossSecs * netRatio))
+      : dailyNetWorkingSecs;
+
+    const remSecTotal = Math.round(remainingGrossSecs);
+    const hours = Math.floor(remSecTotal / 3600);
+    const mins = Math.floor((remSecTotal % 3600) / 60);
+    const secs = remSecTotal % 60;
+    const countdownFormatted = `${hours}h ${mins.toString().padStart(2, "0")}m ${secs.toString().padStart(2, "0")}s`;
+
+    return {
+      isShiftActive,
+      remainingGrossSecs,
+      liveShiftAvailableSecs,
+      countdownFormatted,
+    };
+  }, [currentTime, activeShiftObj, grossShiftMins, netWorkingMins, dailyNetWorkingSecs]);
 
   // Delivery countdown metrics for selected order
   const deliveryCountdown = useMemo(() => {
@@ -222,9 +285,25 @@ export function ProductionMonitoringPage() {
   // Map Planned Line Balance Stations from LinePlan
   const plannedStations = useMemo(() => {
     if (!linePlan || !linePlan.assignments || linePlan.assignments.length === 0) return [];
-    const styleBulletin = bulletins.find(b =>
+    let styleBulletin = bulletins.find(b =>
       (b.styles || []).some(s => String(s.id) === String(selectedOrder?.styleId))
     );
+    if (!styleBulletin && selectedOrder?.styleNo) {
+      styleBulletin = bulletins.find(b =>
+        (b.styles || []).some(s => s.styleNo?.toLowerCase() === selectedOrder.styleNo?.toLowerCase())
+      );
+    }
+    if (!styleBulletin) {
+      for (const a of linePlan.assignments) {
+        if (a.bulletinLineId) {
+          const match = bulletins.find(b => (b.lines || []).some(l => String(l.id) === String(a.bulletinLineId)));
+          if (match) {
+            styleBulletin = match;
+            break;
+          }
+        }
+      }
+    }
 
     const grouped: Record<string, {
       stationNum: number;
@@ -234,6 +313,7 @@ export function ProductionMonitoringPage() {
       operationName: string;
       machineType: string;
       smvSeconds: number;
+      wipThreshold?: number;
       operatorIds: (number | string)[];
       isQcCheckpoint?: boolean;
     }> = {};
@@ -242,7 +322,8 @@ export function ProductionMonitoringPage() {
     linePlan.assignments.forEach(a => {
       const opId = String(a.operationId);
       const op = operations.find(o => String(o.id) === opId);
-      const bLine = styleBulletin?.lines.find(l => String(l.id) === String(a.bulletinLineId));
+      const bLine = styleBulletin?.lines.find(l => String(l.id) === String(a.bulletinLineId))
+        || styleBulletin?.lines.find(l => String(l.operationId) === opId);
       const smvVal = Number(bLine?.smv || op?.standardSmv || 0.5);
 
       if (!grouped[opId]) {
@@ -250,10 +331,11 @@ export function ProductionMonitoringPage() {
           stationNum: bLine?.sequence ? Number(bLine.sequence) : (seq++),
           bulletinLineId: a.bulletinLineId ?? bLine?.id ?? null,
           operationId: a.operationId,
-          operationCode: op?.operationCode || "OP",
-          operationName: op?.name || "Operation",
+          operationCode: bLine?.operationCode || op?.operationCode || "OP",
+          operationName: bLine?.operationName || op?.name || "Operation",
           machineType: bLine?.machineType || op?.machineType || "Single Needle Lockstitch",
           smvSeconds: Math.round(smvVal * 60 * 10) / 10,
+          wipThreshold: bLine?.wipThreshold ?? 20,
           operatorIds: a.operatorId ? [a.operatorId] : [],
           isQcCheckpoint: !!a.isQcCheckpoint,
         };
@@ -274,9 +356,14 @@ export function ProductionMonitoringPage() {
     ? Math.min(100, Math.round((totalLineSMVSecs / (totalAllocatedOps * taktTimeSecs)) * 100 * 10) / 10)
     : 85.0;
 
-  // Station Execution Matrix with Live Actual Performance from Floor Logs
+  // Station Execution Matrix with Live Actual Performance from Floor Logs & Flow Precedence
   const stationLiveExecution = useMemo(() => {
-    return plannedStations.map(st => {
+    // 1. Sort stations in strict physical sequential order (1 -> 2 -> ... -> N)
+    const sorted = [...plannedStations].sort((a, b) => a.stationNum - b.stationNum);
+
+    // 2. Compute raw logs per station
+    const rawMap = new Map<number, { good: number; reject: number; workMins: number }>();
+    sorted.forEach(st => {
       const opIdStr = String(st.operationId);
       const assignedOpIds = st.operatorIds.map(String);
 
@@ -285,7 +372,7 @@ export function ProductionMonitoringPage() {
       let totalWorkMins = 0;
 
       timesheetData.forEach(row => {
-        if (assignedOpIds.includes(String(row.operatorId))) {
+        if (assignedOpIds.includes(String(row.operatorId)) || assignedOpIds.length === 0) {
           (row.rawLogs || []).forEach(log => {
             if (String(log.operationId) === opIdStr || (!log.operationId && row.department === st.operationName)) {
               totalGood += log.goodQty || 0;
@@ -295,16 +382,31 @@ export function ProductionMonitoringPage() {
           });
         }
       });
+      rawMap.set(st.stationNum, { good: totalGood, reject: totalReject, workMins: totalWorkMins });
+    });
+
+    // 3. Flow-bound constraint: Station k output cannot exceed predecessor Station k-1 output
+    let maxPrevGood = Infinity;
+
+    return sorted.map((st, idx) => {
+      const opIdStr = String(st.operationId);
+      const raw = rawMap.get(st.stationNum) || { good: 0, reject: 0, workMins: 0 };
+      const boundedGood = Math.min(raw.good, maxPrevGood);
+      const queueWip = idx > 0 && maxPrevGood !== Infinity ? Math.max(0, maxPrevGood - boundedGood) : 0;
+      maxPrevGood = boundedGood;
 
       const allocatedOps = Math.max(1, st.operatorIds.length);
       const plannedCycleSecs = st.smvSeconds / allocatedOps;
       const plannedCapacityPerHour = plannedCycleSecs > 0 ? Math.round(3600 / plannedCycleSecs) : 0;
 
-      const actualCycleSecs = (totalGood > 0 && totalWorkMins > 0)
-        ? (totalWorkMins * 60) / totalGood
+      const actualCycleSecs = (boundedGood > 0 && raw.workMins > 0)
+        ? (raw.workMins * 60) / boundedGood
         : 0;
 
-      const isBottleneck = (actualCycleSecs > 0 && actualCycleSecs > taktTimeSecs) || (plannedCycleSecs > taktTimeSecs);
+      const wipThreshold = Number((st as any).wipThreshold) >= 0 ? Number((st as any).wipThreshold) : 20;
+      const isCycleBottleneck = (actualCycleSecs > 0 && actualCycleSecs > taktTimeSecs) || (plannedCycleSecs > taktTimeSecs);
+      const isWipBottleneck = (queueWip || 0) > wipThreshold;
+      const isBottleneck = isCycleBottleneck || isWipBottleneck;
 
       const operatorDetails = st.operatorIds.map(id => {
         const op = operators.find(o => String(o.id) === String(id));
@@ -322,9 +424,14 @@ export function ProductionMonitoringPage() {
         allocatedOps,
         plannedCycleSecs,
         plannedCapacityPerHour,
-        totalGood,
-        totalReject,
+        totalGood: boundedGood,
+        rawGood: raw.good,
+        queueWip,
+        wipThreshold,
+        totalReject: raw.reject,
         actualCycleSecs,
+        isCycleBottleneck,
+        isWipBottleneck,
         isBottleneck,
         operatorDetails,
       };
@@ -342,16 +449,25 @@ export function ProductionMonitoringPage() {
 
   const dynamicRemainingTaktSecs = useMemo(() => {
     const balance = remainingShiftBalance > 0 ? remainingShiftBalance : 1;
-    if (dailyAvailableTimeSecs <= 0) return 0;
-    return dailyAvailableTimeSecs / balance;
-  }, [dailyAvailableTimeSecs, remainingShiftBalance]);
+    if (shiftScheduleMetrics.liveShiftAvailableSecs <= 0) return 0;
+    return Math.round((shiftScheduleMetrics.liveShiftAvailableSecs / balance) * 100) / 100;
+  }, [shiftScheduleMetrics.liveShiftAvailableSecs, remainingShiftBalance]);
 
-  const effectiveTaktSecs = endLineOutput > 0 ? dynamicRemainingTaktSecs : taktTimeSecs;
-  const effectiveHourlyTarget = effectiveTaktSecs > 0 ? Math.round(3600 / effectiveTaktSecs) : hourlyTarget;
+  const effectiveTaktSecs = dynamicRemainingTaktSecs > 0 ? dynamicRemainingTaktSecs : taktTimeSecs;
+  const dynamicPitchTimeSecs = effectiveTaktSecs > 0 ? Math.round((effectiveTaktSecs * (plannedLineEfficiency / 100)) * 100) / 100 : 0;
+  const effectiveHourlyTarget = effectiveTaktSecs > 0 ? Math.round((3600 / effectiveTaktSecs) * 10) / 10 : hourlyTarget;
 
   // Hourly Pitch Output Handler
   const handleOutputChange = (hour: number, value: string) => {
-    const num = parseInt(value, 10);
+    if (value === "") {
+      setHourlyOutput(prev => {
+        const next = { ...prev };
+        delete next[hour];
+        return next;
+      });
+      return;
+    }
+    const num = Math.max(0, parseInt(value, 10));
     setHourlyOutput(prev => ({
       ...prev,
       [hour]: isNaN(num) ? 0 : num
@@ -399,7 +515,8 @@ export function ProductionMonitoringPage() {
     let currentStartHour = displayedHours[0];
     let currentCount = 0;
 
-    displayedHours.forEach((h, idx) => {
+    for (let idx = 0; idx < displayedHours.length; idx++) {
+      const h = displayedHours[idx];
       const matchedShift = getShiftForHour(h);
       const isSameShift = matchedShift && currentShift && (matchedShift.id === currentShift.id);
 
@@ -434,7 +551,7 @@ export function ProductionMonitoringPage() {
         currentStartHour = h;
         currentCount = 1;
       }
-    });
+    }
 
     if (currentCount > 0) {
       const startStr = `${String(currentStartHour).padStart(2, "0")}:00`;
@@ -1449,7 +1566,7 @@ export function ProductionMonitoringPage() {
                   className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-mono font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
                 />
                 <span className="text-[11px] text-[#77876F] font-bold block truncate">
-                  PFD Allowance: {allowance}%
+                  Net: {netWorkingMins} min ({dailyNetWorkingSecs}s)
                 </span>
               </div>
             </div>
@@ -1475,46 +1592,21 @@ export function ProductionMonitoringPage() {
             <>
               {/* ── 2. Live Calculation Summary Cards (Synced with Planned Lines & Balancing) ── */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Card 1: TAKT TIME */}
+                {/* Card 1: LIVE DYNAMIC TAKT TIME */}
                 <div className="bg-[#F6F1E8] border border-[#E6DDCE] rounded-2xl p-5 shadow-[0_1px_3px_rgba(34,25,18,0.05)] flex flex-col justify-between min-h-[135px]">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#9C5B3C]">
-                        {endLineOutput > 0 ? "DYNAMIC REMAINING TAKT" : "PLANNED TAKT TIME"}
+                        LIVE DYNAMIC TAKT & PITCH
                       </span>
                     </div>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-bold shadow-2xs border ${
-                      effectiveTaktSecs >= 60
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-200/90"
-                        : effectiveTaktSecs >= 30
-                        ? "bg-sky-50 text-sky-800 border-sky-200/90"
-                        : effectiveTaktSecs >= 15
-                        ? "bg-amber-50 text-amber-800 border-amber-200/90"
-                        : "bg-rose-50 text-rose-800 border-rose-200/90"
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        effectiveTaktSecs >= 60
-                          ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]"
-                          : effectiveTaktSecs >= 30
-                          ? "bg-sky-500 shadow-[0_0_6px_rgba(14,165,233,0.5)]"
-                          : effectiveTaktSecs >= 15
-                          ? "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]"
-                          : "bg-rose-500 animate-pulse shadow-[0_0_6px_rgba(244,63,94,0.6)]"
-                      }`} />
-                      <span>
-                        {effectiveTaktSecs >= 60
-                          ? "Comfortable Pace"
-                          : effectiveTaktSecs >= 30
-                          ? "Standard Pace"
-                          : effectiveTaktSecs >= 15
-                          ? "High Velocity"
-                          : "Critical Rush"}
-                      </span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-[#9C5B3C] bg-white px-2.5 py-0.5 rounded-lg border border-[#E6DDCE] shrink-0 shadow-2xs">
+                      Pitch: {dynamicPitchTimeSecs > 0 ? dynamicPitchTimeSecs.toFixed(2) : "0.00"}s
                     </span>
                   </div>
 
-                  <div className="my-2 flex items-baseline gap-1.5">
+                  <div className="my-2 flex items-baseline gap-2 flex-wrap">
                     <span className="text-3xl font-black text-[#221912] font-mono tracking-tight">
                       {effectiveTaktSecs > 0 ? effectiveTaktSecs.toFixed(2) : "0.00"}
                     </span>
@@ -1523,15 +1615,11 @@ export function ProductionMonitoringPage() {
 
                   <div className="text-[10.5px] text-[#8C7E6E] font-mono border-t border-[#E6DDCE]/60 pt-1.5 truncate flex items-center justify-between">
                     <span>
-                      {endLineOutput > 0
-                        ? `Shift Bal: ${Math.round(dailyAvailableTimeSecs)}s ÷ ${remainingShiftBalance} pcs`
-                        : `Avail: ${Math.round(dailyAvailableTimeSecs)}s ÷ ${targetOutput} pcs`}
+                      Pitch: <strong className="text-[#221912] font-bold">{dynamicPitchTimeSecs.toFixed(2)}s</strong> (@ {plannedLineEfficiency}% Eff)
                     </span>
-                    {endLineOutput > 0 ? (
-                      <span className="text-emerald-700 font-bold font-sans">Done: {endLineOutput} pcs</span>
-                    ) : (
-                      <span className="text-emerald-700 font-bold font-sans">✓ Balanced Plan</span>
-                    )}
+                    <span className="text-emerald-700 font-bold font-sans">
+                      {endLineOutput > 0 ? `Done: ${endLineOutput} pcs (Bal: ${remainingShiftBalance})` : `Target: ${targetOutput} pcs`}
+                    </span>
                   </div>
                 </div>
 
@@ -1583,7 +1671,7 @@ export function ProductionMonitoringPage() {
 
                   <div className="text-[10.5px] text-[#8C7E6E] flex items-center justify-between border-t border-slate-100 pt-1.5">
                     <span>Pitch: {(totalLineSMVSecs / Math.max(1, plannedStations.length)).toFixed(1)}s</span>
-                    <span>PFD: {allowance}%</span>
+                    <span>Stations: {plannedStations.length}</span>
                   </div>
                 </div>
 
@@ -1646,7 +1734,7 @@ export function ProductionMonitoringPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
-                      {stationLiveExecution.map((st) => {
+                      {stationLiveExecution.map((st, idx) => {
                         return (
                           <tr
                             key={st.stationNum}
@@ -1749,26 +1837,40 @@ export function ProductionMonitoringPage() {
 
                             {/* 7. Actual Output Today */}
                             <td className={`py-3 px-4 text-center align-middle whitespace-nowrap font-mono ${
-                              plannedStations.length > 1 && st.totalGood === endLineOutput ? "bg-amber-50/50" : ""
+                              plannedStations.length > 1 && idx === plannedStations.length - 1 ? "bg-amber-50/50" : ""
                             }`}>
                               {st.totalGood > 0 ? (
                                 <div className="flex flex-col items-center">
                                   <div className="flex items-center gap-1 font-bold">
-                                    <span className={plannedStations.length > 1 && st.totalGood === endLineOutput ? "text-amber-900 font-extrabold text-sm" : "text-emerald-700 text-sm"}>
+                                    <span className={plannedStations.length > 1 && idx === plannedStations.length - 1 ? "text-amber-900 font-extrabold text-sm" : "text-emerald-700 text-sm"}>
                                       {st.totalGood} ok
                                     </span>
                                     {st.totalReject > 0 && (
                                       <span className="text-rose-600 text-xs">(-{st.totalReject})</span>
                                     )}
                                   </div>
-                                  {plannedStations.length > 1 && st.totalGood === endLineOutput ? (
+                                  {idx === 0 ? (
+                                    <span className="text-[9px] text-emerald-700 font-mono font-bold mt-0.5">
+                                      Line Inflow
+                                    </span>
+                                  ) : idx === plannedStations.length - 1 ? (
                                     <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300 shadow-2xs mt-0.5">
                                       <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
-                                      End-Line Flow: {st.totalGood} pcs
+                                      End-Line Completed: {st.totalGood} pcs
                                     </span>
+                                  ) : (st.queueWip || 0) > 0 ? (
+                                    st.isWipBottleneck ? (
+                                      <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-rose-800 bg-rose-100 px-2 py-0.5 rounded-full border border-rose-300 shadow-2xs mt-0.5 animate-pulse" title={`Queue WIP (${st.queueWip} pcs) exceeds threshold limit (${st.wipThreshold} pcs)`}>
+                                        ⚠️ +{st.queueWip} WIP (&gt; {st.wipThreshold} max)
+                                      </span>
+                                    ) : (
+                                      <span className="text-[9.5px] text-amber-700 font-mono font-semibold mt-0.5" title={`Queue WIP: ${st.queueWip} pcs (Threshold: ${st.wipThreshold} pcs)`}>
+                                        +{st.queueWip} WIP in queue (Max: {st.wipThreshold})
+                                      </span>
+                                    )
                                   ) : (
                                     <span className="text-[9px] text-slate-400 font-mono mt-0.5">
-                                      +{Math.max(0, st.totalGood - endLineOutput)} WIP buffer
+                                      Synchronized flow
                                     </span>
                                   )}
                                 </div>
@@ -1918,6 +2020,13 @@ export function ProductionMonitoringPage() {
           operators={operators}
           operations={operations}
           orders={orders}
+          stationFlowList={stationLiveExecution.map(s => ({
+            stationNum: s.stationNum,
+            operationId: s.operationId,
+            operationName: s.operationName,
+            totalGood: s.totalGood,
+            rawGood: s.rawGood || s.totalGood,
+          }))}
           initialDate={selectedDate}
           initialOperatorId={preselectedOperatorId}
           initialOperationId={preselectedOperationId}

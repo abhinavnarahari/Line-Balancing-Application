@@ -40,6 +40,10 @@ public class Machine extends AuditableEntity {
 
     @Column(nullable = false)
     @Builder.Default
+    private Integer quantity = 1;
+
+    @Column(nullable = false)
+    @Builder.Default
     private boolean active = true;
 
     public enum MachineStatus {

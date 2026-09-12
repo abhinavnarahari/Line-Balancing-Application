@@ -17,11 +17,11 @@ public class LinePlanRequest {
 
     private Long lineId;
 
-    @NotNull(message = "Allowance is required")
-    @Min(value = 0, message = "Allowance cannot be negative")
-    private Integer allowance;
+    private Integer allowance = 0;
 
     private String allowancePfd;
+
+    private Double plannedEfficiency;
 
     private Integer targetOutput;
 

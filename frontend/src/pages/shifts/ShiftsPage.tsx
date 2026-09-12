@@ -227,7 +227,7 @@ export function ShiftsPage() {
         isOpen={isFormOpen}
         onClose={handleClose}
         title={editingShift ? "Edit Shift" : "Create New Shift"}
-        subtitle="Overnight shifts (e.g. 23:00–07:00) with custom meal and personal allowance are supported."
+        subtitle="Overnight shifts (e.g. 23:00–07:00) with custom meal and break deductions are supported."
       >
         <ShiftForm 
           existingShifts={shifts}

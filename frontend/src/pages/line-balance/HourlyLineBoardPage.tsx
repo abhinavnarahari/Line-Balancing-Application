@@ -258,6 +258,13 @@ export function HourlyLineBoardPage() {
   const [activeModal, setActiveModal] = useState<{ row: OperationRow; cell: HourCell } | null>(null);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
+  // Live second-by-second clock for dynamic pacing & shift countdown
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Load masters on mount
   useEffect(() => {
     const fetchMasters = async () => {
@@ -306,6 +313,17 @@ export function HourlyLineBoardPage() {
   useEffect(() => {
     if (selectedOrderId && selectedShiftId) {
       loadBoard(selectedOrderId, selectedShiftId, logDate);
+
+      // Background live polling every 10s
+      const pollTimer = setInterval(() => {
+        hourlyBoardApi.getBoard({
+          orderId: Number(selectedOrderId),
+          shiftId: Number(selectedShiftId),
+          date: logDate,
+        }).then(data => setBoard(data)).catch(() => {});
+      }, 10000);
+
+      return () => clearInterval(pollTimer);
     }
   }, [selectedOrderId, selectedShiftId, logDate, loadBoard]);
 
@@ -397,6 +415,88 @@ export function HourlyLineBoardPage() {
     if (!board) return 0;
     return board.rows.reduce((sum, r) => sum + r.totalReject, 0);
   }, [board]);
+
+  // ─── Real-Time Live Shift Pacing & Dynamic Takt Engine ───────────────────────
+  const activeShiftObj = useMemo(() => {
+    return shifts.find(s => String(s.id) === selectedShiftId) || shifts[0] || null;
+  }, [shifts, selectedShiftId]);
+
+  const grossShiftMins = useMemo(() => {
+    if (!activeShiftObj) return 480;
+    const [sh = 8, sm = 0] = (activeShiftObj.startTime || "08:00").split(":").map(Number);
+    const [eh = 17, em = 0] = (activeShiftObj.endTime || "17:00").split(":").map(Number);
+    let mins = (eh * 60 + em) - (sh * 60 + sm);
+    if (mins <= 0) mins += 24 * 60;
+    return mins;
+  }, [activeShiftObj]);
+
+  const breakDurationMins = Number(activeShiftObj?.breakDurationMinutes ?? 60);
+  const netWorkingMins = Math.max(60, grossShiftMins - breakDurationMins);
+  const dailyNetWorkingSecs = netWorkingMins * 60;
+
+  const shiftScheduleMetrics = useMemo(() => {
+    const [sh = 8, sm = 0] = (activeShiftObj?.startTime || "08:00").split(":").map(Number);
+    const [eh = 17, em = 0] = (activeShiftObj?.endTime || "17:00").split(":").map(Number);
+
+    const now = currentTime;
+    const nowMs = now.getTime();
+
+    const shiftStartToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 0, 0);
+    const shiftEndToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0, 0);
+    if (shiftEndToday.getTime() <= shiftStartToday.getTime()) {
+      shiftEndToday.setDate(shiftEndToday.getDate() + 1);
+    }
+
+    const startMs = shiftStartToday.getTime();
+    const endMs = shiftEndToday.getTime();
+    const netRatio = grossShiftMins > 0 ? netWorkingMins / grossShiftMins : 1;
+    const fullShiftDurationGrossSecs = Math.max(1, (endMs - startMs) / 1000);
+
+    let remainingGrossSecs = 0;
+    let isShiftActive = false;
+
+    if (nowMs < startMs) {
+      remainingGrossSecs = fullShiftDurationGrossSecs;
+    } else if (nowMs >= startMs && nowMs <= endMs) {
+      remainingGrossSecs = Math.max(1, (endMs - nowMs) / 1000);
+      isShiftActive = true;
+    } else {
+      remainingGrossSecs = fullShiftDurationGrossSecs;
+    }
+
+    const liveShiftAvailableSecs = isShiftActive
+      ? Math.min(dailyNetWorkingSecs, Math.max(1, remainingGrossSecs * netRatio))
+      : dailyNetWorkingSecs;
+
+    const remSecTotal = Math.round(remainingGrossSecs);
+    const hours = Math.floor(remSecTotal / 3600);
+    const mins = Math.floor((remSecTotal % 3600) / 60);
+    const secs = remSecTotal % 60;
+    const countdownFormatted = `${hours}h ${mins.toString().padStart(2, "0")}m ${secs.toString().padStart(2, "0")}s`;
+
+    return {
+      isShiftActive,
+      remainingGrossSecs,
+      liveShiftAvailableSecs,
+      countdownFormatted,
+    };
+  }, [currentTime, activeShiftObj, grossShiftMins, netWorkingMins, dailyNetWorkingSecs]);
+
+  const remainingShiftBalance = useMemo(() => {
+    if (!board) return 0;
+    return Math.max(0, board.totalTargetOutput - totalGoodPieces);
+  }, [board, totalGoodPieces]);
+
+  const dynamicLiveTaktSecs = useMemo(() => {
+    if (!board || remainingShiftBalance <= 0 || shiftScheduleMetrics.liveShiftAvailableSecs <= 0) return 0;
+    return Math.round((shiftScheduleMetrics.liveShiftAvailableSecs / remainingShiftBalance) * 100) / 100;
+  }, [board, remainingShiftBalance, shiftScheduleMetrics.liveShiftAvailableSecs]);
+
+  const dynamicLivePitchSecs = useMemo(() => {
+    if (dynamicLiveTaktSecs <= 0) return 0;
+    const eff = board && board.lineEfficiencyPercent > 0 ? board.lineEfficiencyPercent / 100 : 0.8;
+    return Math.round((dynamicLiveTaktSecs * eff) * 100) / 100;
+  }, [dynamicLiveTaktSecs, board]);
 
   const totalGoodPieces = useMemo(() => {
     if (!board) return 0;
@@ -558,8 +658,12 @@ export function HourlyLineBoardPage() {
           </button>
           <div className="relative flex items-center">
             <Calendar className="absolute left-2.5 w-3.5 h-3.5 text-[#9C5B3C] pointer-events-none" />
-            <input type="date" value={logDate} onChange={e => setLogDate(e.target.value)}
-              className="h-9 pl-8 pr-3 bg-white border border-[#E6DDCE] rounded-xl text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C]" />
+            <input
+              type="date"
+              value={logDate}
+              onChange={e => setLogDate(e.target.value)}
+              className="h-9 pl-8 pr-3 bg-white border border-[#E6DDCE] rounded-xl text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] cursor-pointer"
+            />
           </div>
           <button type="button" onClick={() => stepDate(1)} className="h-9 w-9 rounded-xl border border-[#E6DDCE] bg-white flex items-center justify-center text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] transition-colors cursor-pointer">
             <ChevronRight className="w-4 h-4" />
@@ -577,8 +681,15 @@ export function HourlyLineBoardPage() {
 
       {/* ── KPI Cards ─────────────────────────────────────────────── */}
       {board && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {[
+            {
+              label: "Live Dynamic Takt",
+              value: dynamicLiveTaktSecs > 0 ? `${dynamicLiveTaktSecs.toFixed(2)}s` : "—",
+              sub: dynamicLivePitchSecs > 0 ? `Pitch: ${dynamicLivePitchSecs.toFixed(2)}s · Live` : "Shift pacing pace",
+              icon: Activity,
+              color: "text-[#9C5B3C] bg-[#F6F1E8] border-[#E6DDCE]",
+            },
             {
               label: "Realized Efficiency",
               value: `${board.lineEfficiencyPercent}%`,
@@ -598,9 +709,9 @@ export function HourlyLineBoardPage() {
             {
               label: "Total Good Output",
               value: `${totalGoodPieces} / ${board.totalTargetOutput}`,
-              sub: `${board.totalActualOutput} total inspected`,
+              sub: `${remainingShiftBalance} pcs remaining balance`,
               icon: CheckCircle2,
-              color: "text-[#9C5B3C] bg-[#F6F1E8] border-[#E6DDCE]",
+              color: "text-emerald-800 bg-emerald-50 border-emerald-200",
             },
             {
               label: "Defect Rate / DHU",

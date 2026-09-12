@@ -1,10 +1,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, CheckCircle2, Clock, Calculator, ShieldAlert, Cpu, Trash2 } from "lucide-react";
+import { X, CheckCircle2, Clock, Calculator, ShieldAlert, Cpu, Trash2, AlertCircle, Layers } from "lucide-react";
 import { pieceProductionApi, type PieceProductionLog } from "./api";
 import type { Operator } from "../../features/operators/api";
 import type { Operation } from "../../features/operations/api";
 import type { Order } from "../../features/orders/api";
+
+export interface StationExecutionInfo {
+  stationNum: number;
+  operationId: number | string;
+  operationName: string;
+  totalGood: number;
+  rawGood: number;
+}
 
 interface RecordPieceModalProps {
   isOpen: boolean;
@@ -14,6 +22,7 @@ interface RecordPieceModalProps {
   operators: Operator[];
   operations: Operation[];
   orders?: Order[];
+  stationFlowList?: StationExecutionInfo[];
   initialDate?: string;
   initialOperatorId?: string;
   initialOperationId?: string;
@@ -31,6 +40,7 @@ export function RecordPieceModal({
   operators,
   operations,
   orders = [],
+  stationFlowList = [],
   initialDate = new Date().toISOString().split("T")[0],
   initialOperatorId,
   initialOperationId,
@@ -44,7 +54,6 @@ export function RecordPieceModal({
   const [operationId, setOperationId] = useState<string>("");
   const [orderId, setOrderId] = useState<string>("");
   
-  const [targetQty, setTargetQty] = useState<string>("");
   const [completedQty, setCompletedQty] = useState<string>("");
   const [goodQty, setGoodQty] = useState<string>("");
   const [rejectQty, setRejectQty] = useState<string>("0");
@@ -64,7 +73,6 @@ export function RecordPieceModal({
       setOperatorId(String(editingLog.operatorId));
       setOperationId(editingLog.operationId ? String(editingLog.operationId) : "");
       setOrderId(editingLog.orderId ? String(editingLog.orderId) : "");
-      setTargetQty(String(editingLog.targetQty || ""));
       setCompletedQty(String(editingLog.completedQty || ""));
       setGoodQty(String(editingLog.goodQty || ""));
       setRejectQty(String(editingLog.rejectQty || "0"));
@@ -79,7 +87,6 @@ export function RecordPieceModal({
       const chosenOpId = initialOperationId || (operations.length > 0 ? String(operations[0].id) : "");
       setOperationId(chosenOpId);
       setOrderId(initialOrderId || "");
-      setTargetQty("");
       setCompletedQty("");
       setGoodQty("");
       setRejectQty("0");
@@ -139,8 +146,69 @@ export function RecordPieceModal({
 
   const numGood = Number(goodQty) || 0;
   const numCompleted = Number(completedQty) || 0;
-  const numTarget = Number(targetQty) || 0;
   const numReject = Number(rejectQty) || 0;
+
+  // Precedence constraint calculation based on line workstation sequence
+  const precedenceInfo = useMemo(() => {
+    if (!stationFlowList || stationFlowList.length === 0 || !operationId) {
+      return null;
+    }
+
+    const sorted = [...stationFlowList].sort((a, b) => a.stationNum - b.stationNum);
+    const currIndex = sorted.findIndex(s => String(s.operationId) === String(operationId));
+    if (currIndex === -1) return null;
+
+    const currentStation = sorted[currIndex];
+    if (currIndex === 0) {
+      // First operation in sequence: Line Inflow
+      return {
+        isFirstStation: true,
+        stationNum: currentStation.stationNum,
+        operationName: currentStation.operationName,
+        maxAllowedGood: Infinity,
+        predecessorStationNum: null,
+        predecessorOperationName: null,
+        predecessorCompleted: null,
+        availableWip: null,
+        currentStationLogged: currentStation.rawGood ?? currentStation.totalGood,
+      };
+    }
+
+    const predecessorStation = sorted[currIndex - 1];
+    const predecessorCompleted = predecessorStation.totalGood; // flow-bounded completed pieces of upstream operation
+    const editingGood = (editingLog && String(editingLog.operationId) === String(operationId)) ? (editingLog.goodQty || 0) : 0;
+    const currentLoggedWithoutThis = Math.max(0, (currentStation.rawGood ?? currentStation.totalGood) - editingGood);
+    const maxAllowedGood = Math.max(0, predecessorCompleted - currentLoggedWithoutThis);
+    const availableWip = Math.max(0, predecessorCompleted - (currentStation.rawGood ?? currentStation.totalGood));
+
+    return {
+      isFirstStation: false,
+      stationNum: currentStation.stationNum,
+      operationName: currentStation.operationName,
+      predecessorStationNum: predecessorStation.stationNum,
+      predecessorOperationName: predecessorStation.operationName,
+      predecessorCompleted,
+      availableWip,
+      currentStationLogged: currentStation.rawGood ?? currentStation.totalGood,
+      maxAllowedGood,
+    };
+  }, [stationFlowList, operationId, editingLog]);
+
+  const isPrecedenceViolated = Boolean(
+    precedenceInfo &&
+    !precedenceInfo.isFirstStation &&
+    precedenceInfo.maxAllowedGood !== Infinity &&
+    numGood > precedenceInfo.maxAllowedGood
+  );
+
+  const handleCapToMaxAllowed = () => {
+    if (!precedenceInfo || precedenceInfo.isFirstStation || precedenceInfo.maxAllowedGood === Infinity) return;
+    const maxVal = precedenceInfo.maxAllowedGood;
+    setCompletedQty(String(maxVal));
+    setGoodQty(String(maxVal));
+    setRejectQty("0");
+    setErrorMsg("");
+  };
 
   // Quality Pass Rate % = (Good Qty / Completed Qty) * 100
   const qualityRatePercent = useMemo(() => {
@@ -162,6 +230,12 @@ export function RecordPieceModal({
       setErrorMsg("Completed quantity must be greater than 0");
       return;
     }
+    if (precedenceInfo && !precedenceInfo.isFirstStation && numGood > precedenceInfo.maxAllowedGood) {
+      setErrorMsg(
+        `Precedence Limit Exceeded: Station #${precedenceInfo.stationNum} (${precedenceInfo.operationName}) cannot output more than predecessor Station #${precedenceInfo.predecessorStationNum} (${precedenceInfo.predecessorOperationName}) completed output of ${precedenceInfo.predecessorCompleted} pieces. Maximum allowed good quantity for this entry is ${precedenceInfo.maxAllowedGood} pcs (prevents negative WIP).`
+      );
+      return;
+    }
     const [sh = 0, sm = 0] = startTime.split(":").map(Number);
     const [eh = 0, em = 0] = endTime.split(":").map(Number);
     const diffMins = (eh * 60 + em) - (sh * 60 + sm);
@@ -181,7 +255,7 @@ export function RecordPieceModal({
       operatorId: Number(operatorId),
       operationId: Number(operationId),
       orderId: orderId ? Number(orderId) : undefined,
-      targetQty: numTarget > 0 ? numTarget : numCompleted,
+      targetQty: numCompleted,
       completedQty: numCompleted,
       goodQty: numGood,
       rejectQty: numReject,
@@ -360,32 +434,170 @@ export function RecordPieceModal({
             </div>
           </div>
 
+          {/* Workstation Precedence & WIP Buffer Flow Banner */}
+          {precedenceInfo && (
+            <div className={`p-4 rounded-2xl border transition-all ${
+              precedenceInfo.isFirstStation
+                ? "bg-emerald-50/60 border-emerald-200"
+                : precedenceInfo.maxAllowedGood === 0
+                  ? "bg-rose-50/70 border-rose-200"
+                  : isPrecedenceViolated
+                    ? "bg-amber-50/80 border-amber-300 ring-2 ring-amber-400/30"
+                    : "bg-[#F6F1E8]/70 border-[#E6DDCE]"
+            }`}>
+              {precedenceInfo.isFirstStation ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs border border-emerald-300 shadow-2xs">
+                      #1
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-emerald-950">
+                          Workstation #{precedenceInfo.stationNum}: Line Inflow
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.2 bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200">
+                          Initial Process
+                        </span>
+                      </div>
+                      <p className="text-[10.5px] text-emerald-700 mt-0.5">
+                        First operation in assembly line — feeds cut pieces into progressive sewing flow.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right font-mono text-[11px] text-emerald-800 font-bold shrink-0">
+                    Logged: {precedenceInfo.currentStationLogged} pcs
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-[#9C5B3C]" />
+                      <span className="text-xs font-bold text-[#221912]">
+                        Station #{precedenceInfo.stationNum} Sequential Precedence Flow
+                      </span>
+                    </div>
+                    <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-md border ${
+                      precedenceInfo.maxAllowedGood === 0
+                        ? "bg-rose-100 text-rose-800 border-rose-300"
+                        : "bg-[#FDFBF7] text-[#9C5B3C] border-[#E6DDCE]"
+                    }`}>
+                      Predecessor: Station #{precedenceInfo.predecessorStationNum}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {/* Metric 1: Predecessor Output */}
+                    <div className="p-2.5 bg-white rounded-xl border border-[#E6DDCE] shadow-2xs">
+                      <span className="text-[9.5px] font-bold uppercase tracking-wider text-[#8C7E6E] block truncate">
+                        Upstream Completed
+                      </span>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span className="font-mono font-black text-sm text-[#221912]">
+                          {precedenceInfo.predecessorCompleted}
+                        </span>
+                        <span className="text-[9.5px] text-slate-400">pcs</span>
+                      </div>
+                      <span className="text-[9px] text-[#8C7E6E] truncate block mt-0.5" title={precedenceInfo.predecessorOperationName || ""}>
+                        Stn #{precedenceInfo.predecessorStationNum} ({precedenceInfo.predecessorOperationName})
+                      </span>
+                    </div>
+
+                    {/* Metric 2: Available Queue WIP */}
+                    <div className="p-2.5 bg-white rounded-xl border border-[#E6DDCE] shadow-2xs">
+                      <span className="text-[9.5px] font-bold uppercase tracking-wider text-[#8C7E6E] block truncate">
+                        Queue WIP Buffer
+                      </span>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span className={`font-mono font-black text-sm ${
+                          (precedenceInfo.availableWip || 0) > 0 ? "text-amber-700" : "text-slate-700"
+                        }`}>
+                          {precedenceInfo.availableWip}
+                        </span>
+                        <span className="text-[9.5px] text-slate-400">pcs</span>
+                      </div>
+                      <span className="text-[9px] text-slate-400 truncate block mt-0.5">
+                        Available in buffer
+                      </span>
+                    </div>
+
+                    {/* Metric 3: Max Allowed for this Run */}
+                    <div className={`p-2.5 rounded-xl border shadow-2xs ${
+                      precedenceInfo.maxAllowedGood === 0
+                        ? "bg-rose-50 border-rose-200"
+                        : "bg-emerald-50/50 border-emerald-200"
+                    }`}>
+                      <span className="text-[9.5px] font-bold uppercase tracking-wider text-[#8C7E6E] block truncate">
+                        Max Allowed for Run
+                      </span>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span className={`font-mono font-black text-sm ${
+                          precedenceInfo.maxAllowedGood === 0 ? "text-rose-700" : "text-emerald-800"
+                        }`}>
+                          {precedenceInfo.maxAllowedGood}
+                        </span>
+                        <span className="text-[9.5px] text-slate-400">pcs</span>
+                      </div>
+                      <span className="text-[9px] text-emerald-700 font-medium truncate block mt-0.5">
+                        Precedence Limit
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Warning / Cap helpers */}
+                  {precedenceInfo.maxAllowedGood === 0 ? (
+                    <div className="p-2.5 bg-rose-100/70 border border-rose-200 rounded-xl text-rose-800 text-[11px] flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                      <span className="font-semibold">
+                        WIP Buffer Empty: Station #{precedenceInfo.predecessorStationNum} has no remaining output. Station #{precedenceInfo.predecessorStationNum} must produce more pieces before this station can log additional units.
+                      </span>
+                    </div>
+                  ) : isPrecedenceViolated ? (
+                    <div className="p-2.5 bg-amber-100/90 border border-amber-300 rounded-xl text-amber-900 text-[11px] flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-amber-700" />
+                        <span className="font-semibold">
+                          Exceeds predecessor output! Max allowed is {precedenceInfo.maxAllowedGood} pcs (prevents negative WIP).
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCapToMaxAllowed}
+                        className="px-2.5 py-1 bg-amber-800 text-white rounded-lg text-[10.5px] font-bold hover:bg-amber-900 transition-colors shrink-0 cursor-pointer shadow-2xs"
+                      >
+                        Cap to {precedenceInfo.maxAllowedGood} pcs
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Row 3: Quantities */}
           <div className="p-4 bg-[#FDFBF7] border border-[#E6DDCE] rounded-2xl space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[10.5px] font-bold tracking-wider uppercase text-[#221912] block">
                 Production Quantities
               </span>
-              <span className="text-[10px] text-[#8C7E6E] font-medium">
-                Completed = Good + Rejects
-              </span>
+              <div className="flex items-center gap-2">
+                {precedenceInfo && !precedenceInfo.isFirstStation && precedenceInfo.maxAllowedGood > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleCapToMaxAllowed}
+                    className="text-[10px] font-bold text-[#9C5B3C] hover:underline cursor-pointer"
+                  >
+                    Quick Fill: Max Allowed ({precedenceInfo.maxAllowedGood} pcs)
+                  </button>
+                )}
+                <span className="text-[10px] text-[#8C7E6E] font-medium">
+                  Completed = Good + Rejects
+                </span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold uppercase text-[#8C7E6E] mb-1">
-                  Target Qty
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={targetQty}
-                  onChange={e => setTargetQty(e.target.value)}
-                  placeholder="0"
-                  className="w-full h-9 bg-white border border-[#E6DDCE] rounded-xl px-2.5 text-xs font-mono font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C]"
-                />
-              </div>
-
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[10px] font-bold uppercase text-[#9C5B3C] mb-1">
                   Completed Qty <span className="text-rose-500">*</span>
@@ -393,11 +605,16 @@ export function RecordPieceModal({
                 <input
                   type="number"
                   min="1"
+                  max={precedenceInfo && !precedenceInfo.isFirstStation && precedenceInfo.maxAllowedGood !== Infinity ? precedenceInfo.maxAllowedGood : undefined}
                   value={completedQty}
                   onChange={e => handleCompletedChange(e.target.value)}
                   required
                   placeholder="0"
-                  className="w-full h-9 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl px-2.5 text-xs font-mono font-bold text-[#9C5B3C] focus:outline-none focus:border-[#9C5B3C]"
+                  className={`w-full h-9 border rounded-xl px-2.5 text-xs font-mono font-bold focus:outline-none ${
+                    isPrecedenceViolated
+                      ? "bg-amber-50 border-amber-400 text-amber-900 focus:border-amber-500"
+                      : "bg-[#F6F1E8] border-[#E6DDCE] text-[#9C5B3C] focus:border-[#9C5B3C]"
+                  }`}
                 />
               </div>
 
@@ -408,11 +625,16 @@ export function RecordPieceModal({
                 <input
                   type="number"
                   min="0"
+                  max={precedenceInfo && !precedenceInfo.isFirstStation && precedenceInfo.maxAllowedGood !== Infinity ? precedenceInfo.maxAllowedGood : undefined}
                   value={goodQty}
                   onChange={e => handleGoodChange(e.target.value)}
                   required
                   placeholder="0"
-                  className="w-full h-9 bg-[#F3F5F2] border border-[#d4decb] rounded-xl px-2.5 text-xs font-mono font-bold text-[#77876F] focus:outline-none focus:border-[#77876F]"
+                  className={`w-full h-9 border rounded-xl px-2.5 text-xs font-mono font-bold focus:outline-none ${
+                    isPrecedenceViolated
+                      ? "bg-amber-50 border-amber-400 text-amber-900 focus:border-amber-500"
+                      : "bg-[#F3F5F2] border-[#d4decb] text-[#77876F] focus:border-[#77876F]"
+                  }`}
                 />
               </div>
 

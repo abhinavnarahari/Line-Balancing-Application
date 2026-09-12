@@ -1,17 +1,14 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   Clock,
   Check,
   UserCheck,
-  UserX,
   Calendar,
-  Users,
   ShieldCheck,
   ArrowRight,
   ExternalLink,
-  RefreshCw,
   Sparkles,
 } from "lucide-react";
 import { useImmediateActions, type ImmediateActionItem, type UrgencyTier } from "./useImmediateActions";
@@ -44,9 +41,8 @@ export function TodayImmediateActions({
   skillMatrix = [],
   operations = [],
   onRefresh,
-  compact = false,
+  compact: _compact = false,
 }: TodayImmediateActionsProps) {
-  const navigate = useNavigate();
   const [activeUrgencyFilter, setActiveUrgencyFilter] = useState<"ALL" | UrgencyTier>("ALL");
   const [selectedReplacementItem, setSelectedReplacementItem] = useState<ImmediateActionItem | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);

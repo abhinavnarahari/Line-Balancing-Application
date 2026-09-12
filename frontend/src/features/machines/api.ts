@@ -13,6 +13,7 @@ export interface Machine {
   lineCode?: string;
   lineName?: string;
   status: MachineStatus;
+  quantity?: number;
   active: boolean;
   createdAt?: string;
   updatedAt?: string;

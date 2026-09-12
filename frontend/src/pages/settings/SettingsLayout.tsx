@@ -1,6 +1,5 @@
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { cn } from "../../utils/cn";
-import { motion } from "framer-motion";
 import { Clock, Users, Scissors, Layers, BookOpen, Settings, Activity, Cpu } from "lucide-react";
 
 const tabs = [
@@ -48,7 +47,7 @@ export function SettingsLayout() {
                   key={tab.name}
                   to={tab.href}
                   className={cn(
-                    "relative flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all duration-150 select-none",
+                    "flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs select-none",
                     active
                       ? "bg-[#9C5B3C] text-white shadow-sm shadow-[#9C5B3C]/30"
                       : "text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8]"
@@ -56,13 +55,6 @@ export function SettingsLayout() {
                 >
                   <Icon className={cn("w-4 h-4", active ? "text-white" : "text-[#8C7E6E]")} />
                   <span>{tab.name}</span>
-                  {active && (
-                    <motion.div
-                      layoutId="activeTabPill"
-                      className="absolute inset-0 bg-[#9C5B3C] rounded-xl -z-10"
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                    />
-                  )}
                 </Link>
               );
             })}
@@ -71,14 +63,9 @@ export function SettingsLayout() {
       </div>
 
       {/* ── Nested Master Pages Outlet ─────────────────────────────── */}
-      <motion.div
-        key={location.pathname}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2 }}
-      >
+      <div className="w-full">
         <Outlet />
-      </motion.div>
+      </div>
     </div>
   );
 }

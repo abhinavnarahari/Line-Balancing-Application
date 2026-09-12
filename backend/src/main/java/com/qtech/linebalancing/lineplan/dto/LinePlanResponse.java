@@ -15,6 +15,7 @@ public class LinePlanResponse {
     private Integer targetOutput;
     private Integer allowance;
     private String allowancePfd;
+    private Double plannedEfficiency;
     private String status;
     private List<LinePlanAssignmentResponse> assignments;
 

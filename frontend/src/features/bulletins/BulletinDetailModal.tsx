@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { 
   X, 
-  Sparkles, 
   Sliders, 
   Clock, 
   Cpu, 
@@ -20,6 +19,9 @@ import {
 } from "lucide-react";
 import type { OperationBulletin, BulletinStatus } from "./api";
 import { bulletinsApi } from "./api";
+import { generateLineBalancingScenarios, type BalancingScenario } from "./lineBalancingScenarios";
+import { BalancingScenariosCard } from "./BalancingScenariosCard";
+
 
 interface BulletinDetailModalProps {
   bulletin: OperationBulletin | null;
@@ -40,13 +42,23 @@ export function BulletinDetailModal({
   onDelete,
   onRefresh,
 }: BulletinDetailModalProps) {
-  const [targetManpower, setTargetManpower] = useState<number>(30);
+  const [targetManpower, setTargetManpower] = useState<number>(() => {
+    return (bulletin?.lines && bulletin.lines.length > 0) ? bulletin.lines.length : 20;
+  });
+  const [shiftHours, setShiftHours] = useState<number>(8);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [appliedScenarioId, setAppliedScenarioId] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (bulletin?.lines && bulletin.lines.length > 0) {
+      setTargetManpower(bulletin.lines.length);
+    }
+  }, [bulletin]);
 
   useEffect(() => {
     if (isOpen) {
@@ -107,21 +119,23 @@ export function BulletinDetailModal({
     };
   }, [bulletin]);
 
-  // 2. Theoretical Hourly Output Calculations based on Manpower
+  // 2. Theoretical Hourly Output Calculations constrained by Bottleneck Pace
   const hourlyOutput = useMemo(() => {
     const smv = metrics.totalSmv;
-    if (smv <= 0 || targetManpower <= 0) return { eff100: 0, eff85: 0, eff70: 0, eff60: 0, taktSec: "0.0" };
+    const bSmv = Number(metrics.bottleneckLine?.smv) || 0.1;
+    if (smv <= 0 || targetManpower <= 0 || bSmv <= 0) {
+      return { eff100: 0, eff85: 0, eff70: 0, eff60: 0, taktSec: "0.0" };
+    }
 
-    const totalAvailableMinutesPerHour = 60 * targetManpower;
-    const eff100 = Math.round(totalAvailableMinutesPerHour / smv);
-    const eff85 = Math.round((totalAvailableMinutesPerHour * 0.85) / smv);
-    const eff70 = Math.round((totalAvailableMinutesPerHour * 0.70) / smv);
-    const eff60 = Math.round((totalAvailableMinutesPerHour * 0.60) / smv);
+    const eff100 = Math.round(60 / bSmv);
+    const eff85 = Math.round((60 * 0.85) / bSmv);
+    const eff70 = Math.round((60 * 0.70) / bSmv);
+    const eff60 = Math.round((60 * 0.60) / bSmv);
 
-    const taktSec = eff85 > 0 ? (3600 / eff85).toFixed(1) : "0.0";
+    const taktSec = eff100 > 0 ? (3600 / eff100).toFixed(1) : "0.0";
 
     return { eff100, eff85, eff70, eff60, taktSec };
-  }, [metrics.totalSmv, targetManpower]);
+  }, [metrics.totalSmv, metrics.bottleneckLine, targetManpower]);
 
   const pitchTime = useMemo(() => {
     if (targetManpower <= 0 || metrics.totalSmv <= 0) return 0;
@@ -130,10 +144,32 @@ export function BulletinDetailModal({
 
   const balanceEfficiency = useMemo(() => {
     const bSmv = Number(metrics.bottleneckLine?.smv) || 0;
-    const count = bulletin?.lines?.length || 0;
-    if (count === 0 || bSmv <= 0 || metrics.totalSmv <= 0) return 0;
-    return Math.min(100, Math.round(((metrics.totalSmv / (count * bSmv)) * 100) * 10) / 10);
-  }, [bulletin?.lines?.length, metrics.bottleneckLine, metrics.totalSmv]);
+    if (targetManpower <= 0 || bSmv <= 0 || metrics.totalSmv <= 0) return 0;
+    return Math.min(100, Math.round(((metrics.totalSmv / (targetManpower * bSmv)) * 100) * 10) / 10);
+  }, [targetManpower, metrics.bottleneckLine, metrics.totalSmv]);
+
+  // Generate 2-3 Line Balancing Optimization Scenarios
+  const detailScenarios = useMemo(() => {
+    if (!bulletin || !bulletin.lines || bulletin.lines.length === 0) return [];
+    const opsInput = bulletin.lines.map((l) => ({
+      id: l.id || l.sequence,
+      sequence: l.sequence,
+      name: l.operationName || l.operationCode || `Operation ${l.sequence}`,
+      code: l.operationCode,
+      smv: Number(l.smv) || 0,
+    }));
+    return generateLineBalancingScenarios(opsInput, targetManpower, shiftHours);
+  }, [bulletin, targetManpower, shiftHours]);
+
+  // Handle In-Bulletin Scenario Simulation (does not modify Planned Lines)
+  const handleApplyScenario = (scenario: BalancingScenario) => {
+    setTargetManpower(scenario.totalOperators || scenario.totalMachines);
+    setAppliedScenarioId(scenario.id);
+  };
+
+  const handleResetScenario = () => {
+    setAppliedScenarioId(null);
+  };
 
   if (!isOpen || !bulletin || !mounted) return null;
 
@@ -163,19 +199,21 @@ export function BulletinDetailModal({
         "Operation Code": l.operationCode || `OP-${l.operationId}`,
         "Operation Name": l.operationName || `Operation ${l.operationId}`,
         "Machine Type": l.machineType || "Single Needle",
+        "SMV (sec)": Number((smvVal * 60).toFixed(1)),
         "SMV (min)": smvVal,
         "% Work Share": pctShare,
+        "WIP Threshold (pcs)": l.wipThreshold ?? 20,
         "Skill Required": `L${l.skillRatingRequired || 3}`,
         "Notes & Quality Points": l.notes || "—",
       };
     });
 
     const summaryRows = [
-      { "Seq #": "", "Operation Code": "TOTAL GARMENT SMV (SAM)", "Operation Name": "", "Machine Type": "", "SMV (min)": Number(metrics.totalSmv.toFixed(3)), "% Work Share": "100%", "Skill Required": `Avg L${metrics.avgSkill}`, "Notes & Quality Points": `${bulletin.lines?.length || 0} operations` },
-      { "Seq #": "", "Operation Code": "TARGET PITCH TIME", "Operation Name": `${pitchTime.toFixed(2)} min/pc`, "Machine Type": "", "SMV (min)": Number(pitchTime.toFixed(2)), "% Work Share": "", "Skill Required": `Target: ${targetManpower} Ops`, "Notes & Quality Points": `Takt: ${hourlyOutput.taktSec}s` },
-      { "Seq #": "", "Operation Code": "LINE BALANCING EFFICIENCY", "Operation Name": `${balanceEfficiency.toFixed(1)}% Smoothness Index`, "Machine Type": "", "SMV (min)": "", "% Work Share": "", "Skill Required": balanceEfficiency >= 85 ? "Well Balanced" : "Imbalanced", "Notes & Quality Points": "" },
-      { "Seq #": "", "Operation Code": "BOTTLENECK OPERATION", "Operation Name": metrics.bottleneckLine?.operationName || "—", "Machine Type": metrics.bottleneckLine?.machineType || "—", "SMV (min)": metrics.bottleneckLine?.smv || 0, "% Work Share": "", "Skill Required": "", "Notes & Quality Points": "Critical Pace Constraint" },
-      { "Seq #": "", "Operation Code": "EST. HOURLY TARGET (85% Eff)", "Operation Name": `${hourlyOutput.eff85} pcs/hr with ${targetManpower} operators`, "Machine Type": "", "SMV (min)": "", "% Work Share": "", "Skill Required": "", "Notes & Quality Points": `At 100% Eff: ${hourlyOutput.eff100} pcs/hr` },
+      { "Seq #": "", "Operation Code": "TOTAL GARMENT SMV (SAM)", "Operation Name": "", "Machine Type": "", "SMV (sec)": Number((metrics.totalSmv * 60).toFixed(1)), "% Work Share": "100%", "Skill Required": `Avg L${metrics.avgSkill}`, "Notes & Quality Points": `${bulletin.lines?.length || 0} operations` },
+      { "Seq #": "", "Operation Code": "TARGET PITCH TIME", "Operation Name": `${(pitchTime * 60).toFixed(1)} s/pc (${pitchTime.toFixed(2)} min)`, "Machine Type": "", "SMV (sec)": Number((pitchTime * 60).toFixed(1)), "% Work Share": "", "Skill Required": `Target: ${targetManpower} Ops`, "Notes & Quality Points": `Takt: ${hourlyOutput.taktSec}s` },
+      { "Seq #": "", "Operation Code": "LINE BALANCING EFFICIENCY", "Operation Name": `${balanceEfficiency.toFixed(1)}% Smoothness Index`, "Machine Type": "", "SMV (sec)": "", "% Work Share": "", "Skill Required": balanceEfficiency >= 85 ? "Well Balanced" : "Imbalanced", "Notes & Quality Points": "" },
+      { "Seq #": "", "Operation Code": "BOTTLENECK OPERATION", "Operation Name": metrics.bottleneckLine?.operationName || "—", "Machine Type": metrics.bottleneckLine?.machineType || "—", "SMV (sec)": Number(((metrics.bottleneckLine?.smv || 0) * 60).toFixed(1)), "% Work Share": "", "Skill Required": "", "Notes & Quality Points": "Critical Pace Constraint" },
+      { "Seq #": "", "Operation Code": "EST. HOURLY TARGET (100% Std)", "Operation Name": `${hourlyOutput.eff100} pcs/hr with ${targetManpower} operators`, "Machine Type": "", "SMV (sec)": "", "% Work Share": "", "Skill Required": "", "Notes & Quality Points": `At 85% Expected: ${hourlyOutput.eff85} pcs/hr` },
     ];
 
     const allRows = [...rows, {}, ...summaryRows];
@@ -254,12 +292,12 @@ export function BulletinDetailModal({
               </span>
               <div className="mt-1.5 flex items-baseline gap-1">
                 <span className="text-2xl sm:text-3xl font-black font-mono text-[#9C5B3C]">
-                  {metrics.totalSmv.toFixed(2)}
+                  {(metrics.totalSmv * 60).toFixed(1)}
                 </span>
-                <span className="text-xs text-[#8C7E6E] font-bold font-mono">min</span>
+                <span className="text-xs text-[#8C7E6E] font-bold font-mono">sec</span>
               </div>
               <p className="text-[11px] text-[#8C7E6E] mt-0.5 font-medium">
-                {bulletin.lines?.length || 0} sequential operations
+                {metrics.totalSmv.toFixed(2)} min · {bulletin.lines?.length || 0} sequential operations
               </p>
             </div>
 
@@ -270,12 +308,12 @@ export function BulletinDetailModal({
               </span>
               <div className="mt-1.5 flex items-baseline gap-1">
                 <span className="text-2xl sm:text-3xl font-black font-mono text-sky-800">
-                  {pitchTime.toFixed(2)}
+                  {(pitchTime * 60).toFixed(1)}
                 </span>
-                <span className="text-xs text-[#8C7E6E] font-bold font-mono">min/pc</span>
+                <span className="text-xs text-[#8C7E6E] font-bold font-mono">s/pc</span>
               </div>
               <p className="text-[11px] text-sky-600 mt-0.5 font-medium">
-                For {targetManpower} Line Ops (Takt: {hourlyOutput.taktSec}s)
+                {pitchTime.toFixed(2)}m · For {targetManpower} Line Ops (Takt: {hourlyOutput.taktSec}s)
               </p>
             </div>
 
@@ -313,7 +351,7 @@ export function BulletinDetailModal({
                 </span>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-xs font-mono font-black text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                    {metrics.bottleneckLine?.smv || 0} min
+                    {((metrics.bottleneckLine?.smv || 0) * 60).toFixed(1)}s
                   </span>
                   <span className="text-[10.5px] text-[#8C7E6E] truncate max-w-[90px]">
                     {metrics.bottleneckLine?.machineType?.split(" ")[0]}
@@ -348,7 +386,7 @@ export function BulletinDetailModal({
                   Theoretical Hourly Output Pace Calculator
                 </h3>
                 <p className="text-[10.5px] text-[#8C7E6E] mt-0.5">
-                  Formula: Output = (60 × Operators × Efficiency) / Total SMV
+                  Formula: Bottleneck-Constrained Output = (60 × Efficiency %) / Bottleneck SMV
                 </p>
               </div>
 
@@ -369,13 +407,13 @@ export function BulletinDetailModal({
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <div className="p-2.5 bg-[#FEFCF9] border border-[#E6DDCE] rounded-xl text-center">
-                <span className="text-[10px] font-extrabold uppercase text-[#8C7E6E]">100% Efficiency</span>
-                <p className="text-xl font-black font-mono text-[#221912] mt-0.5">{hourlyOutput.eff100} <span className="text-[10px] text-[#8C7E6E] font-normal">pcs/hr</span></p>
+              <div className="p-2.5 bg-emerald-50/80 border border-emerald-300 rounded-xl text-center shadow-2xs">
+                <span className="text-[10px] font-extrabold uppercase text-emerald-800">100% Standard Target</span>
+                <p className="text-xl font-black font-mono text-emerald-900 mt-0.5">{hourlyOutput.eff100} <span className="text-[10px] text-emerald-700 font-normal">pcs/hr</span></p>
               </div>
-              <div className="p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl text-center">
-                <span className="text-[10px] font-extrabold uppercase text-emerald-800">85% (Expected)</span>
-                <p className="text-xl font-black font-mono text-emerald-800 mt-0.5">{hourlyOutput.eff85} <span className="text-[10px] text-emerald-600 font-normal">pcs/hr</span></p>
+              <div className="p-2.5 bg-[#FEFCF9] border border-[#E6DDCE] rounded-xl text-center">
+                <span className="text-[10px] font-extrabold uppercase text-[#8C7E6E]">85% Expected</span>
+                <p className="text-xl font-black font-mono text-[#221912] mt-0.5">{hourlyOutput.eff85} <span className="text-[10px] text-[#8C7E6E] font-normal">pcs/hr</span></p>
               </div>
               <div className="p-2.5 bg-sky-50/70 border border-sky-200 rounded-xl text-center">
                 <span className="text-[10px] font-extrabold uppercase text-sky-800">70% Efficiency</span>
@@ -387,6 +425,18 @@ export function BulletinDetailModal({
               </div>
             </div>
           </div>
+
+          {/* Line Balancing Optimization Scenarios (2-3 Actionable Scenarios) */}
+          {detailScenarios.length > 0 && (
+            <BalancingScenariosCard
+              scenarios={detailScenarios}
+              appliedScenarioId={appliedScenarioId || undefined}
+              onApplyScenario={handleApplyScenario}
+              onResetScenario={handleResetScenario}
+              shiftHours={shiftHours}
+              onChangeShiftHours={setShiftHours}
+            />
+          )}
 
           {/* Machine Inventory & Linked Styles Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -439,7 +489,7 @@ export function BulletinDetailModal({
                 Operation Sequence &amp; Standard Work Content ({bulletin.lines?.length || 0} Steps)
               </h3>
               <span className="text-xs font-mono font-bold text-[#9C5B3C] bg-white px-2 py-0.5 rounded-lg border border-[#E6DDCE]">
-                TOTAL: {metrics.totalSmv.toFixed(2)} min
+                TOTAL: {(metrics.totalSmv * 60).toFixed(1)} sec ({metrics.totalSmv.toFixed(2)} min)
               </span>
             </div>
 
@@ -451,8 +501,9 @@ export function BulletinDetailModal({
                     <th className="py-2.5 px-3 w-28">Code</th>
                     <th className="py-2.5 px-4">Operation Description</th>
                     <th className="py-2.5 px-4 w-40">Machine Type</th>
-                    <th className="py-2.5 px-3 w-24 text-right">SMV (min)</th>
+                    <th className="py-2.5 px-3 w-28 text-right">SMV (sec)</th>
                     <th className="py-2.5 px-3 w-24 text-center">% Work</th>
+                    <th className="py-2.5 px-3 w-24 text-center">WIP Buffer</th>
                     <th className="py-2.5 px-3 w-20 text-center">Skill</th>
                     <th className="py-2.5 px-4">Notes / Quality</th>
                   </tr>
@@ -492,7 +543,10 @@ export function BulletinDetailModal({
                           {line.machineType || "Single Needle"}
                         </td>
                         <td className="py-2.5 px-3 text-right font-mono font-bold text-[#221912]">
-                          {smvVal.toFixed(2)}
+                          {(smvVal * 60).toFixed(1)}s
+                          <span className="block text-[9px] text-[#8C7E6E] font-normal">
+                            ({smvVal.toFixed(2)}m)
+                          </span>
                         </td>
                         <td className="py-2.5 px-3">
                           <div className="flex items-center gap-1.5">
@@ -506,6 +560,11 @@ export function BulletinDetailModal({
                               {pctShare.toFixed(1)}%
                             </span>
                           </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className="font-mono font-bold text-[10.5px] px-2 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg shadow-2xs">
+                            {line.wipThreshold ?? 20} pcs
+                          </span>
                         </td>
                         <td className="py-2.5 px-3 text-center">
                           <span className="font-mono font-extrabold text-[10.5px] px-1.5 py-0.2 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded">

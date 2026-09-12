@@ -25,7 +25,14 @@ public class BulletinRequest {
     @Min(value = 1, message = "Version must be at least 1")
     private Integer version = 1;
 
+    private Integer revisionNumber = 1;
+
+    private Long parentBulletinId;
+
     private OperationBulletin.Status status = OperationBulletin.Status.DRAFT;
+
+    private String approvedBy;
+    private String releasedBy;
 
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;

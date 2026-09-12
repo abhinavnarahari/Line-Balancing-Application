@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -36,6 +37,7 @@ public class OperationBulletinService {
     private final OperationBulletinRepository bulletinRepository;
     private final StyleService styleService;
     private final OperationService operationService;
+    private final com.qtech.linebalancing.engine.PrecedenceValidationService precedenceValidationService;
 
     public List<BulletinResponse> getAll() {
         return bulletinRepository.findAllByOrderByCreatedAtDesc()
@@ -53,22 +55,32 @@ public class OperationBulletinService {
                     "Bulletin '" + request.getBulletinCode() + "' version " + request.getVersion() + " already exists.");
         }
 
+        // Validate precedence
+        validateLinePrecedence(request.getLines());
+
         OperationBulletin bulletin = OperationBulletin.builder()
                 .bulletinCode(request.getBulletinCode().toUpperCase())
                 .name(request.getName())
                 .description(request.getDescription())
                 .version(request.getVersion())
-                .status(request.getStatus())
+                .revisionNumber(request.getRevisionNumber() != null ? request.getRevisionNumber() : 1)
+                .status(request.getStatus() != null ? request.getStatus() : OperationBulletin.Status.DRAFT)
                 .effectiveFrom(request.getEffectiveFrom())
                 .effectiveTo(request.getEffectiveTo())
+                .approvedBy(request.getApprovedBy())
+                .releasedBy(request.getReleasedBy())
                 .build();
+
+        if (request.getParentBulletinId() != null) {
+            bulletin.setParentBulletin(findOrThrow(request.getParentBulletinId()));
+        }
 
         attachStyles(bulletin, request.getStyleIds());
         buildLines(bulletin, request.getLines());
         bulletin.setTotalSmv(computeTotalSmv(bulletin.getLines()));
 
-        log.info("Creating bulletin '{}' v{} with {} lines, totalSMV={}",
-                bulletin.getBulletinCode(), bulletin.getVersion(),
+        log.info("Creating bulletin '{}' v{} rev{} with {} lines, totalSMV={}",
+                bulletin.getBulletinCode(), bulletin.getVersion(), bulletin.getRevisionNumber(),
                 bulletin.getLines().size(), bulletin.getTotalSmv());
         return toResponse(bulletinRepository.save(bulletin));
     }
@@ -83,11 +95,19 @@ public class OperationBulletinService {
                     "Bulletin '" + request.getBulletinCode() + "' version " + request.getVersion() + " already exists.");
         }
 
+        // Validate precedence
+        validateLinePrecedence(request.getLines());
+
         bulletin.setBulletinCode(request.getBulletinCode().toUpperCase());
         bulletin.setName(request.getName());
         bulletin.setDescription(request.getDescription());
         bulletin.setVersion(request.getVersion());
-        bulletin.setStatus(request.getStatus());
+        if (request.getRevisionNumber() != null) {
+            bulletin.setRevisionNumber(request.getRevisionNumber());
+        }
+        if (request.getStatus() != null) {
+            bulletin.setStatus(request.getStatus());
+        }
         bulletin.setEffectiveFrom(request.getEffectiveFrom());
         bulletin.setEffectiveTo(request.getEffectiveTo());
 
@@ -103,10 +123,65 @@ public class OperationBulletinService {
     }
 
     @Transactional
-    public BulletinResponse updateStatus(Long id, OperationBulletin.Status newStatus) {
+    public BulletinResponse updateStatus(Long id, OperationBulletin.Status newStatus, String user) {
         OperationBulletin bulletin = findOrThrow(id);
         bulletin.setStatus(newStatus);
+        if (newStatus == OperationBulletin.Status.APPROVED) {
+            bulletin.setApprovedBy(user != null ? user : "IE Manager");
+            bulletin.setApprovedAt(java.time.LocalDateTime.now());
+        } else if (newStatus == OperationBulletin.Status.RELEASED || newStatus == OperationBulletin.Status.PUBLISHED) {
+            bulletin.setReleasedBy(user != null ? user : "Plant IE Head");
+            bulletin.setReleasedAt(java.time.LocalDateTime.now());
+        }
         return toResponse(bulletinRepository.save(bulletin));
+    }
+
+    @Transactional
+    public BulletinResponse createRevision(Long id) {
+        OperationBulletin parent = findOrThrow(id);
+        int nextRev = (parent.getRevisionNumber() != null ? parent.getRevisionNumber() : 1) + 1;
+
+        OperationBulletin revision = OperationBulletin.builder()
+                .bulletinCode(parent.getBulletinCode())
+                .name(parent.getName() + " (Rev " + String.format("%02d", nextRev) + ")")
+                .description(parent.getDescription())
+                .version(parent.getVersion())
+                .revisionNumber(nextRev)
+                .parentBulletin(parent)
+                .status(OperationBulletin.Status.DRAFT)
+                .effectiveFrom(LocalDate.now())
+                .totalSmv(parent.getTotalSmv())
+                .build();
+
+        // Copy styles
+        revision.setStyles(new HashSet<>(parent.getStyles()));
+
+        // Copy lines
+        List<BulletinLine> revLines = new ArrayList<>();
+        for (BulletinLine srcLine : parent.getLines()) {
+            revLines.add(BulletinLine.builder()
+                    .bulletin(revision)
+                    .sequence(srcLine.getSequence())
+                    .operation(srcLine.getOperation())
+                    .smv(srcLine.getSmv())
+                    .machineType(srcLine.getMachineType())
+                    .skillRatingRequired(srcLine.getSkillRatingRequired())
+                    .section(srcLine.getSection())
+                    .predecessorIds(srcLine.getPredecessorIds())
+                    .isParallelizable(srcLine.getIsParallelizable())
+                    .splitAllowed(srcLine.getSplitAllowed())
+                    .splitType(srcLine.getSplitType())
+                    .stitchType(srcLine.getStitchType())
+                    .seamType(srcLine.getSeamType())
+                    .attachmentType(srcLine.getAttachmentType())
+                    .wipThreshold(srcLine.getWipThreshold() != null ? srcLine.getWipThreshold() : 20)
+                    .notes(srcLine.getNotes())
+                    .build());
+        }
+        revision.setLines(revLines);
+
+        log.info("Created new revision for bulletin '{}' (Rev {})", parent.getBulletinCode(), nextRev);
+        return toResponse(bulletinRepository.save(revision));
     }
 
     @Transactional
@@ -128,7 +203,6 @@ public class OperationBulletinService {
                 : source.getName() + " (Copy)";
         int targetVersion = 1;
 
-        // If cloning under the same code, increment version
         if (targetCode.equalsIgnoreCase(source.getBulletinCode())) {
             targetVersion = source.getVersion() + 1;
         }
@@ -142,6 +216,7 @@ public class OperationBulletinService {
                 .name(targetName)
                 .description(source.getDescription())
                 .version(targetVersion)
+                .revisionNumber(1)
                 .status(OperationBulletin.Status.DRAFT)
                 .effectiveFrom(source.getEffectiveFrom())
                 .effectiveTo(source.getEffectiveTo())
@@ -161,6 +236,15 @@ public class OperationBulletinService {
                     .smv(srcLine.getSmv())
                     .machineType(srcLine.getMachineType())
                     .skillRatingRequired(srcLine.getSkillRatingRequired())
+                    .section(srcLine.getSection())
+                    .predecessorIds(srcLine.getPredecessorIds())
+                    .isParallelizable(srcLine.getIsParallelizable())
+                    .splitAllowed(srcLine.getSplitAllowed())
+                    .splitType(srcLine.getSplitType())
+                    .stitchType(srcLine.getStitchType())
+                    .seamType(srcLine.getSeamType())
+                    .attachmentType(srcLine.getAttachmentType())
+                    .wipThreshold(srcLine.getWipThreshold() != null ? srcLine.getWipThreshold() : 20)
                     .notes(srcLine.getNotes())
                     .build());
         }
@@ -172,6 +256,32 @@ public class OperationBulletinService {
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
+
+    private void validateLinePrecedence(List<BulletinLineRequest> lineRequests) {
+        if (lineRequests == null || lineRequests.isEmpty()) return;
+        List<com.qtech.linebalancing.engine.PrecedenceValidationService.OperationNode> nodes = new ArrayList<>();
+        for (BulletinLineRequest lr : lineRequests) {
+            List<Long> preds = new ArrayList<>();
+            if (lr.getPredecessorIds() != null && !lr.getPredecessorIds().isBlank()) {
+                for (String p : lr.getPredecessorIds().split(",")) {
+                    try {
+                        long pId = Long.parseLong(p.trim());
+                        preds.add(pId);
+                    } catch (Exception ignored) {}
+                }
+            }
+            nodes.add(com.qtech.linebalancing.engine.PrecedenceValidationService.OperationNode.builder()
+                    .operationId(lr.getOperationId())
+                    .operationCode("Op#" + lr.getOperationId())
+                    .sequence(lr.getSequence())
+                    .predecessorIds(preds)
+                    .build());
+        }
+        var validation = precedenceValidationService.validate(nodes);
+        if (!validation.isValid()) {
+            throw new BusinessRuleException(validation.getErrorMessage());
+        }
+    }
 
     private void attachStyles(OperationBulletin bulletin, Set<Long> styleIds) {
         if (styleIds == null || styleIds.isEmpty()) return;
@@ -193,6 +303,15 @@ public class OperationBulletinService {
                     .smv(lineReq.getSmv())
                     .machineType(lineReq.getMachineType())
                     .skillRatingRequired(lineReq.getSkillRatingRequired())
+                    .section(lineReq.getSection() != null ? lineReq.getSection() : "MAIN_ASSEMBLY")
+                    .predecessorIds(lineReq.getPredecessorIds())
+                    .isParallelizable(lineReq.getIsParallelizable() != null ? lineReq.getIsParallelizable() : true)
+                    .splitAllowed(lineReq.getSplitAllowed() != null ? lineReq.getSplitAllowed() : false)
+                    .splitType(lineReq.getSplitType() != null ? lineReq.getSplitType() : "NONE")
+                    .stitchType(lineReq.getStitchType())
+                    .seamType(lineReq.getSeamType())
+                    .attachmentType(lineReq.getAttachmentType())
+                    .wipThreshold(lineReq.getWipThreshold() != null ? lineReq.getWipThreshold() : 20)
                     .notes(lineReq.getNotes())
                     .build();
             lines.add(line);
@@ -218,6 +337,15 @@ public class OperationBulletinService {
                 existing.setSmv(req.getSmv());
                 existing.setMachineType(req.getMachineType());
                 existing.setSkillRatingRequired(req.getSkillRatingRequired());
+                existing.setSection(req.getSection() != null ? req.getSection() : "MAIN_ASSEMBLY");
+                existing.setPredecessorIds(req.getPredecessorIds());
+                existing.setIsParallelizable(req.getIsParallelizable() != null ? req.getIsParallelizable() : true);
+                existing.setSplitAllowed(req.getSplitAllowed() != null ? req.getSplitAllowed() : false);
+                existing.setSplitType(req.getSplitType() != null ? req.getSplitType() : "NONE");
+                existing.setStitchType(req.getStitchType());
+                existing.setSeamType(req.getSeamType());
+                existing.setAttachmentType(req.getAttachmentType());
+                existing.setWipThreshold(req.getWipThreshold() != null ? req.getWipThreshold() : (existing.getWipThreshold() != null ? existing.getWipThreshold() : 20));
                 existing.setNotes(req.getNotes());
                 updatedLines.add(existing);
             } else {
@@ -228,6 +356,15 @@ public class OperationBulletinService {
                         .smv(req.getSmv())
                         .machineType(req.getMachineType())
                         .skillRatingRequired(req.getSkillRatingRequired())
+                        .section(req.getSection() != null ? req.getSection() : "MAIN_ASSEMBLY")
+                        .predecessorIds(req.getPredecessorIds())
+                        .isParallelizable(req.getIsParallelizable() != null ? req.getIsParallelizable() : true)
+                        .splitAllowed(req.getSplitAllowed() != null ? req.getSplitAllowed() : false)
+                        .splitType(req.getSplitType() != null ? req.getSplitType() : "NONE")
+                        .stitchType(req.getStitchType())
+                        .seamType(req.getSeamType())
+                        .attachmentType(req.getAttachmentType())
+                        .wipThreshold(req.getWipThreshold() != null ? req.getWipThreshold() : 20)
                         .notes(req.getNotes())
                         .build();
                 updatedLines.add(newLine);
@@ -256,7 +393,13 @@ public class OperationBulletinService {
         resp.setName(b.getName());
         resp.setDescription(b.getDescription());
         resp.setVersion(b.getVersion());
+        resp.setRevisionNumber(b.getRevisionNumber() != null ? b.getRevisionNumber() : 1);
+        resp.setParentBulletinId(b.getParentBulletin() != null ? b.getParentBulletin().getId() : null);
         resp.setStatus(b.getStatus());
+        resp.setApprovedBy(b.getApprovedBy());
+        resp.setApprovedAt(b.getApprovedAt());
+        resp.setReleasedBy(b.getReleasedBy());
+        resp.setReleasedAt(b.getReleasedAt());
         resp.setEffectiveFrom(b.getEffectiveFrom());
         resp.setEffectiveTo(b.getEffectiveTo());
         resp.setTotalSmv(b.getTotalSmv());
@@ -281,6 +424,15 @@ public class OperationBulletinService {
             lr.setSmv(line.getSmv());
             lr.setMachineType(line.getMachineType());
             lr.setSkillRatingRequired(line.getSkillRatingRequired());
+            lr.setSection(line.getSection());
+            lr.setPredecessorIds(line.getPredecessorIds());
+            lr.setIsParallelizable(line.getIsParallelizable());
+            lr.setSplitAllowed(line.getSplitAllowed());
+            lr.setSplitType(line.getSplitType());
+            lr.setStitchType(line.getStitchType());
+            lr.setSeamType(line.getSeamType());
+            lr.setAttachmentType(line.getAttachmentType());
+            lr.setWipThreshold(line.getWipThreshold() != null ? line.getWipThreshold() : 20);
             lr.setNotes(line.getNotes());
             return lr;
         }).toList());

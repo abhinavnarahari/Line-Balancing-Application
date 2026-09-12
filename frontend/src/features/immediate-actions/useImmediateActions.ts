@@ -15,6 +15,8 @@ export interface ReplacementCandidate {
   matchedOperations: { operationId: number | string; operationCode?: string; operationName: string; rating: number }[];
 }
 
+export type UrgencyTier = "TIER_1_5MIN" | "TIER_5_10MIN" | "TIER_10_15MIN" | "TIER_CRITICAL_15PLUS";
+
 export interface ImmediateActionItem {
   id: string;
   operatorId: number | string;
@@ -27,6 +29,8 @@ export interface ImmediateActionItem {
   shiftStartTime: string;
   shiftEndTime: string;
   elapsedMinutes: number;
+  urgencyTier: UrgencyTier;
+  urgencyColor: string;
   severity: "CRITICAL";
   statusType: "UNMARKED" | "LATE";
   lateMinutes?: number;
@@ -223,6 +227,23 @@ export function useImmediateActions({
 
       replacementCandidates.sort((a, b) => b.rating - a.rating);
 
+      const mins = statusType === "LATE" ? (lateMinutes ?? elapsedMinutes) : elapsedMinutes;
+      let urgencyTier: UrgencyTier = "TIER_CRITICAL_15PLUS";
+      let urgencyColor = "bg-rose-50 text-rose-800 border-rose-200";
+      if (mins <= 5) {
+        urgencyTier = "TIER_1_5MIN";
+        urgencyColor = "bg-emerald-50 text-emerald-800 border-emerald-200";
+      } else if (mins <= 10) {
+        urgencyTier = "TIER_5_10MIN";
+        urgencyColor = "bg-amber-50 text-amber-800 border-amber-200";
+      } else if (mins <= 15) {
+        urgencyTier = "TIER_10_15MIN";
+        urgencyColor = "bg-orange-50 text-orange-900 border-orange-200";
+      } else {
+        urgencyTier = "TIER_CRITICAL_15PLUS";
+        urgencyColor = "bg-rose-50 text-rose-800 border-rose-200";
+      }
+
       actionList.push({
         id: `${op.id}_${shift.id}_${todayStr}`,
         operatorId: op.id,
@@ -235,6 +256,8 @@ export function useImmediateActions({
         shiftStartTime: shift.startTime || "07:00",
         shiftEndTime: shift.endTime || "15:30",
         elapsedMinutes,
+        urgencyTier,
+        urgencyColor,
         severity: "CRITICAL",
         statusType,
         lateMinutes,
@@ -324,10 +347,19 @@ export function useImmediateActions({
   const counts = useMemo(() => {
     const unmarkedCount = items.filter(i => i.statusType === "UNMARKED").length;
     const lateCount = items.filter(i => i.statusType === "LATE").length;
+    const tier1_5min = items.filter(i => i.urgencyTier === "TIER_1_5MIN").length;
+    const tier5_10min = items.filter(i => i.urgencyTier === "TIER_5_10MIN").length;
+    const tier10_15min = items.filter(i => i.urgencyTier === "TIER_10_15MIN").length;
+    const tierCritical15plus = items.filter(i => i.urgencyTier === "TIER_CRITICAL_15PLUS").length;
     return {
+      total: items.length,
       totalCritical: items.length,
       unmarkedCount,
       lateCount,
+      tier1_5min,
+      tier5_10min,
+      tier10_15min,
+      tierCritical15plus,
       unallocatedPresentCount: unallocatedPresentOperators.length,
     };
   }, [items, unallocatedPresentOperators]);

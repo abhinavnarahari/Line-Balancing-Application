@@ -1,22 +1,24 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Search, Edit2, Trash2, X, Cpu, CheckCircle2, AlertCircle } from "lucide-react";
+import { Search, Edit2, Trash2, X, Cpu, CheckCircle2, AlertCircle, Network } from "lucide-react";
 import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { DataCard, SkeletonTable, EmptyState, StatusBadge } from "../../components/ui/PremiumUI";
 import { machinesApi, type Machine } from "../machines/api";
-import type { Operation } from "./api";
+import type { Operation, OperationAffinity } from "./api";
 
 interface OperationListProps {
   operations: Operation[];
+  affinities?: OperationAffinity[];
   onEdit: (op: Operation) => void;
   onToggleActive: (id: string | number) => void;
   onDelete: (id: string | number) => void;
   onViewRating: (op: Operation) => void;
+  onManageAffinities?: (op: Operation) => void;
   loading?: boolean;
 }
 
-export function OperationList({ operations, onEdit, onToggleActive, onDelete, onViewRating, loading }: OperationListProps) {
+export function OperationList({ operations, affinities = [], onEdit, onToggleActive, onDelete, onViewRating, onManageAffinities, loading }: OperationListProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
   const [selectedMachineType, setSelectedMachineType] = useState<string>("all");
@@ -138,8 +140,9 @@ export function OperationList({ operations, onEdit, onToggleActive, onDelete, on
                 <TableHead className="text-slate-500 font-bold whitespace-nowrap">Operation Name & Specification</TableHead>
                 <TableHead className="w-56 text-slate-500 font-bold whitespace-nowrap">Attached Machinery</TableHead>
                 <TableHead className="w-36 text-center text-slate-500 font-bold whitespace-nowrap">Standard SMV</TableHead>
+                <TableHead className="w-40 text-center text-slate-500 font-bold whitespace-nowrap">Skill Affinities</TableHead>
                 <TableHead className="w-28 text-center text-slate-500 font-bold whitespace-nowrap">Status</TableHead>
-                <TableHead className="text-right w-28 text-slate-500 font-bold whitespace-nowrap pr-4">Actions</TableHead>
+                <TableHead className="text-right w-32 text-slate-500 font-bold whitespace-nowrap pr-4">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -240,6 +243,34 @@ export function OperationList({ operations, onEdit, onToggleActive, onDelete, on
                       </div>
                     </TableCell>
 
+                    {/* Skill Affinities */}
+                    <TableCell className="text-center align-middle whitespace-nowrap" onClick={(e) => { e.stopPropagation(); onManageAffinities?.(op); }}>
+                      {(() => {
+                        const opAffinities = affinities.filter(a => String(a.primaryOperationId) === String(op.id));
+                        return opAffinities.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onManageAffinities?.(op); }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-all shadow-2xs cursor-pointer group"
+                            title="View & manage affinitized alternative operations"
+                          >
+                            <Network className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                            <span>{opAffinities.length} Alternatives</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onManageAffinities?.(op); }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-[#9C5B3C] hover:bg-[#F6F1E8] border border-dashed border-slate-200 transition-colors cursor-pointer"
+                            title="Click to define alternative operations this skill can cover"
+                          >
+                            <Network className="w-3 h-3" />
+                            <span>+ Affinitize</span>
+                          </button>
+                        );
+                      })()}
+                    </TableCell>
+
                     {/* Status */}
                     <TableCell className="text-center align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                       <StatusBadge status={op.active ? "active" : "inactive"} />
@@ -253,6 +284,17 @@ export function OperationList({ operations, onEdit, onToggleActive, onDelete, on
                           onChange={() => onToggleActive(op.id)}
                           title={op.active ? "Click to deactivate" : "Click to activate"}
                         />
+
+                        {onManageAffinities && (
+                          <button
+                            type="button"
+                            onClick={() => onManageAffinities(op)}
+                            className="p-1.5 rounded-lg text-[#9C5B3C] hover:text-[#854B30] hover:bg-[#F6F1E8] border border-[#E6DDCE] transition-colors cursor-pointer shadow-2xs"
+                            title="Manage Skill Affinities & Alternative Operations"
+                          >
+                            <Network className="h-3.5 w-3.5" />
+                          </button>
+                        )}
 
                         <button
                           type="button"

@@ -9,10 +9,19 @@ export interface BulletinLine {
   smv: number;
   machineType: string;
   skillRatingRequired: 1 | 2 | 3 | 4 | 5;
+  section?: string;
+  predecessorIds?: string;
+  isParallelizable?: boolean;
+  splitAllowed?: boolean;
+  splitType?: string;
+  stitchType?: string;
+  seamType?: string;
+  attachmentType?: string;
+  wipThreshold?: number;
   notes?: string;
 }
 
-export type BulletinStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
+export type BulletinStatus = "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "RELEASED" | "PUBLISHED" | "ARCHIVED" | "OBSOLETE";
 
 export interface BulletinStyleSummary {
   id: string | number;
@@ -27,7 +36,13 @@ export interface OperationBulletin {
   description?: string;
   styles?: BulletinStyleSummary[];
   version: number;
+  revisionNumber?: number;
+  parentBulletinId?: string | number;
   status: BulletinStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  releasedBy?: string;
+  releasedAt?: string;
   effectiveFrom?: string;
   effectiveTo?: string;
   lines: BulletinLine[];
@@ -41,6 +56,8 @@ export interface CreateBulletinDTO {
   name: string;
   description?: string;
   version?: number;
+  revisionNumber?: number;
+  parentBulletinId?: string | number;
   status?: BulletinStatus;
   effectiveFrom?: string;
   effectiveTo?: string;
@@ -51,6 +68,15 @@ export interface CreateBulletinDTO {
     smv: number;
     machineType?: string;
     skillRatingRequired?: number;
+    section?: string;
+    predecessorIds?: string;
+    isParallelizable?: boolean;
+    splitAllowed?: boolean;
+    splitType?: string;
+    stitchType?: string;
+    seamType?: string;
+    attachmentType?: string;
+    wipThreshold?: number;
     notes?: string;
   }[];
 }
@@ -76,6 +102,10 @@ export const bulletinsApi = {
     return await api.delete(`/operation-bulletins/${id}`);
   },
 
+  createRevision: async (id: string | number): Promise<OperationBulletin> => {
+    return await api.post(`/operation-bulletins/${id}/revisions`, {});
+  },
+
   cloneBulletin: async (id: string | number, newCode?: string, newName?: string): Promise<OperationBulletin> => {
     const params = new URLSearchParams();
     if (newCode) params.append("newCode", newCode);
@@ -84,7 +114,10 @@ export const bulletinsApi = {
     return await api.post(`/operation-bulletins/${id}/clone${queryString}`, {});
   },
 
-  updateStatus: async (id: string | number, status: BulletinStatus): Promise<OperationBulletin> => {
-    return await api.patch(`/operation-bulletins/${id}/status?status=${status}`, {});
+  updateStatus: async (id: string | number, status: BulletinStatus, user?: string): Promise<OperationBulletin> => {
+    const params = new URLSearchParams();
+    params.append("status", status);
+    if (user) params.append("user", user);
+    return await api.patch(`/operation-bulletins/${id}/status?${params.toString()}`, {});
   }
 };

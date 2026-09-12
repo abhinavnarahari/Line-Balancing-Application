@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard,
   Users,
   Settings,
   Activity,
@@ -14,6 +13,10 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Gauge,
+  Factory,
+  Layers,
+  Calculator,
+  Cpu,
 } from "lucide-react";
 import { cn } from "../../utils/cn";
 import { motion, AnimatePresence } from "framer-motion";
@@ -31,33 +34,36 @@ type NavGroup = {
 
 const navigation: NavGroup[] = [
   {
-    group: "",
+    group: "Dashboards",
     items: [
-      { name: "Dashboard", href: "/", icon: LayoutDashboard },
+      { name: "Plant Executive", href: "/plant-dashboard", icon: Factory },
+      { name: "Line Operations", href: "/line-dashboard", icon: Layers },
     ],
   },
   {
-    group: "Workforce",
+    group: "Engineering & Planning",
     items: [
-      { name: "Shift Assignment", href: "/shift-assignment", icon: UserCheck },
-      { name: "Daily Attendance", href: "/attendance", icon: CalendarCheck },
-      { name: "Sewing Skill Matrix", href: "/skill-matrix", icon: Star },
-    ],
-  },
-  {
-    group: "Production",
-    items: [
-      { name: "Orders", href: "/orders", icon: ShoppingBag },
       { name: "Operation Bulletins", href: "/operation-bulletins", icon: ClipboardList },
+      { name: "Capacity Planning", href: "/capacity-planning", icon: Calculator },
+      { name: "Line Architecture", href: "/line-design", icon: Cpu },
     ],
   },
   {
-    group: "Line Balancing",
+    group: "Line Balancing & Floor",
     items: [
-      { name: "Planned Lines", href: "/line-balance", icon: Activity },
+      { name: "Planned Balancing", href: "/line-balance", icon: Activity },
       { name: "Fixed Shift Target", href: "/fixed-shift-target", icon: Gauge },
       { name: "Operator Placement", href: "/operator-placement", icon: Users },
-      { name: "Production Monitoring", href: "/monitoring", icon: TrendingUp },
+      { name: "Live Monitoring", href: "/monitoring", icon: TrendingUp },
+    ],
+  },
+  {
+    group: "Workforce & Orders",
+    items: [
+      { name: "Production Orders", href: "/orders", icon: ShoppingBag },
+      { name: "Daily Attendance", href: "/attendance", icon: CalendarCheck },
+      { name: "Shift Assignment", href: "/shift-assignment", icon: UserCheck },
+      { name: "Sewing Skill Matrix", href: "/skill-matrix", icon: Star },
     ],
   },
 ];

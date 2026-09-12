@@ -50,6 +50,12 @@ app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173}
 
+# Optional External LLM Integration (Zero configuration required by default)
+llm:
+  api-key: ${LLM_API_KEY:YOUR_LLM_API_KEY}
+  base-url: ${LLM_BASE_URL:https://generativelanguage.googleapis.com/v1beta/openai/}
+  model: ${LLM_MODEL:gemini-3.8-flash}
+
 logging:
   level:
     com.qtech.linebalancing: ${LOGGING_LEVEL_APP:INFO}

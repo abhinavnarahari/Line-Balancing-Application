@@ -45,8 +45,15 @@ public class OperationBulletinController {
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<BulletinResponse>> updateStatus(
             @PathVariable Long id,
-            @RequestParam OperationBulletin.Status status) {
-        return ResponseEntity.ok(ApiResponse.success("Bulletin status updated", bulletinService.updateStatus(id, status)));
+            @RequestParam OperationBulletin.Status status,
+            @RequestParam(required = false) String user) {
+        return ResponseEntity.ok(ApiResponse.success("Bulletin status updated", bulletinService.updateStatus(id, status, user)));
+    }
+
+    @PostMapping("/{id}/revisions")
+    public ResponseEntity<ApiResponse<BulletinResponse>> createRevision(@PathVariable Long id) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("New bulletin revision created", bulletinService.createRevision(id)));
     }
 
     @DeleteMapping("/{id}")

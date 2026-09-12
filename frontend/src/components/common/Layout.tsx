@@ -1,17 +1,23 @@
+import { useState, useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
+import { Sparkles } from "lucide-react";
 import { Sidebar } from "./Sidebar";
 import { NotificationBell } from "./NotificationBell";
 import { TodayImmediateActionsNavButton } from "../../features/immediate-actions/TodayImmediateActionsNavButton";
-import { motion, AnimatePresence } from "framer-motion";
+import { ChatbotDrawer, ChatbotFloatingButton } from "../../features/chatbot";
 
 const routeLabels: Record<string, string> = {
-  "/":                   "Factory Dashboard",
+  "/":                   "Factory Executive Cockpit",
+  "/plant-dashboard":    "Plant Management Dashboard",
+  "/line-dashboard":     "Line Operations Dashboard",
   "/shift-assignment":   "Shift Assignment",
   "/attendance":         "Daily Attendance",
   "/immediate-actions":  "Today's Immediate Actions",
   "/skill-matrix":       "Sewing Skill Matrix",
   "/orders":             "Production Orders",
   "/operation-bulletins":"Operation Bulletins",
+  "/capacity-planning":  "Capacity Planning & Takt Engine",
+  "/line-design":        "Line Design & Workstation Architecture",
   "/line-balance":       "Planned Lines & Balancing",
   "/operator-placement": "Operator Placement",
   "/monitoring":         "Production Monitoring",
@@ -30,6 +36,25 @@ const routeLabels: Record<string, string> = {
 export function Layout() {
   const location = useLocation();
   const pageLabel = routeLabels[location.pathname] || "Line Balancing Suite";
+  const [isChatOpen, setIsChatOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+        e.preventDefault();
+        setIsChatOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Dynamic context extracted from active route
+  const chatContext = {
+    page: pageLabel,
+    activeLineCode: location.pathname.includes("line") ? "Line 01" : undefined,
+    activeStyleCode: location.pathname.includes("bulletin") || location.pathname.includes("balance") ? "DENIM-001" : undefined,
+  };
 
   return (
     <div className="flex h-screen w-full bg-[#F6F1E8] overflow-hidden text-[#221912] relative font-sans">
@@ -40,21 +65,24 @@ export function Layout() {
         <header className="h-16 shrink-0 border-b border-[#E6DDCE] bg-white/95 backdrop-blur-md flex items-center justify-between px-7 z-40 sticky top-0 shadow-[0_1px_2px_rgba(34,25,18,0.03)]">
           <div className="flex items-center gap-3.5">
             <span className="h-3 w-3 rounded-full bg-[#9C5B3C] shadow-sm shadow-[#9C5B3C]/50" />
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={pageLabel}
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.15 }}
-                className="text-sm font-extrabold tracking-wider text-[#221912] uppercase"
-              >
-                {pageLabel}
-              </motion.span>
-            </AnimatePresence>
+            <span className="text-sm font-extrabold tracking-wider text-[#221912] uppercase">
+              {pageLabel}
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* SewNexa AI Header Button */}
+            <button
+              onClick={() => setIsChatOpen((prev) => !prev)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#FAF7F2] hover:bg-[#F3EFE9] border border-[#E8E2D9] hover:border-[#9C5B3C] rounded-full text-xs font-bold text-[#9C5B3C] transition-all shadow-2xs cursor-pointer group"
+              title="Open SewNexa AI"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-[#9C5B3C] group-hover:rotate-12 transition-transform" />
+              <span>SewNexa AI</span>
+            </button>
+
+            <div className="h-5 w-px bg-[#E6DDCE]" />
+
             {/* Today's Immediate Actions Floor Governance Button */}
             <TodayImmediateActionsNavButton />
 
@@ -82,20 +110,21 @@ export function Layout() {
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto relative bg-[#F6F1E8] custom-scrollbar">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              className="relative z-10 min-h-full"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          <div className="relative z-10 min-h-full">
+            <Outlet />
+          </div>
         </main>
       </div>
+
+      {/* Floating Action Trigger Button */}
+      <ChatbotFloatingButton onClick={() => setIsChatOpen(true)} isOpen={isChatOpen} />
+
+      {/* Slide-over Grounded Manufacturing AI Chatbot Drawer */}
+      <ChatbotDrawer
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        context={chatContext}
+      />
     </div>
   );
 }

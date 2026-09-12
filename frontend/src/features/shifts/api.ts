@@ -1,5 +1,6 @@
 import { api } from "../../lib/api";
 import type { Shift, CreateShiftDTO, UpdateShiftDTO } from "./types";
+export type { Shift, CreateShiftDTO, UpdateShiftDTO } from "./types";
 
 export const shiftsApi = {
   getShifts: async (active?: boolean): Promise<Shift[]> => {

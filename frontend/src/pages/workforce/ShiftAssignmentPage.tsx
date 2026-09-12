@@ -58,7 +58,7 @@ export function ShiftAssignmentPage() {
     }
   };
 
-  const handleEndAssignment = async (id: string, date: string) => {
+  const handleEndAssignment = async (id: string | number, date: string) => {
     try {
       await shiftAssignmentApi.endAssignment(id, date);
       loadData();

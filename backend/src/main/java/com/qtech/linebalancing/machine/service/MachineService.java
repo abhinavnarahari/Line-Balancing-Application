@@ -62,6 +62,7 @@ public class MachineService {
                 .serialNo(request.getSerialNo())
                 .line(line)
                 .status(request.getStatus() != null ? request.getStatus() : MachineStatus.AVAILABLE)
+                .quantity(request.getQuantity() != null && request.getQuantity() > 0 ? request.getQuantity() : 1)
                 .active(request.getActive() == null || request.getActive())
                 .build();
 
@@ -88,6 +89,9 @@ public class MachineService {
         machine.setModel(request.getModel());
         machine.setSerialNo(request.getSerialNo());
         machine.setLine(line);
+        if (request.getQuantity() != null && request.getQuantity() > 0) {
+            machine.setQuantity(request.getQuantity());
+        }
         if (request.getStatus() != null) {
             machine.setStatus(request.getStatus());
         }

@@ -15,7 +15,13 @@ public class BulletinResponse {
     private String name;
     private String description;
     private Integer version;
+    private Integer revisionNumber;
+    private Long parentBulletinId;
     private OperationBulletin.Status status;
+    private String approvedBy;
+    private LocalDateTime approvedAt;
+    private String releasedBy;
+    private LocalDateTime releasedAt;
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;
     private BigDecimal totalSmv;
@@ -41,6 +47,15 @@ public class BulletinResponse {
         private BigDecimal smv;
         private String machineType;
         private Integer skillRatingRequired;
+        private String section;
+        private String predecessorIds;
+        private Boolean isParallelizable;
+        private Boolean splitAllowed;
+        private String splitType;
+        private String stitchType;
+        private String seamType;
+        private String attachmentType;
+        private Integer wipThreshold;
         private String notes;
     }
 }

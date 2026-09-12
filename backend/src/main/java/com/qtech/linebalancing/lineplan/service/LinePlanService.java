@@ -76,6 +76,9 @@ public class LinePlanService {
         if (request.getAllowancePfd() != null && !request.getAllowancePfd().isBlank()) {
             plan.setAllowancePfd(request.getAllowancePfd());
         }
+        if (request.getPlannedEfficiency() != null && request.getPlannedEfficiency() > 0) {
+            plan.setPlannedEfficiency(request.getPlannedEfficiency());
+        }
         plan.setTargetOutput(request.getTargetOutput() != null && request.getTargetOutput() > 0 
                 ? request.getTargetOutput() 
                 : (order.getTotalQuantity() != null && order.getTotalQuantity() > 0 ? order.getTotalQuantity() : 480));
@@ -136,6 +139,7 @@ public class LinePlanService {
         response.setTargetOutput(plan.getTargetOutput());
         response.setAllowance(plan.getAllowance());
         response.setAllowancePfd(plan.getAllowancePfd());
+        response.setPlannedEfficiency(plan.getPlannedEfficiency());
         response.setStatus(plan.getStatus());
         
         List<LinePlanResponse.LinePlanAssignmentResponse> assignResps = plan.getAssignments().stream()

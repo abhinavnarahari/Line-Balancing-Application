@@ -7,20 +7,28 @@ import { Button } from "../../components/ui/Button";
 import { OperationList } from "../../features/operations/OperationList";
 import { OperationForm } from "../../features/operations/OperationForm";
 import { OperationRatingModal } from "../../features/operations/OperationRatingModal";
-import { operationsApi, type Operation } from "../../features/operations/api";
+import { OperationAffinityModal } from "../../features/operations/OperationAffinityModal";
+import { operationsApi, type Operation, type OperationAffinity } from "../../features/operations/api";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
 
 export function OperationsPage() {
   const [operations, setOperations] = useState<Operation[]>([]);
+  const [affinities, setAffinities] = useState<OperationAffinity[]>([]);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingOperation, setEditingOperation] = useState<Operation | null>(null);
   const [selectedOperationForRating, setSelectedOperationForRating] = useState<Operation | null>(null);
+  const [selectedOpForAffinity, setSelectedOpForAffinity] = useState<Operation | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadOperations = async () => {
     setLoading(true);
     try {
-      setOperations(await operationsApi.getOperations());
+      const [ops, affs] = await Promise.all([
+        operationsApi.getOperations(),
+        operationsApi.getAllAffinities().catch(() => [])
+      ]);
+      setOperations(ops);
+      setAffinities(affs);
     } finally {
       setLoading(false);
     }
@@ -221,13 +229,24 @@ export function OperationsPage() {
         onOperationUpdated={loadOperations}
       />
 
+      {/* ── Operation Affinity Modal ───────────────────────────────── */}
+      <OperationAffinityModal
+        isOpen={Boolean(selectedOpForAffinity)}
+        onClose={() => setSelectedOpForAffinity(null)}
+        operation={selectedOpForAffinity}
+        allOperations={operations}
+        onUpdated={loadOperations}
+      />
+
       {/* ── Data Grid ─────────────────────────────────────────────── */}
       <OperationList
         operations={operations}
+        affinities={affinities}
         onEdit={handleEdit}
         onToggleActive={handleToggleActive}
         onDelete={handleDelete}
         onViewRating={(op) => setSelectedOperationForRating(op)}
+        onManageAffinities={(op) => setSelectedOpForAffinity(op)}
         loading={loading}
       />
     

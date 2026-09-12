@@ -18,5 +18,6 @@ public class MachineRequest {
     private String serialNo;
     private Long lineId;
     private MachineStatus status;
+    private Integer quantity;
     private Boolean active;
 }

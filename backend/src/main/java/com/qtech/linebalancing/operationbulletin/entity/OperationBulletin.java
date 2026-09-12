@@ -34,10 +34,30 @@ public class OperationBulletin extends AuditableEntity {
     @Builder.Default
     private Integer version = 1;
 
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 30)
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private Status status = Status.DRAFT;
+
+    @Column(name = "revision_number", nullable = false)
+    @Builder.Default
+    private Integer revisionNumber = 1;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_bulletin_id")
+    private OperationBulletin parentBulletin;
+
+    @Column(name = "approved_by", length = 100)
+    private String approvedBy;
+
+    @Column(name = "approved_at")
+    private java.time.LocalDateTime approvedAt;
+
+    @Column(name = "released_by", length = 100)
+    private String releasedBy;
+
+    @Column(name = "released_at")
+    private java.time.LocalDateTime releasedAt;
 
     @Column(name = "effective_from")
     private LocalDate effectiveFrom;
@@ -69,6 +89,6 @@ public class OperationBulletin extends AuditableEntity {
     private List<BulletinLine> lines = new ArrayList<>();
 
     public enum Status {
-        DRAFT, PUBLISHED, ARCHIVED
+        DRAFT, UNDER_REVIEW, APPROVED, RELEASED, PUBLISHED, ARCHIVED, OBSOLETE
     }
 }

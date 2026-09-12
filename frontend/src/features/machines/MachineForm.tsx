@@ -50,6 +50,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
     model: initialData?.model || "",
     serialNo: initialData?.serialNo || `SN-${currentYear}-${String(Math.floor(1000 + Math.random() * 9000))}`,
     lineId: initialData?.lineId ? String(initialData.lineId) : "",
+    quantity: initialData?.quantity || 1,
     status: (initialData?.status || "AVAILABLE") as MachineStatus,
     active: initialData?.active ?? true,
   });
@@ -63,6 +64,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
         model: initialData.model || "",
         serialNo: initialData.serialNo || "",
         lineId: initialData.lineId ? String(initialData.lineId) : "",
+        quantity: initialData.quantity || 1,
         status: initialData.status || "AVAILABLE",
         active: initialData.active,
       });
@@ -75,7 +77,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: name === "quantity" ? Math.max(1, parseInt(value, 10) || 1) : value,
     }));
   };
 
@@ -83,6 +85,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
     e.preventDefault();
     onSubmit({
       ...formData,
+      quantity: Number(formData.quantity) || 1,
       lineId: formData.lineId ? Number(formData.lineId) : null,
     });
   };
@@ -145,6 +148,20 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
           value={formData.serialNo}
           onChange={handleChange}
           placeholder="e.g. SN-JK-2024-998"
+        />
+
+        <Input
+          label="Quantity (Units)"
+          id="quantity"
+          name="quantity"
+          type="number"
+          min="1"
+          step="1"
+          value={formData.quantity}
+          onChange={handleChange}
+          placeholder="1"
+          required
+          hint="Number of units in this asset record"
         />
 
         <div className="flex flex-col space-y-2">

@@ -28,7 +28,7 @@ export const linesApi = {
 
   getNextLineCode: async (): Promise<string> => {
     try {
-      const res = await api.get<any>("/lines/next-code");
+      const res: any = await api.get("/lines/next-code");
       if (typeof res === "string") return res;
       return res?.data || res?.message || "LINE-01";
     } catch {

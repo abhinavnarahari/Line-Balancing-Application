@@ -75,6 +75,18 @@
   letter-spacing: 0.01em;
 }
 
+/* ─── Hide Number Input Spin Buttons (Up/Down Arrows) ───────────────── */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* ─── Custom Scrollbar ──────────────────────────────────────────────── */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
@@ -125,4 +137,65 @@
 @keyframes shimmer {
   from { background-position: -400px 0; }
   to   { background-position: 400px 0; }
+}
+
+/* ─── Workstation Conveyor Line Animations ──────────────────────────── */
+@keyframes conveyorTrack {
+  0% { background-position: 0 0; }
+  100% { background-position: 24px 0; }
+}
+
+.conveyor-belt-animated {
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(156, 91, 60, 0.35) 0,
+    rgba(156, 91, 60, 0.35) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+  background-size: 24px 100%;
+  animation: conveyorTrack 0.8s linear infinite;
+}
+
+@keyframes pulseBottleneckGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.4), 0 2px 8px rgba(225, 29, 72, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(225, 29, 72, 0.0), 0 4px 16px rgba(225, 29, 72, 0.25);
+  }
+}
+
+.bottleneck-station-pulse {
+  animation: pulseBottleneckGlow 2s ease-in-out infinite;
+}
+
+@keyframes garmentTokenTravel {
+  0% {
+    transform: translateX(-8px) scale(0.9);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translateX(0px) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(8px) scale(0.9);
+    opacity: 0.3;
+  }
+}
+
+.garment-token-flow {
+  animation: garmentTokenTravel 1.2s ease-in-out infinite;
+}
+
+@keyframes flowDash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.conveyor-svg-flow {
+  stroke-dasharray: 6, 6;
+  animation: flowDash 0.8s linear infinite;
 }

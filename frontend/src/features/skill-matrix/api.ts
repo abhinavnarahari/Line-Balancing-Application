@@ -3,7 +3,11 @@ import { api } from "../../lib/api";
 export interface SkillAssessment {
   id: string | number;
   operatorId: string | number;
+  operatorName?: string;
+  employeeId?: string;
   operationId: string | number;
+  operationName?: string;
+  operationCode?: string;
   rating: 1 | 2 | 3 | 4 | 5;
   cycleTimeSeconds: number;
   revision: number;

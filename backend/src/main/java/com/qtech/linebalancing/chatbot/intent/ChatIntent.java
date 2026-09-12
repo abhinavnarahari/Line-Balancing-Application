@@ -1,0 +1,71 @@
+package com.qtech.linebalancing.chatbot.intent;
+
+public enum ChatIntent {
+    // Style intents
+    GET_STYLE_DETAILS,
+    GET_STYLE_OPERATIONS,
+    GET_STYLE_TOTAL_SMV,
+
+    // Order intents
+    GET_ORDER_DETAILS,
+    GET_ORDER_QUANTITY,
+    GET_ORDER_PROGRESS,
+    GET_ORDER_DELIVERY_STATUS,
+
+    // Operation & Bulletin intents
+    GET_OB_DETAILS,
+    GET_OPERATION_DETAILS,
+    GET_OPERATION_SMV,
+    GET_OPERATION_MACHINE,
+    GET_OPERATION_PREDECESSORS,
+
+    // Line & Machine Master intents
+    GET_LINE_DETAILS,
+    GET_LINE_MANPOWER,
+    GET_LINE_MACHINES,
+    GET_MACHINE_INVENTORY,
+
+    // Capacity & Takt intents
+    GET_CAPACITY_PLAN,
+    GET_TAKT_TIME,
+    GET_DESIGNED_PITCH,
+    GET_PLANNED_MANPOWER,
+    GET_REQUIRED_CAPACITY,
+
+    // Line Balancing & Bottleneck intents
+    GET_LINE_BALANCE,
+    GET_STATION_LOAD,
+    GET_LINE_BALANCE_EFFICIENCY,
+    GET_BOTTLENECK_STATION,
+    GET_OPERATOR_ASSIGNMENT,
+
+    // Operator & Skill intents
+    GET_OPERATOR_DETAILS,
+    GET_OPERATOR_SKILL,
+    GET_OPERATOR_ATTENDANCE,
+
+    // Production & Monitoring intents
+    GET_TODAY_PRODUCTION,
+    GET_HOURLY_PRODUCTION,
+    GET_ACTUAL_EFFICIENCY,
+    GET_REJECT_QUANTITY,
+
+    // Analytical & Comparison & Optimization intents
+    COMPARE_LINES,
+    COMPARE_TARGET_VS_ACTUAL,
+    EXPLAIN_PRODUCTION_GAP,
+    IDENTIFY_BOTTLENECKS,
+    OPTIMIZATION_RECOMMENDATIONS,
+    EXPLAIN_IE_FORMULA,
+
+    // Shift & General Settings
+    GET_SHIFT_DETAILS,
+    GET_OPERATION_ATTRIBUTES,
+
+    // Clarification & Safety Guardrails
+    AMBIGUOUS_EFFICIENCY,
+    AMBIGUOUS_OPERATION,
+    READ_ONLY_GUARDRAIL,
+    OUT_OF_SCOPE,
+    GENERAL_HELP
+}

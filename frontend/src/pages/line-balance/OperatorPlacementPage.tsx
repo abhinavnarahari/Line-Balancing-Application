@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Users, User } from "lucide-react";
-import { operationsApi, type Operation } from "../../features/operations/api";
+import { Users, User, Network } from "lucide-react";
+import { operationsApi, type Operation, type OperationAffinity } from "../../features/operations/api";
 import { operatorsApi, type Operator } from "../../features/operators/api";
 import { ordersApi, type Order } from "../../features/orders/api";
 import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/api";
 import { linePlanApi, type LinePlan } from "../../features/line-balance/api";
+import { skillApi, type SkillAssessment } from "../../features/skill-matrix/api";
 import { PageHeader, DataCard, EmptyState } from "../../components/ui/PremiumUI";
 
 export function OperatorPlacementPage() {
@@ -13,25 +14,31 @@ export function OperatorPlacementPage() {
   const [operations, setOperations] = useState<Operation[]>([]);
   const [operators, setOperators] = useState<Operator[]>([]);
   const [bulletins, setBulletins] = useState<OperationBulletin[]>([]);
+  const [skills, setSkills] = useState<SkillAssessment[]>([]);
+  const [affinities, setAffinities] = useState<OperationAffinity[]>([]);
   
   const [loading, setLoading] = useState(true);
-  const [selectedOrderId, setSelectedOrderId] = useState<string>("");
+  const [selectedOrderId, setSelectedOrderId] = useState<string>("" );
   const [linePlan, setLinePlan] = useState<LinePlan | null>(null);
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [ops, oprs, ords, bulls] = await Promise.all([
+        const [ops, oprs, ords, bulls, sks, affs] = await Promise.all([
           operationsApi.getOperations(),
           operatorsApi.getOperators(),
           ordersApi.getOrders(),
           bulletinsApi.getBulletins(),
+          skillApi.getCurrentMatrix().catch(() => []),
+          operationsApi.getAllAffinities().catch(() => []),
         ]);
         setOperations(ops);
         setOperators(oprs.filter(o => o.active));
         setOrders(ords);
         setBulletins(bulls);
+        setSkills(sks || []);
+        setAffinities(affs || []);
         
         if (ords.length > 0) {
           setSelectedOrderId(String(ords[0].id));
@@ -64,28 +71,71 @@ export function OperatorPlacementPage() {
   const selectedOrder = useMemo(() => orders.find(o => String(o.id) === String(selectedOrderId)), [orders, selectedOrderId]);
   const selectedBulletin = useMemo(() => {
     if (!selectedOrder) return null;
-    return bulletins.find(b => (b.styles || []).some(s => String(s.id) === String(selectedOrder.styleId))) || null;
-  }, [bulletins, selectedOrder]);
+    const byStyle = bulletins.find(b => (b.styles || []).some(s => String(s.id) === String(selectedOrder.styleId)));
+    if (byStyle) return byStyle;
+    const byStyleNo = bulletins.find(b => (b.styles || []).some(s => s.styleNo?.toLowerCase() === selectedOrder.styleNo?.toLowerCase()));
+    if (byStyleNo) return byStyleNo;
+    if (linePlan?.assignments) {
+      for (const a of linePlan.assignments) {
+        if (a.bulletinLineId) {
+          const match = bulletins.find(b => (b.lines || []).some(l => String(l.id) === String(a.bulletinLineId)));
+          if (match) return match;
+        }
+      }
+    }
+    return null;
+  }, [bulletins, selectedOrder, linePlan]);
 
   const placementData = useMemo(() => {
-    if (!linePlan || !selectedBulletin) return [];
+    if (!linePlan || !linePlan.assignments) return [];
 
-    return linePlan.assignments.map((assignment) => {
-      const line = selectedBulletin.lines.find(l => String(l.id) === String(assignment.bulletinLineId));
+    return linePlan.assignments.map((assignment, idx) => {
+      const line = selectedBulletin?.lines?.find(l => String(l.id) === String(assignment.bulletinLineId))
+        || selectedBulletin?.lines?.find(l => String(l.operationId) === String(assignment.operationId));
       const op = operations.find(o => String(o.id) === String(assignment.operationId));
-      const operator = assignment.operatorId ? operators.find(o => String(o.id) === String(assignment.operatorId)) : null;
+      const operator = operators.find(o => String(o.id) === String(assignment.operatorId));
+
+      // Check direct vs affinity skill coverage
+      let affinityCoverage: { sourceOpName: string; transferPct: number } | null = null;
+      let directRating: number | null = null;
+      if (assignment.operatorId) {
+        const direct = skills.find(s => String(s.operatorId) === String(assignment.operatorId) && String(s.operationId) === String(assignment.operationId));
+        if (direct) {
+          directRating = direct.rating;
+        } else {
+          const opAffs = affinities.filter(a =>
+            String(a.primaryOperationId) === String(assignment.operationId) ||
+            (op && a.primaryOperationCode === op.operationCode)
+          );
+          for (const aff of opAffs) {
+            const alt = skills.find(s =>
+              String(s.operatorId) === String(assignment.operatorId) &&
+              (String(s.operationId) === String(aff.alternativeOperationId) || (s as any).operationCode === aff.alternativeOperationCode)
+            );
+            if (alt) {
+              affinityCoverage = {
+                sourceOpName: aff.alternativeOperationName || "Alt Skill",
+                transferPct: Number(aff.efficiencyTransferPct) || 85,
+              };
+              break;
+            }
+          }
+        }
+      }
 
       return {
-        sequence: line?.sequence ?? 0,
-        machineType: line?.machineType ?? "Unknown",
-        operationName: op?.name ?? "Unknown Operation",
-        operationCode: op?.operationCode ?? "N/A",
+        sequence: line?.sequence ?? op?.sequence ?? (idx + 1),
+        machineType: line?.machineType ?? op?.machineType ?? "Single Needle Lockstitch",
+        operationName: line?.operationName ?? op?.name ?? "Operation",
+        operationCode: line?.operationCode ?? op?.operationCode ?? "OP",
         operatorName: operator?.name ?? "Unassigned",
         operatorId: operator?.employeeId ?? null,
-        isAssigned: !!operator
+        isAssigned: !!operator,
+        directRating,
+        affinityCoverage,
       };
     }).sort((a, b) => a.sequence - b.sequence);
-  }, [linePlan, selectedBulletin, operations, operators]);
+  }, [linePlan, selectedBulletin, operations, operators, skills, affinities]);
 
   if (loading) {
     return (
@@ -170,11 +220,25 @@ export function OperatorPlacementPage() {
                       <div className="w-8 h-8 rounded-xl bg-[#F6F1E8] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C]">
                         <User className="h-4 w-4" />
                       </div>
-                      <div>
-                        <p className="text-xs font-bold text-[#221912]">{station.operatorName}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-[#221912] truncate">{station.operatorName}</p>
+                          {station.directRating && (
+                            <span className="text-[10px] font-bold text-emerald-700 font-mono">
+                              ★{station.directRating}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[10px] font-mono text-[#8C7E6E]">{station.operatorId || '—'}</p>
                       </div>
                     </div>
+
+                    {station.affinityCoverage && (
+                      <div className="mt-2.5 flex items-center gap-1.5 text-[9.5px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-lg">
+                        <Network className="w-3 h-3 text-indigo-600 shrink-0" />
+                        <span className="truncate">Covering via {station.affinityCoverage.sourceOpName} ({station.affinityCoverage.transferPct}% Eff)</span>
+                      </div>
+                    )}
                   </motion.div>
                 ))}
               </div>

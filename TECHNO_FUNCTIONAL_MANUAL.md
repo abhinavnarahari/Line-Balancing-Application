@@ -47,12 +47,11 @@ SewNexa implements globally recognized apparel manufacturing Industrial Engineer
 
 | Standard / Metric | Formula / Standard Definition | Operational Role & Significance |
 | :--- | :--- | :--- |
-| **Standard Minute Value (SMV)** | $\text{SMV} = \text{Basic Time} \times (1 + \text{PFD Allowance } \%)$ | The standard work content required for a qualified operator at 100% rating to complete a specific sewing operation. |
-| **Basic Pitch Time (BPT)** | $\text{BPT} = \frac{\text{Total Garment SMV} \times 60}{\text{Total Allocated Operators}}$ | The theoretical average cycle time per workstation under perfect work distribution. |
-| **Takt Time (Delivery Paced)** | $\text{Takt Time} = \frac{\text{Net Available Production Seconds}}{\text{Remaining Order Units}}$ | The maximum allowable cycle time per workstation required to meet the customer's delivery deadline or internal planned completion date. |
-| **Takt Time (Shift Paced)** | $\text{Takt Time} = \frac{\text{Shift Operating Seconds (e.g. 28,800s)}}{\text{Fixed Shift Target Pieces}}$ | The workstation cycle pace required to satisfy the daily shift production quota (e.g., 600 pcs/shift = 48.0s Takt). |
-| **Line Balance Efficiency (LBE)** | $\text{LBE} \% = \frac{\sum \text{SMV}}{\text{Bottleneck Cycle Time} \times \text{Total Operators}} \times 100$ | Measures line synchronization. Higher efficiency (>85%) minimizes idle waiting time and WIP pile-ups. |
-| **PFD Allowance** | Personal (5%) + Fatigue (4%) + Delay (1%) = **10%** | Standard relaxation allowances added to observed sewing times. |
+| **Standard Minute Value (SMV)** | SMV = Basic Work Content Minutes | The standard work content required for a qualified operator at 100% rating to complete a specific sewing operation. |
+| **Basic Pitch Time (BPT)** | BPT = (Total Garment SMV * 60) / Total Allocated Operators | The theoretical average cycle time per workstation under perfect work distribution. |
+| **Customer Takt Time (Ttakt)** | Ttakt = Net Shift Operating Seconds / Target Shift Output | The maximum cycle pace per workstation required to satisfy the shift production quota. |
+| **Designed Pitch Time (Tpitch)** | Tpitch = Customer Takt * (Planned Efficiency / 100) | Feasibility-adjusted target cycle time based on planned factory efficiency. |
+| **Line Balance Efficiency (LBE)** | LBE % = (Total Garment SMV Seconds / (Bottleneck Cycle Time * Total Operators)) * 100 | Measures line synchronization. Higher efficiency minimizes idle waiting time and WIP pile-ups. |
 
 ---
 

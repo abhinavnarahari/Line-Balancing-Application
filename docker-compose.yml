@@ -7,15 +7,15 @@ services:
     container_name: qtech-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: qtech_linebalancing
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: ${POSTGRES_DB:-qtech_linebalancing}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d qtech_linebalancing"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-qtech_linebalancing}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -33,15 +33,19 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      PORT: 8085
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/qtech_linebalancing
-      SPRING_DATASOURCE_USERNAME: postgres
-      SPRING_DATASOURCE_PASSWORD: password123
-      SPRING_FLYWAY_ENABLED: "true"
-      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
-      CORS_ALLOWED_ORIGINS: "*"
+      PORT: ${PORT:-8085}
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/qtech_linebalancing}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-password123}
+      SPRING_FLYWAY_ENABLED: ${SPRING_FLYWAY_ENABLED:-true}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: ${SPRING_FLYWAY_BASELINE_ON_MIGRATE:-true}
+      SPRING_FLYWAY_OUT_OF_ORDER: ${SPRING_FLYWAY_OUT_OF_ORDER:-true}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-*}
+      LLM_API_KEY: ${LLM_API_KEY:-YOUR_LLM_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/}
+      LLM_MODEL: ${LLM_MODEL:-gemini-3.8-flash}
     ports:
-      - "8085:8085"
+      - "${PORT:-8085}:8085"
 
   # ============================================================================
   # React TypeScript Frontend (Nginx)
@@ -57,8 +61,8 @@ services:
     depends_on:
       - backend
     ports:
-      - "80:80"
-      - "3000:80"
+      - "${FRONTEND_PORT:-80}:80"
+      - "${FRONTEND_ALT_PORT:-3000}:80"
 
 volumes:
   postgres_data:

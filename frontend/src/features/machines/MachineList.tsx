@@ -73,12 +73,12 @@ export function MachineList({ machines, lines, loading, onEdit, onToggleActive }
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-slate-900">Machine Inventory & Equipment</h3>
-            <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-700 border border-blue-200">
-              {filtered.length}
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-700 border border-blue-200">
+              {filtered.length} Assets • {filtered.reduce((acc, m) => acc + (m.quantity || 1), 0)} Total Units
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Sewing machines, special equipment, and floor assignments
+            Sewing machines, special equipment, quantity lots, and floor assignments
           </p>
         </div>
 
@@ -135,7 +135,7 @@ export function MachineList({ machines, lines, loading, onEdit, onToggleActive }
 
       {/* Table */}
       {loading ? (
-        <SkeletonTable rows={6} cols={7} />
+        <SkeletonTable rows={6} cols={8} />
       ) : filtered.length === 0 ? (
         <EmptyState title="No machines found" description="Register sewing machines to track line constraints and floor capacity." />
       ) : (
@@ -143,9 +143,10 @@ export function MachineList({ machines, lines, loading, onEdit, onToggleActive }
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/80 border-b border-slate-200">
-                <TableHead className="w-32 text-slate-500 font-bold whitespace-nowrap">Asset Code</TableHead>
+                <TableHead className="w-28 text-slate-500 font-bold whitespace-nowrap">Asset Code</TableHead>
                 <TableHead className="text-slate-500 font-bold whitespace-nowrap">Machine Type</TableHead>
                 <TableHead className="text-slate-500 font-bold whitespace-nowrap">Brand & Model</TableHead>
+                <TableHead className="w-24 text-center text-slate-500 font-bold whitespace-nowrap">Quantity</TableHead>
                 <TableHead className="text-slate-500 font-bold whitespace-nowrap">Assigned Line</TableHead>
                 <TableHead className="w-32 text-center text-slate-500 font-bold whitespace-nowrap">Status</TableHead>
                 <TableHead className="w-24 text-center text-slate-500 font-bold whitespace-nowrap">Active</TableHead>
@@ -174,6 +175,11 @@ export function MachineList({ machines, lines, loading, onEdit, onToggleActive }
                   </TableCell>
                   <TableCell className="align-middle text-xs font-medium text-slate-700 whitespace-nowrap">
                     {m.brand ? `${m.brand} ${m.model || ""}` : "—"}
+                  </TableCell>
+                  <TableCell className="text-center align-middle whitespace-nowrap">
+                    <span className="inline-flex items-center justify-center font-mono text-xs font-bold text-slate-800 bg-slate-100/90 px-2.5 py-0.5 rounded-lg border border-slate-200 shadow-2xs">
+                      {m.quantity || 1}
+                    </span>
                   </TableCell>
                   <TableCell className="align-middle whitespace-nowrap">
                     {(() => {
