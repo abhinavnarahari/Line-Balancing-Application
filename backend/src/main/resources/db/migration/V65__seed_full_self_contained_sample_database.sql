@@ -1,6 +1,33 @@
 -- V65: 100% Self-Contained Enterprise Sample Database Seeder
 -- Guarantees complete end-to-end sample data regardless of database state or previous migration history.
 
+-- 0. CLEAN SLATE FOR REFERENTIAL INTEGRITY & IDEMPOTENCY
+DELETE FROM operator_allocation_audits;
+DELETE FROM operator_allocation_scenarios;
+DELETE FROM operator_allocation_bottlenecks;
+DELETE FROM operator_allocation_assignments;
+DELETE FROM operator_allocation_runs;
+
+DELETE FROM optimization_recommendations;
+DELETE FROM operator_station_placements;
+DELETE FROM balance_station_operations;
+DELETE FROM balance_workstations;
+DELETE FROM line_design_machines;
+DELETE FROM line_designs;
+
+DELETE FROM capacity_plans;
+DELETE FROM hourly_production_entries;
+DELETE FROM line_plan_assignments;
+DELETE FROM line_plans;
+DELETE FROM piece_production_logs;
+
+DELETE FROM order_size_lines;
+DELETE FROM orders;
+
+DELETE FROM bulletin_styles;
+DELETE FROM bulletin_lines;
+DELETE FROM operation_bulletins;
+
 -- ==============================================================================
 -- 1. SEED 50 OPERATORS (EMP-001 to EMP-050)
 -- ==============================================================================
@@ -197,10 +224,7 @@ ON CONFLICT (id) DO UPDATE SET
     status = EXCLUDED.status,
     total_smv = EXCLUDED.total_smv;
 
-DELETE FROM bulletin_styles WHERE bulletin_id IN (1, 2);
 INSERT INTO bulletin_styles (bulletin_id, style_id) VALUES (1, 1), (2, 2);
-
-DELETE FROM bulletin_lines WHERE bulletin_id IN (1, 2);
 
 -- Bulletin 1 Lines (Crewneck T-Shirt - 8 Operations)
 INSERT INTO bulletin_lines (bulletin_id, sequence, operation_id, smv, machine_type, skill_rating_required, section, is_parallelizable, notes)
