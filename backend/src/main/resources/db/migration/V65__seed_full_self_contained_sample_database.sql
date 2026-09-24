@@ -466,7 +466,7 @@ JOIN operators op ON op.employee_id = t.emp_code;
 DELETE FROM attendance_records WHERE attendance_date = CURRENT_DATE;
 
 INSERT INTO attendance_records (
-    operator_id, attendance_date, shift_id, status, check_in_time, check_out_time, working_hours, overtime_hours, notes, created_at, updated_at
+    operator_id, attendance_date, shift_id, status, check_in_time, check_out_time, remarks, created_at, updated_at
 )
 SELECT 
     op.id,
@@ -475,8 +475,6 @@ SELECT
     'PRESENT',
     '07:55:00'::TIME,
     '16:35:00'::TIME,
-    8.00,
-    0.00,
     'On-time shopfloor biometric check-in',
     NOW(),
     NOW()
