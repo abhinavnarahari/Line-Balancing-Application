@@ -153,24 +153,23 @@ WHERE NOT EXISTS (SELECT 1 FROM operations WHERE operation_code = t.op_code);
 -- ==============================================================================
 -- 3. SEED 14 MACHINES
 -- ==============================================================================
-INSERT INTO machines (id, machine_code, machine_type, brand, model, status, quantity, active)
+INSERT INTO machines (machine_code, machine_type, brand, model, status, quantity, active)
 VALUES
-    (1,  'SN-001',  'Single Needle Lockstitch', 'Juki',    'DDL-8700',  'AVAILABLE', 30, TRUE),
-    (2,  'SN-002',  'Single Needle Lockstitch', 'Juki',    'DDL-9000C', 'AVAILABLE', 30, TRUE),
-    (3,  'SN-003',  'Single Needle Lockstitch', 'Brother', 'S-7300A',   'AVAILABLE', 30, TRUE),
-    (4,  'SN-004',  'Single Needle Lockstitch', 'Jack',    'A4F',       'AVAILABLE', 30, TRUE),
-    (5,  'OL-001',  '4-Thread Overlock',        'Pegasus', 'M952-52',   'AVAILABLE', 25, TRUE),
-    (6,  'OL-002',  '4-Thread Overlock',        'Siruba',  '747K',      'AVAILABLE', 25, TRUE),
-    (7,  'OL-003',  '5-Thread Overlock',        'Juki',    'MO-6816S',  'AVAILABLE', 15, TRUE),
-    (8,  'FL-001',  'Flatlock / Interlock',     'Yamato',  'VG2700',    'AVAILABLE', 20, TRUE),
-    (9,  'FL-002',  'Flatlock / Interlock',     'Pegasus', 'W562PV',    'AVAILABLE', 20, TRUE),
-    (10, 'BH-001',  'Buttonhole Machine',       'Juki',    'LBH-1790A', 'AVAILABLE', 10, TRUE),
-    (11, 'BA-001',  'Button Attach Machine',    'Juki',    'MB-1377',   'AVAILABLE', 10, TRUE),
-    (12, 'BT-001',  'Bar Tack Machine',         'Brother', 'KE-430FX',  'AVAILABLE', 10, TRUE),
-    (13, 'FOA-001', 'Feed-off-the-arm Machine', 'Juki',    'MS-1261',   'AVAILABLE', 8,  TRUE),
-    (14, 'DN-001',  'Double Needle Lockstitch', 'Juki',    'LH-3568A',  'AVAILABLE', 10, TRUE)
-ON CONFLICT (id) DO UPDATE SET
-    machine_code = EXCLUDED.machine_code,
+    ('SN-001',  'Single Needle Lockstitch', 'Juki',    'DDL-8700',  'AVAILABLE', 30, TRUE),
+    ('SN-002',  'Single Needle Lockstitch', 'Juki',    'DDL-9000C', 'AVAILABLE', 30, TRUE),
+    ('SN-003',  'Single Needle Lockstitch', 'Brother', 'S-7300A',   'AVAILABLE', 30, TRUE),
+    ('SN-004',  'Single Needle Lockstitch', 'Jack',    'A4F',       'AVAILABLE', 30, TRUE),
+    ('OL-001',  '4-Thread Overlock',        'Pegasus', 'M952-52',   'AVAILABLE', 25, TRUE),
+    ('OL-002',  '4-Thread Overlock',        'Siruba',  '747K',      'AVAILABLE', 25, TRUE),
+    ('OL-003',  '5-Thread Overlock',        'Juki',    'MO-6816S',  'AVAILABLE', 15, TRUE),
+    ('FL-001',  'Flatlock / Interlock',     'Yamato',  'VG2700',    'AVAILABLE', 20, TRUE),
+    ('FL-002',  'Flatlock / Interlock',     'Pegasus', 'W562PV',    'AVAILABLE', 20, TRUE),
+    ('BH-001',  'Buttonhole Machine',       'Juki',    'LBH-1790A', 'AVAILABLE', 10, TRUE),
+    ('BA-001',  'Button Attach Machine',    'Juki',    'MB-1377',   'AVAILABLE', 10, TRUE),
+    ('BT-001',  'Bar Tack Machine',         'Brother', 'KE-430FX',  'AVAILABLE', 10, TRUE),
+    ('FOA-001', 'Feed-off-the-arm Machine', 'Juki',    'MS-1261',   'AVAILABLE', 8,  TRUE),
+    ('DN-001',  'Double Needle Lockstitch', 'Juki',    'LH-3568A',  'AVAILABLE', 10, TRUE)
+ON CONFLICT (machine_code) DO UPDATE SET
     machine_type = EXCLUDED.machine_type,
     brand = EXCLUDED.brand,
     model = EXCLUDED.model,
@@ -181,16 +180,15 @@ ON CONFLICT (id) DO UPDATE SET
 -- ==============================================================================
 -- 4. SEED GARMENT SIZES
 -- ==============================================================================
-INSERT INTO sizes (id, code, label, sequence, active)
+INSERT INTO sizes (code, label, sequence, active)
 VALUES
-    (1, 'XS',  'Extra Small', 1, TRUE),
-    (2, 'S',   'Small',       2, TRUE),
-    (3, 'M',   'Medium',      3, TRUE),
-    (4, 'L',   'Large',       4, TRUE),
-    (5, 'XL',  'Extra Large', 5, TRUE),
-    (6, 'XXL', '2X Large',    6, TRUE)
-ON CONFLICT (id) DO UPDATE SET
-    code = EXCLUDED.code,
+    ('XS',  'Extra Small', 1, TRUE),
+    ('S',   'Small',       2, TRUE),
+    ('M',   'Medium',      3, TRUE),
+    ('L',   'Large',       4, TRUE),
+    ('XL',  'Extra Large', 5, TRUE),
+    ('XXL', '2X Large',    6, TRUE)
+ON CONFLICT (code) DO UPDATE SET
     label = EXCLUDED.label,
     sequence = EXCLUDED.sequence,
     active = TRUE;
@@ -198,12 +196,11 @@ ON CONFLICT (id) DO UPDATE SET
 -- ==============================================================================
 -- 5. SEED GARMENT STYLES
 -- ==============================================================================
-INSERT INTO styles (id, style_no, buyer, description, season, product_type, active)
+INSERT INTO styles (style_no, buyer, description, season, product_type, active)
 VALUES
-    (1, 'STY-CREW-101', 'Nike Activewear', 'Classic Crewneck T-Shirt', 'Summer 2026', 'Crewneck T-Shirt', TRUE),
-    (2, 'STY-POLO-201', 'Tommy Hilfiger', 'Classic Pique Polo Shirt with Ribbed Collar', 'Spring/Summer 2026', 'Polo Shirt', TRUE)
-ON CONFLICT (id) DO UPDATE SET
-    style_no = EXCLUDED.style_no,
+    ('STY-CREW-101', 'Nike Activewear', 'Classic Crewneck T-Shirt', 'Summer 2026', 'Crewneck T-Shirt', TRUE),
+    ('STY-POLO-201', 'Tommy Hilfiger', 'Classic Pique Polo Shirt with Ribbed Collar', 'Spring/Summer 2026', 'Polo Shirt', TRUE)
+ON CONFLICT (style_no) DO UPDATE SET
     buyer = EXCLUDED.buyer,
     description = EXCLUDED.description,
     season = EXCLUDED.season,
@@ -213,50 +210,86 @@ ON CONFLICT (id) DO UPDATE SET
 -- ==============================================================================
 -- 6. SEED OPERATION BULLETINS & BULLETIN LINES
 -- ==============================================================================
-INSERT INTO operation_bulletins (id, bulletin_code, name, description, version, revision_number, status, total_smv, approved_by, approved_at, released_by, released_at)
+INSERT INTO operation_bulletins (bulletin_code, name, description, version, revision_number, status, total_smv, approved_by, approved_at, released_by, released_at)
 VALUES
-    (1, 'OB-CREW-101', 'Crewneck T-Shirt Standard Assembly', '8-operation balanced assembly sequence for Classic Crewneck T-Shirt', 1, 1, 'PUBLISHED', 3.70, 'Priya Sharma (Senior IE Lead)', NOW(), 'Amit Verma (Head IE)', NOW()),
-    (2, 'OB-POLO-201', 'Polo Shirt Standard Assembly', '10-operation assembly sequence for Pique Polo Shirt', 1, 1, 'PUBLISHED', 4.85, 'Priya Sharma (Senior IE Lead)', NOW(), 'Amit Verma (Head IE)', NOW())
-ON CONFLICT (id) DO UPDATE SET
-    bulletin_code = EXCLUDED.bulletin_code,
+    ('OB-CREW-101', 'Crewneck T-Shirt Standard Assembly', '8-operation balanced assembly sequence for Classic Crewneck T-Shirt', 1, 1, 'PUBLISHED', 3.70, 'Priya Sharma (Senior IE Lead)', NOW(), 'Amit Verma (Head IE)', NOW()),
+    ('OB-POLO-201', 'Polo Shirt Standard Assembly', '10-operation assembly sequence for Pique Polo Shirt', 1, 1, 'PUBLISHED', 4.85, 'Priya Sharma (Senior IE Lead)', NOW(), 'Amit Verma (Head IE)', NOW())
+ON CONFLICT (bulletin_code, version) DO UPDATE SET
     name = EXCLUDED.name,
     description = EXCLUDED.description,
     status = EXCLUDED.status,
     total_smv = EXCLUDED.total_smv;
 
-INSERT INTO bulletin_styles (bulletin_id, style_id) VALUES (1, 1), (2, 2);
+INSERT INTO bulletin_styles (bulletin_id, style_id)
+SELECT b.id, s.id
+FROM operation_bulletins b
+JOIN styles s ON (b.bulletin_code = 'OB-CREW-101' AND s.style_no = 'STY-CREW-101')
+              OR (b.bulletin_code = 'OB-POLO-201' AND s.style_no = 'STY-POLO-201')
+ON CONFLICT (bulletin_id, style_id) DO NOTHING;
 
 -- Bulletin 1 Lines (Crewneck T-Shirt - 8 Operations)
 INSERT INTO bulletin_lines (bulletin_id, sequence, operation_id, smv, machine_type, skill_rating_required, section, is_parallelizable, notes)
-VALUES
-    (1, 1, 1, 0.45, '4-Thread Overlock',        3, 'BODY_ASSEMBLY', TRUE, 'Shoulder join with clear mobilon tape'),
-    (1, 2, 2, 0.50, '4-Thread Overlock',        3, 'COLLAR_SET',    TRUE, 'Neck rib knit attach in circular loop'),
-    (1, 3, 3, 0.35, 'Single Needle Lockstitch', 3, 'COLLAR_SET',    TRUE, 'Neckline top stitch and label sandwich'),
-    (1, 4, 4, 0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach left sleeve to body armhole'),
-    (1, 5, 5, 0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach right sleeve to body armhole'),
-    (1, 6, 6, 0.55, '4-Thread Overlock',        4, 'BODY_ASSEMBLY', TRUE, 'Close side seams in one continuous pass'),
-    (1, 7, 7, 0.50, 'Flatlock / Interlock',     3, 'BODY_HEM',      TRUE, 'Bottom hem fold and coverstitch finish'),
-    (1, 8, 8, 0.45, 'Flatlock / Interlock',     3, 'CUFF_HEM',      TRUE, 'Sleeve cuff fold and coverstitch hem');
+SELECT b.id, 1, op.id, 0.45, '4-Thread Overlock',        3, 'BODY_ASSEMBLY', TRUE, 'Shoulder join with clear mobilon tape'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-CREW-101' AND op.operation_code = 'OP-001'
+UNION ALL
+SELECT b.id, 2, op.id, 0.50, '4-Thread Overlock',        3, 'COLLAR_SET',    TRUE, 'Neck rib knit attach in circular loop'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-CREW-101' AND op.operation_code = 'OP-002'
+UNION ALL
+SELECT b.id, 3, op.id, 0.35, 'Single Needle Lockstitch', 3, 'COLLAR_SET',    TRUE, 'Neckline top stitch and label sandwich'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-CREW-101' AND op.operation_code = 'OP-003'
+UNION ALL
+SELECT b.id, 4, op.id, 0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach left sleeve to body armhole'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-CREW-101' AND op.operation_code = 'OP-004'
+UNION ALL
+SELECT b.id, 5, op.id, 0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach right sleeve to body armhole'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-CREW-101' AND op.operation_code = 'OP-005'
+UNION ALL
+SELECT b.id, 6, op.id, 0.55, '4-Thread Overlock',        4, 'BODY_ASSEMBLY', TRUE, 'Close side seams in one continuous pass'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-CREW-101' AND op.operation_code = 'OP-006'
+UNION ALL
+SELECT b.id, 7, op.id, 0.50, 'Flatlock / Interlock',     3, 'BODY_HEM',      TRUE, 'Bottom hem fold and coverstitch finish'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-CREW-101' AND op.operation_code = 'OP-007'
+UNION ALL
+SELECT b.id, 8, op.id, 0.45, 'Flatlock / Interlock',     3, 'CUFF_HEM',      TRUE, 'Sleeve cuff fold and coverstitch hem'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-CREW-101' AND op.operation_code = 'OP-008';
 
 -- Bulletin 2 Lines (Polo Shirt - 10 Operations)
 INSERT INTO bulletin_lines (bulletin_id, sequence, operation_id, smv, machine_type, skill_rating_required, section, is_parallelizable, notes)
-VALUES
-    (2, 1,  1,  0.45, '4-Thread Overlock',        3, 'BODY_ASSEMBLY', TRUE, 'Shoulder seam join with reinforcement tape'),
-    (2, 2,  9,  0.65, 'Single Needle Lockstitch', 4, 'FRONT_PREP',    TRUE, 'Form and attach polo front placket with box stitch'),
-    (2, 3,  10, 0.60, 'Single Needle Lockstitch', 4, 'COLLAR_SET',    TRUE, 'Attach ribbed knit collar to neck placket'),
-    (2, 4,  11, 0.35, 'Single Needle Lockstitch', 3, 'COLLAR_SET',    TRUE, 'Collar band top stitch edge finish'),
-    (2, 5,  4,  0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach left sleeve to armhole curvature'),
-    (2, 6,  5,  0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach right sleeve to armhole curvature'),
-    (2, 7,  8,  0.45, 'Flatlock / Interlock',     3, 'CUFF_HEM',      TRUE, 'Sleeve cuff hem with 2-needle interlock'),
-    (2, 8,  6,  0.55, '4-Thread Overlock',        4, 'BODY_ASSEMBLY', TRUE, 'Close side seams from sleeve to bottom slit'),
-    (2, 9,  7,  0.50, 'Flatlock / Interlock',     3, 'BODY_HEM',      TRUE, 'Bottom body fold and coverstitch hem'),
-    (2, 10, 18, 0.40, 'Single Needle Lockstitch', 2, 'FINISHING',     TRUE, 'Buttonhole punch and button tack attach');
+SELECT b.id, 1,  op.id, 0.45, '4-Thread Overlock',        3, 'BODY_ASSEMBLY', TRUE, 'Shoulder seam join with reinforcement tape'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-POLO-201' AND op.operation_code = 'OP-001'
+UNION ALL
+SELECT b.id, 2,  op.id, 0.65, 'Single Needle Lockstitch', 4, 'FRONT_PREP',    TRUE, 'Form and attach polo front placket with box stitch'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-POLO-201' AND op.operation_code = 'OP-009'
+UNION ALL
+SELECT b.id, 3,  op.id, 0.60, 'Single Needle Lockstitch', 4, 'COLLAR_SET',    TRUE, 'Attach ribbed knit collar to neck placket'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-POLO-201' AND op.operation_code = 'OP-010'
+UNION ALL
+SELECT b.id, 4,  op.id, 0.35, 'Single Needle Lockstitch', 3, 'COLLAR_SET',    TRUE, 'Collar band top stitch edge finish'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-POLO-201' AND op.operation_code = 'OP-011'
+UNION ALL
+SELECT b.id, 5,  op.id, 0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach left sleeve to armhole curvature'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-POLO-201' AND op.operation_code = 'OP-004'
+UNION ALL
+SELECT b.id, 6,  op.id, 0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach right sleeve to armhole curvature'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-POLO-201' AND op.operation_code = 'OP-005'
+UNION ALL
+SELECT b.id, 7,  op.id, 0.45, 'Flatlock / Interlock',     3, 'CUFF_HEM',      TRUE, 'Sleeve cuff hem with 2-needle interlock'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-POLO-201' AND op.operation_code = 'OP-008'
+UNION ALL
+SELECT b.id, 8,  op.id, 0.55, '4-Thread Overlock',        4, 'BODY_ASSEMBLY', TRUE, 'Close side seams from sleeve to bottom slit'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-POLO-201' AND op.operation_code = 'OP-006'
+UNION ALL
+SELECT b.id, 9,  op.id, 0.50, 'Flatlock / Interlock',     3, 'BODY_HEM',      TRUE, 'Bottom body fold and coverstitch hem'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-POLO-201' AND op.operation_code = 'OP-007'
+UNION ALL
+SELECT b.id, 10, op.id, 0.40, 'Single Needle Lockstitch', 2, 'FINISHING',     TRUE, 'Buttonhole punch and button tack attach'
+FROM operation_bulletins b, operations op WHERE b.bulletin_code = 'OB-POLO-201' AND op.operation_code = 'OP-018';
 
 -- ==============================================================================
 -- 7. SEED SEWING LINES
 -- ==============================================================================
 INSERT INTO sewing_lines (
-    id, line_code, line_name, line_type, floor, department,
+    line_code, line_name, line_type, floor, department,
     supervisor_name, ie_in_charge, qc_inspector,
     workstation_count, operator_count, helper_count, machine_count,
     working_hours, capacity_per_day, target_efficiency_percent,
@@ -264,7 +297,7 @@ INSERT INTO sewing_lines (
 )
 VALUES
 (
-    1, 'LINE-01', 'Line 01 - T-Shirt Assembly', 'PBS', 'Floor 1 - Bay A', 'Knit Tops Department',
+    'LINE-01', 'Line 01 - T-Shirt Assembly', 'PBS', 'Floor 1 - Bay A', 'Knit Tops Department',
     'Rajesh Patel', 'Priya Sharma', 'Naresh Soni',
     8, 8, 1, 8,
     8.00, 1200, 85.00,
@@ -272,15 +305,14 @@ VALUES
     'High-velocity knit tops line with ergonomic workstations.'
 ),
 (
-    2, 'LINE-02', 'Line 02 - Polo Shirt Assembly', 'PBS', 'Floor 1 - Bay B', 'Knit Tops Department',
+    'LINE-02', 'Line 02 - Polo Shirt Assembly', 'PBS', 'Floor 1 - Bay B', 'Knit Tops Department',
     'Rahim Khan', 'Priya Sharma', 'Sunil Mehta',
     10, 10, 1, 10,
     8.00, 1000, 82.00,
     'ACTIVE', 'STY-POLO-201 - Classic Pique Polo Shirt', 'OB-POLO-201', TRUE,
     'Precision polo line equipped with placket folders and rib collar attach stations.'
 )
-ON CONFLICT (id) DO UPDATE SET
-    line_code = EXCLUDED.line_code,
+ON CONFLICT (line_code) DO UPDATE SET
     line_name = EXCLUDED.line_name,
     line_type = EXCLUDED.line_type,
     floor = EXCLUDED.floor,
@@ -296,17 +328,16 @@ ON CONFLICT (id) DO UPDATE SET
 -- 8. SEED PRODUCTION ORDERS
 -- ==============================================================================
 INSERT INTO orders (
-    id, order_no, buyer, style_id, color, order_date, delivery_date, planned_completion_date, status, total_quantity, created_at, updated_at
+    order_no, buyer, style_id, color, order_date, delivery_date, planned_completion_date, status, total_quantity, created_at, updated_at
 )
-VALUES
-(
-    1, 'PO-2026-001', 'Nike Activewear', 1, 'Heather Anthracite', CURRENT_DATE - INTERVAL '23 days', CURRENT_DATE + INTERVAL '36 days', CURRENT_DATE + INTERVAL '30 days', 'IN_PRODUCTION', 20000, NOW(), NOW()
-),
-(
-    2, 'PO-2026-002', 'Tommy Hilfiger', 2, 'Navy Blue', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '32 days', CURRENT_DATE + INTERVAL '28 days', 'IN_PRODUCTION', 9200, NOW(), NOW()
-)
-ON CONFLICT (id) DO UPDATE SET
-    order_no = EXCLUDED.order_no,
+SELECT
+    'PO-2026-001', 'Nike Activewear', s.id, 'Heather Anthracite', CURRENT_DATE - INTERVAL '23 days', CURRENT_DATE + INTERVAL '36 days', CURRENT_DATE + INTERVAL '30 days', 'IN_PRODUCTION', 20000, NOW(), NOW()
+FROM styles s WHERE s.style_no = 'STY-CREW-101'
+UNION ALL
+SELECT
+    'PO-2026-002', 'Tommy Hilfiger', s.id, 'Navy Blue', CURRENT_DATE - INTERVAL '19 days', CURRENT_DATE + INTERVAL '32 days', CURRENT_DATE + INTERVAL '28 days', 'IN_PRODUCTION', 9200, NOW(), NOW()
+FROM styles s WHERE s.style_no = 'STY-POLO-201'
+ON CONFLICT (order_no) DO UPDATE SET
     buyer = EXCLUDED.buyer,
     style_id = EXCLUDED.style_id,
     total_quantity = EXCLUDED.total_quantity,
@@ -314,7 +345,7 @@ ON CONFLICT (id) DO UPDATE SET
     planned_completion_date = EXCLUDED.planned_completion_date,
     status = EXCLUDED.status;
 
-DELETE FROM order_size_lines WHERE order_id IN (1, 2);
+DELETE FROM order_size_lines WHERE order_id IN (SELECT id FROM orders WHERE order_no IN ('PO-2026-001', 'PO-2026-002'));
 INSERT INTO order_size_lines (order_id, size_id, quantity)
 SELECT o.id, s.id,
     CASE s.code
@@ -327,7 +358,7 @@ SELECT o.id, s.id,
     END
 FROM orders o
 CROSS JOIN sizes s
-WHERE o.id IN (1, 2);
+WHERE o.order_no IN ('PO-2026-001', 'PO-2026-002');
 
 -- ==============================================================================
 -- 9. SEED 900 COMPREHENSIVE SKILL ASSESSMENTS (50 Operators x 18 Operations)
@@ -415,9 +446,9 @@ BEGIN
             END IF;
 
             INSERT INTO skill_assessments (
-                operator_id, operation_id, rating, cycle_time_seconds, is_current, assessment_date, assessor, notes, created_at, updated_at
+                operator_id, operation_id, rating, cycle_time_seconds, revision, effective_date, is_current, notes, created_at, updated_at
             ) VALUES (
-                v_oper.id, v_op.id, v_rating, v_cycle_time, TRUE, CURRENT_DATE - INTERVAL '15 days', 'Priya Sharma (Senior IE Lead)', 'Certified performance rating', NOW(), NOW()
+                v_oper.id, v_op.id, v_rating, v_cycle_time, 1, CURRENT_DATE - INTERVAL '15 days', TRUE, 'Certified performance rating by Priya Sharma (Senior IE Lead)', NOW(), NOW()
             );
         END LOOP;
     END LOOP;
@@ -427,50 +458,59 @@ END $$;
 -- 10. SEED LINE PLANS & ALL WORKSTATION ASSIGNMENTS
 -- ==============================================================================
 INSERT INTO line_plans (
-    id, line_id, order_id, shift_id, target_output, planned_efficiency, allowance, status, created_at, updated_at
+    line_id, order_id, shift_id, target_output, planned_efficiency, allowance, status, created_at, updated_at
 )
-VALUES
-    (1, 1, 1, 1, 840, 85.00, 10, 'active',   NOW(), NOW()),
-    (2, 2, 2, 1, 800, 82.00, 10, 'RELEASED', NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET
-    target_output = EXCLUDED.target_output,
-    planned_efficiency = EXCLUDED.planned_efficiency,
-    allowance = EXCLUDED.allowance,
-    status = EXCLUDED.status;
-
-DELETE FROM line_plan_assignments WHERE line_plan_id IN (1, 2);
+SELECT 
+    l.id, o.id, 1, 840, 85.00, 10, 'active', NOW(), NOW()
+FROM sewing_lines l, orders o
+WHERE l.line_code = 'LINE-01' AND o.order_no = 'PO-2026-001'
+UNION ALL
+SELECT 
+    l.id, o.id, 1, 800, 82.00, 10, 'RELEASED', NOW(), NOW()
+FROM sewing_lines l, orders o
+WHERE l.line_code = 'LINE-02' AND o.order_no = 'PO-2026-002';
 
 -- Line 01 (8 main stations + 3 support stations)
 INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id)
-SELECT 1, bl.id, bl.operation_id, op.id
-FROM bulletin_lines bl
-JOIN operators op ON op.employee_id = 'EMP-' || LPAD(bl.sequence::text, 3, '0')
-WHERE bl.bulletin_id = 1;
+SELECT lp.id, bl.id, bl.operation_id, op.id
+FROM line_plans lp
+JOIN sewing_lines sl ON sl.id = lp.line_id AND sl.line_code = 'LINE-01'
+JOIN operation_bulletins ob ON ob.bulletin_code = 'OB-CREW-101'
+JOIN bulletin_lines bl ON bl.bulletin_id = ob.id
+JOIN operators op ON op.employee_id = 'EMP-' || LPAD(bl.sequence::text, 3, '0');
 
 INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id)
-SELECT 1, bl.id, bl.operation_id, op.id
-FROM bulletin_lines bl
-JOIN operators op ON op.employee_id = 'EMP-009'
-WHERE bl.bulletin_id = 1 AND bl.sequence = 2;
+SELECT lp.id, bl.id, bl.operation_id, op.id
+FROM line_plans lp
+JOIN sewing_lines sl ON sl.id = lp.line_id AND sl.line_code = 'LINE-01'
+JOIN operation_bulletins ob ON ob.bulletin_code = 'OB-CREW-101'
+JOIN bulletin_lines bl ON bl.bulletin_id = ob.id AND bl.sequence = 2
+JOIN operators op ON op.employee_id = 'EMP-009';
 
 INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id)
-SELECT 1, bl.id, bl.operation_id, op.id
-FROM bulletin_lines bl
-JOIN operators op ON op.employee_id = 'EMP-010'
-WHERE bl.bulletin_id = 1 AND bl.sequence = 4;
+SELECT lp.id, bl.id, bl.operation_id, op.id
+FROM line_plans lp
+JOIN sewing_lines sl ON sl.id = lp.line_id AND sl.line_code = 'LINE-01'
+JOIN operation_bulletins ob ON ob.bulletin_code = 'OB-CREW-101'
+JOIN bulletin_lines bl ON bl.bulletin_id = ob.id AND bl.sequence = 4
+JOIN operators op ON op.employee_id = 'EMP-010';
 
 INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id)
-SELECT 1, bl.id, bl.operation_id, op.id
-FROM bulletin_lines bl
-JOIN operators op ON op.employee_id = 'EMP-011'
-WHERE bl.bulletin_id = 1 AND bl.sequence = 6;
+SELECT lp.id, bl.id, bl.operation_id, op.id
+FROM line_plans lp
+JOIN sewing_lines sl ON sl.id = lp.line_id AND sl.line_code = 'LINE-01'
+JOIN operation_bulletins ob ON ob.bulletin_code = 'OB-CREW-101'
+JOIN bulletin_lines bl ON bl.bulletin_id = ob.id AND bl.sequence = 6
+JOIN operators op ON op.employee_id = 'EMP-011';
 
 -- Line 02 (10 stations)
 INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id)
-SELECT 2, bl.id, bl.operation_id, op.id
-FROM bulletin_lines bl
-JOIN operators op ON op.employee_id = 'EMP-' || LPAD((bl.sequence + 11)::text, 3, '0')
-WHERE bl.bulletin_id = 2;
+SELECT lp.id, bl.id, bl.operation_id, op.id
+FROM line_plans lp
+JOIN sewing_lines sl ON sl.id = lp.line_id AND sl.line_code = 'LINE-02'
+JOIN operation_bulletins ob ON ob.bulletin_code = 'OB-POLO-201'
+JOIN bulletin_lines bl ON bl.bulletin_id = ob.id
+JOIN operators op ON op.employee_id = 'EMP-' || LPAD((bl.sequence + 11)::text, 3, '0');
 
 -- ==============================================================================
 -- 11. SEED PIECE PRODUCTION LOGS FOR CURRENT_DATE (145 PCS FLOW OUTPUT)
@@ -483,9 +523,9 @@ INSERT INTO piece_production_logs (
 )
 SELECT 
     op.id,
-    t.op_id,
+    ops.id,
     t.op_name,
-    1,
+    o.id,
     t.t_qty,
     t.c_qty,
     t.g_qty,
@@ -499,16 +539,18 @@ SELECT
     10,
     NOW()
 FROM (VALUES
-    ('EMP-001', 1, 'Shoulder Join',          150, 150, 150, 0, 0.45, '4-Thread Overlock'),
-    ('EMP-002', 2, 'Neck Rib Attach',        150, 150, 150, 0, 0.50, '4-Thread Overlock'),
-    ('EMP-003', 3, 'Neck Top Stitch',        148, 148, 148, 0, 0.35, 'Single Needle Lockstitch'),
-    ('EMP-004', 4, 'Sleeve Attach Left',     148, 148, 148, 0, 0.45, '4-Thread Overlock'),
-    ('EMP-005', 5, 'Sleeve Attach Right',    148, 148, 148, 0, 0.45, '4-Thread Overlock'),
-    ('EMP-006', 6, 'Side Seam Close',        148, 148, 148, 0, 0.55, '4-Thread Overlock'),
-    ('EMP-007', 8, 'Sleeve Hem',             145, 145, 145, 0, 0.45, 'Flatlock / Interlock'),
-    ('EMP-008', 7, 'Bottom Hem',             145, 145, 145, 0, 0.50, 'Flatlock / Interlock')
-) AS t(emp_code, op_id, op_name, t_qty, c_qty, g_qty, r_qty, sam, m_type)
-JOIN operators op ON op.employee_id = t.emp_code;
+    ('EMP-001', 'OP-001', 'Shoulder Join',          150, 150, 150, 0, 0.45, '4-Thread Overlock'),
+    ('EMP-002', 'OP-002', 'Neck Rib Attach',        150, 150, 150, 0, 0.50, '4-Thread Overlock'),
+    ('EMP-003', 'OP-003', 'Neck Top Stitch',        148, 148, 148, 0, 0.35, 'Single Needle Lockstitch'),
+    ('EMP-004', 'OP-004', 'Sleeve Attach Left',     148, 148, 148, 0, 0.45, '4-Thread Overlock'),
+    ('EMP-005', 'OP-005', 'Sleeve Attach Right',    148, 148, 148, 0, 0.45, '4-Thread Overlock'),
+    ('EMP-006', 'OP-006', 'Side Seam Close',        148, 148, 148, 0, 0.55, '4-Thread Overlock'),
+    ('EMP-007', 'OP-008', 'Sleeve Hem',             145, 145, 145, 0, 0.45, 'Flatlock / Interlock'),
+    ('EMP-008', 'OP-007', 'Bottom Hem',             145, 145, 145, 0, 0.50, 'Flatlock / Interlock')
+) AS t(emp_code, op_code, op_name, t_qty, c_qty, g_qty, r_qty, sam, m_type)
+JOIN operators op ON op.employee_id = t.emp_code
+JOIN operations ops ON ops.operation_code = t.op_code
+JOIN orders o ON o.order_no = 'PO-2026-001';
 
 -- ==============================================================================
 -- 12. SEED BIOMETRIC ATTENDANCE FOR ALL 50 OPERATORS FOR CURRENT_DATE
@@ -535,20 +577,26 @@ WHERE op.active = TRUE;
 -- 13. SEED CAPACITY PLANS & LINE DESIGNS
 -- ==============================================================================
 INSERT INTO capacity_plans (
-    id, plan_code, order_id, style_id, bulletin_id, shift_id, order_quantity, available_days,
+    plan_code, order_id, style_id, bulletin_id, shift_id, order_quantity, available_days,
     target_hourly_output, planned_efficiency, allowance_pfd, total_smv_minutes, customer_takt_secs,
     required_design_capacity, designed_pitch_secs, theoretical_manpower, planned_manpower, status, created_at, updated_at
 )
-VALUES
-(
-    1, 'CAP-LINE01-CREW', 1, 1, 1, 1, 20000, 27,
+SELECT
+    'CAP-LINE01-CREW', o.id, s.id, b.id, 1, 20000, 27,
     125, 85.0, '5,4,1', 3.70, 28.8, 147.0, 27.0, 7.5, 8.0, 'ACTIVE', NOW(), NOW()
-),
-(
-    2, 'CAP-LINE02-POLO', 2, 2, 2, 1, 9200, 25,
+FROM orders o
+JOIN styles s ON s.style_no = 'STY-CREW-101'
+JOIN operation_bulletins b ON b.bulletin_code = 'OB-CREW-101'
+WHERE o.order_no = 'PO-2026-001'
+UNION ALL
+SELECT
+    'CAP-LINE02-POLO', o.id, s.id, b.id, 1, 9200, 25,
     100, 82.0, '5,4,1', 4.85, 36.0, 122.0, 28.8, 9.8, 10.0, 'ACTIVE', NOW(), NOW()
-)
-ON CONFLICT (id) DO UPDATE SET
+FROM orders o
+JOIN styles s ON s.style_no = 'STY-POLO-201'
+JOIN operation_bulletins b ON b.bulletin_code = 'OB-POLO-201'
+WHERE o.order_no = 'PO-2026-002'
+ON CONFLICT (plan_code) DO UPDATE SET
     order_quantity = EXCLUDED.order_quantity,
     available_days = EXCLUDED.available_days,
     target_hourly_output = EXCLUDED.target_hourly_output,
@@ -556,19 +604,27 @@ ON CONFLICT (id) DO UPDATE SET
     status = 'ACTIVE';
 
 INSERT INTO line_designs (
-    id, design_code, order_id, bulletin_id, line_id, capacity_plan_id, total_workstations, total_operators, total_helpers, total_qc, total_machines,
+    design_code, order_id, bulletin_id, line_id, capacity_plan_id, total_workstations, total_operators, total_helpers, total_qc, total_machines,
     target_hourly_output, planned_efficiency, designed_pitch_secs, line_balance_efficiency, status, version, created_by, approved_by, released_by
 )
-VALUES
-(
-    1, 'DES-LINE01-CREW', 1, 1, 1, 1, 8, 8, 1, 1, 8,
+SELECT
+    'DES-LINE01-CREW', o.id, b.id, l.id, cp.id, 8, 8, 1, 1, 8,
     125, 85.0, 27.0, 88.5, 'RELEASED', 1, 'Priya Sharma', 'Amit Verma', 'Rajesh Patel'
-),
-(
-    2, 'DES-LINE02-POLO', 2, 2, 2, 2, 10, 10, 1, 1, 10,
+FROM orders o
+JOIN operation_bulletins b ON b.bulletin_code = 'OB-CREW-101'
+JOIN sewing_lines l ON l.line_code = 'LINE-01'
+JOIN capacity_plans cp ON cp.plan_code = 'CAP-LINE01-CREW'
+WHERE o.order_no = 'PO-2026-001'
+UNION ALL
+SELECT
+    'DES-LINE02-POLO', o.id, b.id, l.id, cp.id, 10, 10, 1, 1, 10,
     100, 82.0, 28.8, 86.0, 'RELEASED', 1, 'Priya Sharma', 'Amit Verma', 'Rajesh Patel'
-)
-ON CONFLICT (id) DO UPDATE SET
+FROM orders o
+JOIN operation_bulletins b ON b.bulletin_code = 'OB-POLO-201'
+JOIN sewing_lines l ON l.line_code = 'LINE-02'
+JOIN capacity_plans cp ON cp.plan_code = 'CAP-LINE02-POLO'
+WHERE o.order_no = 'PO-2026-002'
+ON CONFLICT (design_code) DO UPDATE SET
     target_hourly_output = EXCLUDED.target_hourly_output,
     planned_efficiency = EXCLUDED.planned_efficiency,
     status = 'RELEASED';
