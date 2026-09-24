@@ -68,34 +68,60 @@ ON CONFLICT (employee_id) DO UPDATE SET
 -- ==============================================================================
 -- 2. SEED 18 OPERATIONS
 -- ==============================================================================
-INSERT INTO operations (id, operation_code, name, description, standard_smv, machine_type, sequence, active)
-VALUES
-    (1,  'OP-001', 'Shoulder Join', 'Join front and back body panels at shoulder seams', 0.45, '4-Thread Overlock', 1, TRUE),
-    (2,  'OP-002', 'Neck Rib Attach', 'Attach ribbed knit neckband to neckline loop', 0.50, '4-Thread Overlock', 2, TRUE),
-    (3,  'OP-003', 'Neck Top Stitch', 'Top stitch around neckline for collar stabilization', 0.35, 'Single Needle Lockstitch', 3, TRUE),
-    (4,  'OP-004', 'Sleeve Attach Left', 'Attach left sleeve to armhole curvature', 0.45, '4-Thread Overlock', 4, TRUE),
-    (5,  'OP-005', 'Sleeve Attach Right', 'Attach right sleeve to armhole curvature', 0.45, '4-Thread Overlock', 5, TRUE),
-    (6,  'OP-006', 'Side Seam Close', 'Close side seams and underarm in continuous pass', 0.55, '4-Thread Overlock', 6, TRUE),
-    (7,  'OP-007', 'Bottom Hem', 'Fold and coverstitch bottom body hem', 0.50, 'Flatlock / Interlock', 7, TRUE),
-    (8,  'OP-008', 'Sleeve Hem', 'Fold and coverstitch sleeve cuff hems', 0.45, 'Flatlock / Interlock', 8, TRUE),
-    (9,  'OP-009', 'Placket Set', 'Form and attach front placket with box stitch', 0.65, 'Single Needle Lockstitch', 9, TRUE),
-    (10, 'OP-010', 'Collar Set', 'Attach polo ribbed collar to neckline placket', 0.60, 'Single Needle Lockstitch', 10, TRUE),
-    (11, 'OP-011', 'Collar Band Top Stitch', 'Top stitch collar band edge finish', 0.35, 'Single Needle Lockstitch', 11, TRUE),
-    (12, 'OP-012', 'Pocket Attach', 'Position and top stitch front chest pocket', 0.55, 'Single Needle Lockstitch', 12, TRUE),
-    (13, 'OP-013', 'Cuff Attach', 'Attach tubular rib cuffs to sleeve hems', 0.40, '4-Thread Overlock', 13, TRUE),
-    (14, 'OP-014', 'Side Slit Reinforce', 'Reinforce side bottom slits with bartack', 0.30, 'Single Needle Lockstitch', 14, TRUE),
-    (15, 'OP-015', 'Main Label Attach', 'Attach brand and care labels inside back neckline', 0.25, 'Single Needle Lockstitch', 15, TRUE),
-    (16, 'OP-016', 'Buttonhole Make', 'Punch and stitch keyhole buttonholes on placket', 0.30, 'Buttonhole Machine', 16, TRUE),
-    (17, 'OP-017', 'Button Attach', 'Sew 2-hole or 4-hole buttons to matching placket', 0.25, 'Button Attach Machine', 17, TRUE),
-    (18, 'OP-018', 'Final Quality Inspection', 'Full garment construction and measurement audit', 0.40, 'Single Needle Lockstitch', 18, TRUE)
-ON CONFLICT (id) DO UPDATE SET
-    operation_code = EXCLUDED.operation_code,
-    name = EXCLUDED.name,
-    description = EXCLUDED.description,
-    standard_smv = EXCLUDED.standard_smv,
-    machine_type = EXCLUDED.machine_type,
-    sequence = EXCLUDED.sequence,
-    active = TRUE;
+ALTER TABLE operations DROP CONSTRAINT IF EXISTS uq_operations_name;
+
+UPDATE operations AS op
+SET name = t.name,
+    description = t.description,
+    standard_smv = t.standard_smv,
+    machine_type = t.machine_type,
+    sequence = t.seq,
+    active = TRUE
+FROM (VALUES
+    ('OP-001', 'Shoulder Join',             'Join front and back body panels at shoulder seams', 0.45, '4-Thread Overlock', 1),
+    ('OP-002', 'Neck Rib Attach',           'Attach ribbed knit neckband to neckline loop', 0.50, '4-Thread Overlock', 2),
+    ('OP-003', 'Neck Top Stitch',           'Top stitch around neckline for collar stabilization', 0.35, 'Single Needle Lockstitch', 3),
+    ('OP-004', 'Sleeve Attach Left',        'Attach left sleeve to armhole curvature', 0.45, '4-Thread Overlock', 4),
+    ('OP-005', 'Sleeve Attach Right',       'Attach right sleeve to armhole curvature', 0.45, '4-Thread Overlock', 5),
+    ('OP-006', 'Side Seam Close',           'Close side seams and underarm in continuous pass', 0.55, '4-Thread Overlock', 6),
+    ('OP-007', 'Bottom Hem',                'Fold and coverstitch bottom body hem', 0.50, 'Flatlock / Interlock', 7),
+    ('OP-008', 'Sleeve Hem',                'Fold and coverstitch sleeve cuff hems', 0.45, 'Flatlock / Interlock', 8),
+    ('OP-009', 'Placket Set',               'Form and attach front placket with box stitch', 0.65, 'Single Needle Lockstitch', 9),
+    ('OP-010', 'Collar Set',                'Attach polo ribbed collar to neckline placket', 0.60, 'Single Needle Lockstitch', 10),
+    ('OP-011', 'Collar Band Top Stitch',    'Top stitch collar band edge finish', 0.35, 'Single Needle Lockstitch', 11),
+    ('OP-012', 'Pocket Attach',             'Position and top stitch front chest pocket', 0.55, 'Single Needle Lockstitch', 12),
+    ('OP-013', 'Cuff Attach',               'Attach tubular rib cuffs to sleeve hems', 0.40, '4-Thread Overlock', 13),
+    ('OP-014', 'Side Slit Reinforce',       'Reinforce side bottom slits with bartack', 0.30, 'Single Needle Lockstitch', 14),
+    ('OP-015', 'Main Label Attach',         'Attach brand and care labels inside back neckline', 0.25, 'Single Needle Lockstitch', 15),
+    ('OP-016', 'Buttonhole Make',           'Punch and stitch keyhole buttonholes on placket', 0.30, 'Buttonhole Machine', 16),
+    ('OP-017', 'Button Attach',             'Sew 2-hole or 4-hole buttons to matching placket', 0.25, 'Button Attach Machine', 17),
+    ('OP-018', 'Final Quality Inspection',  'Full garment construction and measurement audit', 0.40, 'Single Needle Lockstitch', 18)
+) AS t(op_code, name, description, standard_smv, machine_type, seq)
+WHERE op.operation_code = t.op_code;
+
+INSERT INTO operations (operation_code, name, description, standard_smv, machine_type, sequence, active)
+SELECT t.op_code, t.name, t.description, t.standard_smv, t.machine_type, t.seq, TRUE
+FROM (VALUES
+    ('OP-001', 'Shoulder Join',             'Join front and back body panels at shoulder seams', 0.45, '4-Thread Overlock', 1),
+    ('OP-002', 'Neck Rib Attach',           'Attach ribbed knit neckband to neckline loop', 0.50, '4-Thread Overlock', 2),
+    ('OP-003', 'Neck Top Stitch',           'Top stitch around neckline for collar stabilization', 0.35, 'Single Needle Lockstitch', 3),
+    ('OP-004', 'Sleeve Attach Left',        'Attach left sleeve to armhole curvature', 0.45, '4-Thread Overlock', 4),
+    ('OP-005', 'Sleeve Attach Right',       'Attach right sleeve to armhole curvature', 0.45, '4-Thread Overlock', 5),
+    ('OP-006', 'Side Seam Close',           'Close side seams and underarm in continuous pass', 0.55, '4-Thread Overlock', 6),
+    ('OP-007', 'Bottom Hem',                'Fold and coverstitch bottom body hem', 0.50, 'Flatlock / Interlock', 7),
+    ('OP-008', 'Sleeve Hem',                'Fold and coverstitch sleeve cuff hems', 0.45, 'Flatlock / Interlock', 8),
+    ('OP-009', 'Placket Set',               'Form and attach front placket with box stitch', 0.65, 'Single Needle Lockstitch', 9),
+    ('OP-010', 'Collar Set',                'Attach polo ribbed collar to neckline placket', 0.60, 'Single Needle Lockstitch', 10),
+    ('OP-011', 'Collar Band Top Stitch',    'Top stitch collar band edge finish', 0.35, 'Single Needle Lockstitch', 11),
+    ('OP-012', 'Pocket Attach',             'Position and top stitch front chest pocket', 0.55, 'Single Needle Lockstitch', 12),
+    ('OP-013', 'Cuff Attach',               'Attach tubular rib cuffs to sleeve hems', 0.40, '4-Thread Overlock', 13),
+    ('OP-014', 'Side Slit Reinforce',       'Reinforce side bottom slits with bartack', 0.30, 'Single Needle Lockstitch', 14),
+    ('OP-015', 'Main Label Attach',         'Attach brand and care labels inside back neckline', 0.25, 'Single Needle Lockstitch', 15),
+    ('OP-016', 'Buttonhole Make',           'Punch and stitch keyhole buttonholes on placket', 0.30, 'Buttonhole Machine', 16),
+    ('OP-017', 'Button Attach',             'Sew 2-hole or 4-hole buttons to matching placket', 0.25, 'Button Attach Machine', 17),
+    ('OP-018', 'Final Quality Inspection',  'Full garment construction and measurement audit', 0.40, 'Single Needle Lockstitch', 18)
+) AS t(op_code, name, description, standard_smv, machine_type, seq)
+WHERE NOT EXISTS (SELECT 1 FROM operations WHERE operation_code = t.op_code);
 
 -- ==============================================================================
 -- 3. SEED 14 MACHINES
