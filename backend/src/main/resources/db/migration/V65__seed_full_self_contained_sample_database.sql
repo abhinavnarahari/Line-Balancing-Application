@@ -154,17 +154,17 @@ ON CONFLICT (id) DO UPDATE SET
 -- ==============================================================================
 -- 4. SEED GARMENT SIZES
 -- ==============================================================================
-INSERT INTO sizes (id, code, name, chest_cm, waist_cm, hip_cm, sequence, active)
+INSERT INTO sizes (id, code, label, sequence, active)
 VALUES
-    (1, 'XS',  'Extra Small', 86,  71, 88,  1, TRUE),
-    (2, 'S',   'Small',       92,  77, 94,  2, TRUE),
-    (3, 'M',   'Medium',      98,  83, 100, 3, TRUE),
-    (4, 'L',   'Large',       104, 89, 106, 4, TRUE),
-    (5, 'XL',  'Extra Large', 110, 95, 112, 5, TRUE),
-    (6, 'XXL', '2X Large',    116, 101,118, 6, TRUE)
+    (1, 'XS',  'Extra Small', 1, TRUE),
+    (2, 'S',   'Small',       2, TRUE),
+    (3, 'M',   'Medium',      3, TRUE),
+    (4, 'L',   'Large',       4, TRUE),
+    (5, 'XL',  'Extra Large', 5, TRUE),
+    (6, 'XXL', '2X Large',    6, TRUE)
 ON CONFLICT (id) DO UPDATE SET
     code = EXCLUDED.code,
-    name = EXCLUDED.name,
+    label = EXCLUDED.label,
     sequence = EXCLUDED.sequence,
     active = TRUE;
 
