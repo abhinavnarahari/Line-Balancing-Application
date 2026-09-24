@@ -1,6 +1,8 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Layout } from "../components/common/Layout";
 import { Dashboard } from "../pages/Dashboard";
+import { LoginPage } from "../pages/auth/LoginPage";
+import { ProtectedRoute } from "../features/auth/ProtectedRoute";
 
 // Masters
 import { ShiftsPage } from "../pages/shifts/ShiftsPage";
@@ -32,17 +34,29 @@ import { ImmediateActionsPage } from "../pages/workforce/ImmediateActionsPage";
 import { PlantDashboardPage } from "../pages/dashboards/PlantDashboardPage";
 import { LineDashboardPage } from "../pages/dashboards/LineDashboardPage";
 import { OverallDashboardPage } from "../pages/dashboards/OverallDashboardPage";
+import { OperatorAllocationPage } from "../pages/allocation/OperatorAllocationPage";
 
 export const router = createBrowserRouter([
+  // Public Authentication Route
+  {
+    path: "/login",
+    element: <LoginPage />,
+  },
+
+  // Protected Factory Application Routes
   {
     path: "/",
-    element: <Layout />,
+    element: (
+      <ProtectedRoute>
+        <Layout />
+      </ProtectedRoute>
+    ),
     children: [
       // Dashboards
-      { index: true, element: <Dashboard /> },
+      { index: true, element: <OverallDashboardPage /> },
+      { path: "overall-dashboard", element: <OverallDashboardPage /> },
       { path: "plant-dashboard",   element: <PlantDashboardPage /> },
       { path: "line-dashboard",    element: <LineDashboardPage /> },
-      { path: "overall-dashboard", element: <OverallDashboardPage /> },
 
       // Settings & Masters
       {
@@ -87,7 +101,9 @@ export const router = createBrowserRouter([
       { path: "line-design",        element: <LineDesignPage /> },
       { path: "line_design",        element: <LineDesignPage /> },
 
-      // Line Balancing & Operations
+      // Multi-Line Optimization & Balancing
+      { path: "operator-allocation",     element: <OperatorAllocationPage /> },
+      { path: "multi-line-optimizer",   element: <OperatorAllocationPage /> },
       { path: "line-balance",            element: <LineBalancePage fixedMode="DELIVERY" /> },
       { path: "planned-lines",           element: <LineBalancePage fixedMode="DELIVERY" /> },
       { path: "fixed-shift-target",      element: <LineBalancePage fixedMode="SHIFT_TARGET" /> },
@@ -95,7 +111,14 @@ export const router = createBrowserRouter([
       { path: "operator-placement",       element: <OperatorPlacementPage /> },
       { path: "monitoring",               element: <ProductionMonitoringPage /> },
       { path: "production-monitoring",    element: <ProductionMonitoringPage /> },
+      { path: "production-logs",          element: <ProductionMonitoringPage /> },
       { path: "hourly-board",             element: <ProductionMonitoringPage /> },
     ],
+  },
+
+  // Fallback Wildcard Route -> redirect to root
+  {
+    path: "*",
+    element: <Navigate to="/" replace />,
   },
 ]);

@@ -43,12 +43,18 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
     return `OP-${String(maxNum + 1).padStart(3, "0")}`;
   }, [existingOperations]);
 
+  const initialSmv = initialData?.standardSmv !== undefined ? Number(initialData.standardSmv) : 0.5;
+  const initialSec = Math.round(initialSmv * 60 * 10) / 10;
+
+  const [secondsVal, setSecondsVal] = useState<number | string>(initialSec);
+  const [smvVal, setSmvVal] = useState<number | string>(initialSmv);
+
   const [formData, setFormData] = useState({
     operationCode: initialData?.operationCode || sequentialCode,
     name: initialData?.name || "",
     description: initialData?.description || "",
     sequence: initialData?.sequence || (existingOperations.length + 1),
-    standardSmv: initialData?.standardSmv !== undefined ? Number(initialData.standardSmv) : 0.5,
+    standardSmv: initialSmv,
     machineType: initialData?.machineType || "Single Needle Lockstitch",
     active: initialData?.active ?? true,
   });
@@ -58,6 +64,26 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
       setFormData(prev => ({ ...prev, operationCode: sequentialCode }));
     }
   }, [sequentialCode, initialData]);
+
+  // Sync when initialData changes
+  useEffect(() => {
+    if (initialData) {
+      const smv = initialData.standardSmv !== undefined ? Number(initialData.standardSmv) : 0.5;
+      const sec = Math.round(smv * 60 * 10) / 10;
+      setSmvVal(smv);
+      setSecondsVal(sec);
+      setFormData(prev => ({
+        ...prev,
+        operationCode: initialData.operationCode,
+        name: initialData.name,
+        description: initialData.description || "",
+        sequence: initialData.sequence || 1,
+        standardSmv: smv,
+        machineType: initialData.machineType || "Single Needle Lockstitch",
+        active: initialData.active ?? true,
+      }));
+    }
+  }, [initialData]);
 
   const [machines, setMachines] = useState<Machine[]>([]);
 
@@ -89,17 +115,48 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
     }));
   };
 
+  const handleSecondsChange = (valStr: string) => {
+    setSecondsVal(valStr);
+    const sec = parseFloat(valStr);
+    if (!isNaN(sec) && sec > 0) {
+      const min = Math.round((sec / 60) * 1000) / 1000;
+      setSmvVal(min);
+      setFormData(prev => ({ ...prev, standardSmv: min }));
+    }
+  };
+
+  const handleSmvMinutesChange = (valStr: string) => {
+    setSmvVal(valStr);
+    const min = parseFloat(valStr);
+    if (!isNaN(min) && min > 0) {
+      const sec = Math.round(min * 60 * 10) / 10;
+      setSecondsVal(sec);
+      setFormData(prev => ({ ...prev, standardSmv: min }));
+    }
+  };
+
+  const setSecondsPreset = (sec: number) => {
+    setSecondsVal(sec);
+    const min = Math.round((sec / 60) * 1000) / 1000;
+    setSmvVal(min);
+    setFormData(prev => ({ ...prev, standardSmv: min }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const finalSec = typeof secondsVal === "number" ? secondsVal : parseFloat(secondsVal);
+    const finalSmv = typeof smvVal === "number" ? smvVal : parseFloat(smvVal);
+    const resolvedSmv = !isNaN(finalSmv) && finalSmv > 0
+      ? finalSmv
+      : (!isNaN(finalSec) && finalSec > 0 ? finalSec / 60 : 0.5);
+
     onSubmit({
       ...formData,
       sequence: Number(formData.sequence) || 1,
-      standardSmv: Number(formData.standardSmv) || 0.5,
+      standardSmv: resolvedSmv,
       machineType: formData.machineType.trim() || "Single Needle Lockstitch",
     });
   };
-
-  const currentSeconds = Math.round((Number(formData.standardSmv) || 0) * 60);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -136,25 +193,94 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
           />
         </div>
 
-        {/* Standard SMV */}
-        <div>
-          <Input
-            label="Standard SMV (min)"
-            id="standardSmv"
-            name="standardSmv"
-            type="number"
-            step="0.01"
-            min="0.01"
-            value={formData.standardSmv}
-            onChange={handleChange}
-            placeholder="e.g. 0.40"
-            helperText={`${currentSeconds}s target cycle time`}
-            required
-          />
+        {/* Standard SMV / Target Cycle Time (Seconds Primary) */}
+        <div className="md:col-span-2 bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <label className="text-xs font-bold text-slate-900 uppercase tracking-wider block">
+                Standard SMV & Target Cycle Time
+              </label>
+              <p className="text-[11px] text-slate-500 font-medium">
+                Enter benchmark cycle time in seconds (or standard minutes).
+              </p>
+            </div>
+            
+            {/* Quick Seconds Presets */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10.5px] font-semibold text-slate-400 mr-1">Presets:</span>
+              {[15, 20, 24, 30, 45, 60].map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSecondsPreset(s)}
+                  className={`px-2 py-0.5 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                    Number(secondsVal) === s
+                      ? "bg-[#9C5B3C] text-white shadow-2xs"
+                      : "bg-white text-slate-700 border border-slate-200 hover:border-[#9C5B3C] hover:text-[#9C5B3C]"
+                  }`}
+                >
+                  {s}s
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            {/* Primary Seconds Input */}
+            <div className="bg-white border-2 border-[#9C5B3C]/40 focus-within:border-[#9C5B3C] rounded-xl p-3 shadow-2xs transition-colors">
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="cycleSeconds" className="text-xs font-bold text-slate-900 flex items-center gap-1">
+                  <span>Cycle Time in Seconds</span>
+                  <span className="px-1.5 py-0.2 rounded bg-amber-50 text-[#9C5B3C] font-bold text-[10px] border border-amber-200">
+                    Primary
+                  </span>
+                </label>
+                <span className="text-[10.5px] font-mono text-slate-400 font-semibold">sec</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  id="cycleSeconds"
+                  step="0.5"
+                  min="1"
+                  value={secondsVal}
+                  onChange={(e) => handleSecondsChange(e.target.value)}
+                  placeholder="e.g. 24"
+                  className="w-full text-lg font-mono font-extrabold text-slate-900 focus:outline-none bg-transparent"
+                  required
+                />
+                <span className="text-sm font-bold text-[#9C5B3C] font-mono">seconds</span>
+              </div>
+            </div>
+
+            {/* Equivalent Minutes Input */}
+            <div className="bg-white border border-slate-200 focus-within:border-[#9C5B3C] rounded-xl p-3 shadow-2xs transition-colors">
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="smvMinutes" className="text-xs font-bold text-slate-700">
+                  Equivalent Standard SMV (SAM)
+                </label>
+                <span className="text-[10.5px] font-mono text-slate-400 font-semibold">min</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  id="smvMinutes"
+                  step="0.01"
+                  min="0.01"
+                  value={smvVal}
+                  onChange={(e) => handleSmvMinutesChange(e.target.value)}
+                  placeholder="e.g. 0.40"
+                  className="w-full text-lg font-mono font-bold text-slate-700 focus:outline-none bg-transparent"
+                  required
+                />
+                <span className="text-sm font-semibold text-slate-500 font-mono">min</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Status */}
-        <div className="flex flex-col space-y-2">
+        <div className="flex flex-col space-y-2 md:col-span-2">
           <label htmlFor="active" className="text-sm font-medium text-[#475569]">
             Status
           </label>
@@ -163,7 +289,7 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
             name="active"
             value={formData.active ? "true" : "false"}
             onChange={(e) => setFormData((p) => ({ ...p, active: e.target.value === "true" }))}
-            className="flex h-11 w-full bg-white border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm text-[#0F172A] shadow-xs focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+            className="flex h-11 w-full bg-white border border-[#E6DDCE] rounded-xl px-3 py-2 text-sm text-[#221912] shadow-xs focus:outline-none focus:ring-1 focus:ring-[#9C5B3C] focus:border-[#9C5B3C]"
           >
             <option value="true">Active (Available in Bulletins & Lines)</option>
             <option value="false">Inactive</option>
@@ -171,10 +297,10 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
         </div>
 
         {/* Sewing Machine Attachment */}
-        <div className="md:col-span-2 bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3">
+        <div className="md:col-span-2 bg-[#FAF7F2] border border-[#E6DDCE] rounded-2xl p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase tracking-wider">
-              <Cpu className="w-4 h-4 text-blue-600" />
+            <label className="flex items-center gap-2 text-xs font-bold text-[#221912] uppercase tracking-wider">
+              <Cpu className="w-4 h-4 text-[#9C5B3C]" />
               <span>Assigned Sewing Machine / Workstation</span>
             </label>
             {formData.machineType && (
@@ -206,7 +332,7 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+              <label className="block text-[11px] font-semibold text-[#8C7E6E] mb-1">
                 Select Standard Machinery Preset
               </label>
               <select
@@ -216,7 +342,7 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
                     setFormData((p) => ({ ...p, machineType: e.target.value }));
                   }
                 }}
-                className="w-full h-9 bg-white border border-slate-300 rounded-lg px-3 text-xs text-slate-900 focus:outline-none focus:border-blue-500 shadow-2xs font-medium"
+                className="w-full h-9 bg-white border border-[#E6DDCE] rounded-lg px-3 text-xs text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs font-medium"
               >
                 <option value="">-- Choose Machine Preset --</option>
                 {allMachineTypes.map((mType) => {
@@ -233,7 +359,7 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-slate-500 mb-1">
+              <label className="block text-[11px] font-semibold text-[#8C7E6E] mb-1">
                 Or Type Custom Machine Specification
               </label>
               <input
@@ -242,7 +368,7 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
                 value={formData.machineType}
                 onChange={handleChange}
                 placeholder="e.g. 4-Thread Overlock or Special Gauge"
-                className="w-full h-9 bg-white border border-slate-300 rounded-lg px-3 text-xs text-slate-900 focus:outline-none focus:border-blue-500 shadow-2xs font-mono font-medium"
+                className="w-full h-9 bg-white border border-[#E6DDCE] rounded-lg px-3 text-xs text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs font-mono font-medium"
                 required
               />
             </div>
@@ -251,7 +377,7 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
 
         {/* Description */}
         <div className="md:col-span-2 flex flex-col space-y-2">
-          <label htmlFor="description" className="text-sm font-medium text-[#475569]">
+          <label htmlFor="description" className="text-sm font-medium text-[#8C7E6E]">
             Description / Standard Work Procedure
           </label>
           <textarea
@@ -261,16 +387,16 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
             onChange={handleChange}
             rows={3}
             placeholder="Describe seam construction, fabric feeding, and standard work method…"
-            className="w-full bg-white border border-[#E2E8F0] rounded-xl px-4 py-2.5 text-sm text-[#0F172A] placeholder-slate-400 shadow-xs resize-none focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+            className="w-full bg-white border border-[#E6DDCE] rounded-xl px-4 py-2.5 text-sm text-[#221912] placeholder-slate-400 shadow-xs resize-none focus:outline-none focus:ring-1 focus:ring-[#9C5B3C] focus:border-[#9C5B3C]"
           />
         </div>
       </div>
 
-      <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#E2E8F0]">
+      <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#E6DDCE]">
         <Button type="button" variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white font-bold">
+        <Button type="submit" variant="primary" className="bg-[#9C5B3C] hover:bg-[#854D33] text-white font-bold">
           {initialData ? "Update Operation" : "Create Operation"}
         </Button>
       </div>

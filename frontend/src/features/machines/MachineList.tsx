@@ -20,7 +20,7 @@ const getStatusStyle = (status: MachineStatus) => {
     case "AVAILABLE":
       return "bg-emerald-50 text-emerald-700 border-emerald-200";
     case "IN_USE":
-      return "bg-blue-50 text-blue-700 border-blue-200";
+      return "bg-[#F6F1E8] text-[#9C5B3C] border-[#E6DDCE]";
     case "UNDER_MAINTENANCE":
       return "bg-rose-50 text-rose-700 border-rose-200";
     case "IDLE":
@@ -73,7 +73,7 @@ export function MachineList({ machines, lines, loading, onEdit, onToggleActive }
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-slate-900">Machine Inventory & Equipment</h3>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-700 border border-blue-200">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-[#FAF7F2] text-[#9C5B3C] border border-[#E6DDCE]">
               {filtered.length} Assets • {filtered.reduce((acc, m) => acc + (m.quantity || 1), 0)} Total Units
             </span>
           </div>
@@ -87,7 +87,7 @@ export function MachineList({ machines, lines, loading, onEdit, onToggleActive }
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-8 px-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-700 shadow-2xs focus:outline-none focus:border-blue-500 cursor-pointer"
+            className="h-8 px-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-700 shadow-2xs focus:outline-none focus:border-[#9C5B3C] cursor-pointer"
           >
             <option value="all">All Statuses</option>
             <option value="AVAILABLE">Ready / Available</option>
@@ -100,7 +100,7 @@ export function MachineList({ machines, lines, loading, onEdit, onToggleActive }
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="h-8 px-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-700 shadow-2xs focus:outline-none focus:border-blue-500 cursor-pointer max-w-[160px] truncate"
+            className="h-8 px-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-xl text-slate-700 shadow-2xs focus:outline-none focus:border-[#9C5B3C] cursor-pointer max-w-[160px] truncate"
           >
             <option value="all">All Machine Types</option>
             {machineTypes.map((t) => (
@@ -118,7 +118,7 @@ export function MachineList({ machines, lines, loading, onEdit, onToggleActive }
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search code, type, brand…"
-              className="w-full pl-8 pr-8 py-1.5 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
+              className="w-full pl-8 pr-8 py-1.5 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#9C5B3C] shadow-2xs"
             />
             {search && (
               <button
@@ -163,7 +163,7 @@ export function MachineList({ machines, lines, loading, onEdit, onToggleActive }
                   transition={{ delay: index * 0.015, duration: 0.2 }}
                 >
                   <TableCell className="align-middle whitespace-nowrap">
-                    <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+                    <span className="font-mono text-xs font-bold text-[#9C5B3C] bg-[#FAF7F2] px-2.5 py-1 rounded-lg border border-[#E6DDCE]">
                       {m.machineCode}
                     </span>
                   </TableCell>

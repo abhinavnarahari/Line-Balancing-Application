@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { 
   Calculator, 
   Clock, 
-  Users, 
   Target, 
   TrendingUp, 
   ShieldCheck, 
@@ -24,6 +23,7 @@ import { capacityApi, type CapacityPlan, type CapacityPlanRequest } from "../../
 import { ordersApi, type Order } from "../../features/orders/api";
 import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/api";
 import { shiftsApi, type Shift } from "../../features/shifts/api";
+import { useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 export function CapacityPlanningPage() {
   const navigate = useNavigate();
@@ -58,32 +58,35 @@ export function CapacityPlanningPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      try {
-        const [ordersRes, bulletinsRes, shiftsRes, plansRes] = await Promise.all([
-          ordersApi.getOrders(),
-          bulletinsApi.getBulletins(),
-          shiftsApi.getShifts(),
-          capacityApi.getPlans(),
-        ]);
-        setOrders(ordersRes || []);
-        setBulletins(bulletinsRes || []);
-        setShifts(shiftsRes || []);
-        setExistingPlans(plansRes || []);
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [ordersRes, bulletinsRes, shiftsRes, plansRes] = await Promise.all([
+        ordersApi.getOrders(),
+        bulletinsApi.getBulletins(),
+        shiftsApi.getShifts(),
+        capacityApi.getPlans(),
+      ]);
+      setOrders(ordersRes || []);
+      setBulletins(bulletinsRes || []);
+      setShifts(shiftsRes || []);
+      setExistingPlans(plansRes || []);
 
-        if (ordersRes && ordersRes.length > 0 && !selectedOrderId) {
-          setSelectedOrderId(String(ordersRes[0].id));
-        }
-      } catch (err) {
-        console.error("Failed to load capacity planning dependencies:", err);
-      } finally {
-        setLoading(false);
+      if (ordersRes && ordersRes.length > 0 && !selectedOrderId) {
+        setSelectedOrderId(String(ordersRes[0].id));
       }
+    } catch (err) {
+      console.error("Failed to load capacity planning dependencies:", err);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
     loadData();
   }, []);
+
+  useMasterDataSubscription(["shift", "order", "bulletin", "all"], loadData);
 
   // When selected order changes, auto-populate style, quantity, delivery horizon, and matched bulletin
   const currentOrder = useMemo(() => {
@@ -376,7 +379,7 @@ export function CapacityPlanningPage() {
       <PageHeader
         eyebrow="Industrial Engineering & Planning"
         title="Capacity Planning & Takt Engine"
-        description="Calculate customer takt time, designed pitch time, required hourly capacity, and planned manpower sizing."
+
         action={
           <div className="flex items-center gap-3">
             {editingPlan && (
@@ -423,7 +426,7 @@ export function CapacityPlanningPage() {
                 <span className="text-[#8C7E6E]">({editingPlan.orderNo || "Order"})</span>
               </div>
               <div className="text-[11px] text-[#8C7E6E] mt-0.5">
-                Modify parameters below to recalculate Takt, Pitch, and Manpower. Click <strong>Update Capacity Plan</strong> when done.
+                Modify parameters below to recalculate Takt and Pitch. Click <strong>Update Capacity Plan</strong> when done.
               </div>
             </div>
           </div>
@@ -678,7 +681,7 @@ export function CapacityPlanningPage() {
 
               {/* Customer Takt Time */}
               <div className="flex items-baseline justify-between p-2.5 bg-[#F6F1E8]/50 rounded-xl border border-[#E6DDCE]">
-                <span className="text-[#8C7E6E] font-bold">Customer Takt Time (Ttakt):</span>
+                <span className="text-[#8C7E6E] font-bold">Customer Takt Time:</span>
                 <div className="text-right">
                   <span className="text-xl font-black font-mono text-slate-800">{calculations.customerTaktSecs.toFixed(1)}</span>
                   <span className="text-[10px] text-[#8C7E6E] ml-1">sec/pc</span>
@@ -687,19 +690,10 @@ export function CapacityPlanningPage() {
 
               {/* Designed Pitch Time */}
               <div className="flex items-baseline justify-between p-2.5 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE]">
-                <span className="text-[#8C7E6E] font-bold">Designed Pitch Time (Tpitch):</span>
+                <span className="text-[#8C7E6E] font-bold">Designed Pitch Time:</span>
                 <div className="text-right">
                   <span className="text-2xl font-black font-mono text-[#9C5B3C]">{calculations.designedPitchSecs.toFixed(1)}</span>
                   <span className="text-[10px] text-[#8C7E6E] ml-1">sec/pc</span>
-                </div>
-              </div>
-
-              {/* Planned Manpower Sizing */}
-              <div className="flex items-baseline justify-between p-2.5 bg-emerald-50 rounded-xl border border-emerald-200">
-                <span className="text-emerald-900 font-bold">Planned Line Manpower:</span>
-                <div className="text-right">
-                  <span className="text-2xl font-black font-mono text-emerald-800">{calculations.plannedManpower}</span>
-                  <span className="text-[10px] text-emerald-700 ml-1">operators</span>
                 </div>
               </div>
             </div>
@@ -712,17 +706,14 @@ export function CapacityPlanningPage() {
 
       </div>
 
-      {/* ── 3. Four Core IE Transparent Engineering Cards (No LaTeX) ─── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── 3. Three Core IE Engineering Cards ─────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         
         {/* Card 1: Customer Takt Time */}
         <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1">
               <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" /> Customer Takt Time
-            </span>
-            <span className="text-[10px] font-mono font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-              Ttakt
             </span>
           </div>
 
@@ -733,7 +724,7 @@ export function CapacityPlanningPage() {
 
           <div className="p-2.5 bg-[#F6F1E8] rounded-xl border border-[#E6DDCE] text-[11px] font-mono text-[#8C7E6E] space-y-0.5">
             <div className="text-[10px] font-bold text-[#221912]">Formula:</div>
-            <div>Ttakt = Net Shift Secs / Target Shift Output</div>
+            <div>Net Shift Secs / Target Shift Output</div>
             <div className="text-[#9C5B3C] font-bold">= {calculations.netAvailableSeconds}s / {calculations.targetShiftOutput} pcs</div>
           </div>
         </div>
@@ -744,9 +735,6 @@ export function CapacityPlanningPage() {
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
               <TrendingUp className="w-3.5 h-3.5 text-emerald-600" /> Required Design Capacity
             </span>
-            <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-              Rreq
-            </span>
           </div>
 
           <div className="flex items-baseline gap-1">
@@ -756,7 +744,7 @@ export function CapacityPlanningPage() {
 
           <div className="p-2.5 bg-[#F6F1E8] rounded-xl border border-[#E6DDCE] text-[11px] font-mono text-[#8C7E6E] space-y-0.5">
             <div className="text-[10px] font-bold text-[#221912]">Formula:</div>
-            <div>Rreq = Target Hourly Output / Planned Eff ({plannedEfficiency}%)</div>
+            <div>Target Hourly Output / Planned Eff ({plannedEfficiency}%)</div>
             <div className="text-emerald-700 font-bold">= {calculations.targetHourlyOutput} / {(plannedEfficiency / 100).toFixed(2)}</div>
           </div>
         </div>
@@ -767,9 +755,6 @@ export function CapacityPlanningPage() {
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#9C5B3C] flex items-center gap-1">
               <Target className="w-3.5 h-3.5 text-[#9C5B3C]" /> Designed Pitch Time
             </span>
-            <span className="text-[10px] font-mono font-bold text-[#9C5B3C] bg-[#F6F1E8] px-1.5 py-0.5 rounded border border-[#E6DDCE]">
-              Tpitch
-            </span>
           </div>
 
           <div className="flex items-baseline gap-1">
@@ -779,31 +764,8 @@ export function CapacityPlanningPage() {
 
           <div className="p-2.5 bg-[#F6F1E8] rounded-xl border border-[#E6DDCE] text-[11px] font-mono text-[#8C7E6E] space-y-0.5">
             <div className="text-[10px] font-bold text-[#221912]">Formula:</div>
-            <div>Tpitch = 3600s / Required Design Capacity</div>
+            <div>3600s / Required Design Capacity</div>
             <div className="text-[#9C5B3C] font-bold">= {calculations.customerTaktSecs.toFixed(1)}s × {(plannedEfficiency / 100).toFixed(2)}</div>
-          </div>
-        </div>
-
-        {/* Card 4: Theoretical vs Planned Manpower */}
-        <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-800 flex items-center gap-1">
-              <Users className="w-3.5 h-3.5 text-indigo-600" /> Manpower Sizing
-            </span>
-            <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
-              Nplan
-            </span>
-          </div>
-
-          <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-black font-mono text-indigo-700">{calculations.plannedManpower}</span>
-            <span className="text-xs font-mono font-bold text-[#8C7E6E]">operators (theo: {calculations.theoreticalManpower.toFixed(1)})</span>
-          </div>
-
-          <div className="p-2.5 bg-[#F6F1E8] rounded-xl border border-[#E6DDCE] text-[11px] font-mono text-[#8C7E6E] space-y-0.5">
-            <div className="text-[10px] font-bold text-[#221912]">Formula:</div>
-            <div>Nplan = Total SMV ({calculations.totalSmvSeconds.toFixed(1)}s) / Tpitch</div>
-            <div className="text-indigo-700 font-bold">= {calculations.totalSmvSeconds.toFixed(1)}s / {calculations.designedPitchSecs.toFixed(1)}s</div>
           </div>
         </div>
 
@@ -918,7 +880,7 @@ export function CapacityPlanningPage() {
 
       {/* Delete Confirmation Modal */}
       {planToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-2xl border border-[#E6DDCE] shadow-2xl max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3 text-rose-600">
               <div className="p-2.5 bg-rose-50 rounded-xl border border-rose-200">

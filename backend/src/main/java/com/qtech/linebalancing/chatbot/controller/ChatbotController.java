@@ -5,8 +5,10 @@ import com.qtech.linebalancing.chatbot.service.ChatbotService;
 import com.qtech.linebalancing.common.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 
@@ -22,6 +24,11 @@ public class ChatbotController {
     public ResponseEntity<ApiResponse<ChatMessageResponse>> chat(@Valid @RequestBody ChatMessageRequest request) {
         ChatMessageResponse response = chatbotService.processMessage(request);
         return ResponseEntity.ok(ApiResponse.success("Message processed successfully", response));
+    }
+
+    @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamChat(@Valid @RequestBody ChatMessageRequest request) {
+        return chatbotService.streamMessage(request);
     }
 
     @GetMapping("/conversations")

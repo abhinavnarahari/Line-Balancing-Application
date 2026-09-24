@@ -113,7 +113,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
             name="machineType"
             value={formData.machineType}
             onChange={handleChange}
-            className="flex h-11 w-full bg-white border border-[#F1F5F9] px-4 py-2 text-sm text-[#0F172A] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+            className="flex h-11 w-full bg-white border border-[#E6DDCE] rounded-xl px-4 py-2 text-sm text-[#221912] shadow-2xs focus:outline-none focus:ring-1 focus:ring-[#9C5B3C] focus:border-[#9C5B3C]"
           >
             {COMMON_MACHINE_TYPES.map((type) => (
               <option key={type} value={type}>
@@ -165,7 +165,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
         />
 
         <div className="flex flex-col space-y-2">
-          <label htmlFor="lineId" className="text-sm font-medium text-[#475569]">
+          <label htmlFor="lineId" className="text-sm font-medium text-[#8C7E6E]">
             Assigned Line (Optional)
           </label>
           <select
@@ -173,7 +173,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
             name="lineId"
             value={formData.lineId}
             onChange={handleChange}
-            className="flex h-11 w-full bg-white border border-[#F1F5F9] px-4 py-2 text-sm text-[#0F172A] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+            className="flex h-11 w-full bg-white border border-[#E6DDCE] rounded-xl px-4 py-2 text-sm text-[#221912] shadow-2xs focus:outline-none focus:ring-1 focus:ring-[#9C5B3C] focus:border-[#9C5B3C]"
           >
             <option value="">— Unallocated / General Pool —</option>
             {lines.map((l) => (
@@ -185,7 +185,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
         </div>
 
         <div className="flex flex-col space-y-2">
-          <label htmlFor="status" className="text-sm font-medium text-[#475569]">
+          <label htmlFor="status" className="text-sm font-medium text-[#8C7E6E]">
             Operational Status
           </label>
           <select
@@ -193,7 +193,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
             name="status"
             value={formData.status}
             onChange={handleChange}
-            className="flex h-11 w-full bg-white border border-[#F1F5F9] px-4 py-2 text-sm text-[#0F172A] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+            className="flex h-11 w-full bg-white border border-[#E6DDCE] rounded-xl px-4 py-2 text-sm text-[#221912] shadow-2xs focus:outline-none focus:ring-1 focus:ring-[#9C5B3C] focus:border-[#9C5B3C]"
           >
             <option value="AVAILABLE">Available / Ready</option>
             <option value="IN_USE">In Use on Line</option>
@@ -203,7 +203,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
         </div>
 
         <div className="flex flex-col space-y-2">
-          <label htmlFor="active" className="text-sm font-medium text-[#475569]">Active</label>
+          <label htmlFor="active" className="text-sm font-medium text-[#8C7E6E]">Active</label>
           <select
             id="active"
             name="active"
@@ -211,7 +211,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
             onChange={(e) =>
               setFormData((prev) => ({ ...prev, active: e.target.value === "true" }))
             }
-            className="flex h-11 w-full bg-white border border-[#F1F5F9] px-4 py-2 text-sm text-[#0F172A] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+            className="flex h-11 w-full bg-white border border-[#E6DDCE] rounded-xl px-4 py-2 text-sm text-[#221912] shadow-2xs focus:outline-none focus:ring-1 focus:ring-[#9C5B3C] focus:border-[#9C5B3C]"
           >
             <option value="true">Active Asset</option>
             <option value="false">Decommissioned / Inactive</option>
@@ -219,7 +219,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
         </div>
       </div>
 
-      <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#F1F5F9]">
+      <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#E6DDCE]">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
         <Button type="submit" variant="primary">
           {initialData ? "Update Machine" : "Register Machine"}

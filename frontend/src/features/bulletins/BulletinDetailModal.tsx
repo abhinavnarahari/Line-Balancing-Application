@@ -19,9 +19,6 @@ import {
 } from "lucide-react";
 import type { OperationBulletin, BulletinStatus } from "./api";
 import { bulletinsApi } from "./api";
-import { generateLineBalancingScenarios, type BalancingScenario } from "./lineBalancingScenarios";
-import { BalancingScenariosCard } from "./BalancingScenariosCard";
-
 
 interface BulletinDetailModalProps {
   bulletin: OperationBulletin | null;
@@ -48,7 +45,6 @@ export function BulletinDetailModal({
   const [shiftHours, setShiftHours] = useState<number>(8);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [appliedScenarioId, setAppliedScenarioId] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -147,29 +143,6 @@ export function BulletinDetailModal({
     if (targetManpower <= 0 || bSmv <= 0 || metrics.totalSmv <= 0) return 0;
     return Math.min(100, Math.round(((metrics.totalSmv / (targetManpower * bSmv)) * 100) * 10) / 10);
   }, [targetManpower, metrics.bottleneckLine, metrics.totalSmv]);
-
-  // Generate 2-3 Line Balancing Optimization Scenarios
-  const detailScenarios = useMemo(() => {
-    if (!bulletin || !bulletin.lines || bulletin.lines.length === 0) return [];
-    const opsInput = bulletin.lines.map((l) => ({
-      id: l.id || l.sequence,
-      sequence: l.sequence,
-      name: l.operationName || l.operationCode || `Operation ${l.sequence}`,
-      code: l.operationCode,
-      smv: Number(l.smv) || 0,
-    }));
-    return generateLineBalancingScenarios(opsInput, targetManpower, shiftHours);
-  }, [bulletin, targetManpower, shiftHours]);
-
-  // Handle In-Bulletin Scenario Simulation (does not modify Planned Lines)
-  const handleApplyScenario = (scenario: BalancingScenario) => {
-    setTargetManpower(scenario.totalOperators || scenario.totalMachines);
-    setAppliedScenarioId(scenario.id);
-  };
-
-  const handleResetScenario = () => {
-    setAppliedScenarioId(null);
-  };
 
   if (!isOpen || !bulletin || !mounted) return null;
 
@@ -425,18 +398,6 @@ export function BulletinDetailModal({
               </div>
             </div>
           </div>
-
-          {/* Line Balancing Optimization Scenarios (2-3 Actionable Scenarios) */}
-          {detailScenarios.length > 0 && (
-            <BalancingScenariosCard
-              scenarios={detailScenarios}
-              appliedScenarioId={appliedScenarioId || undefined}
-              onApplyScenario={handleApplyScenario}
-              onResetScenario={handleResetScenario}
-              shiftHours={shiftHours}
-              onChangeShiftHours={setShiftHours}
-            />
-          )}
 
           {/* Machine Inventory & Linked Styles Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">

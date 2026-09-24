@@ -15,9 +15,11 @@ import {
   CheckCircle2,
   Split,
   Workflow,
-  Activity
+  Activity,
+  Table
 } from "lucide-react";
 import type { BalancingScenario } from "./lineBalancingScenarios";
+import { WorkstationFlowPreview } from "../linedesign/WorkstationFlowPreview";
 
 interface BalancingScenariosCardProps {
   scenarios: BalancingScenario[];
@@ -50,6 +52,7 @@ export function BalancingScenariosCard({
   const [showDetails, setShowDetails] = useState<boolean>(false);
   const [showIeNotes, setShowIeNotes] = useState<boolean>(true);
   const [detailTab, setDetailTab] = useState<"workstations" | "machines" | "actions">("workstations");
+  const [workstationViewMode, setWorkstationViewMode] = useState<"flow" | "table">("flow");
 
   // Keep selectedId in sync with activeScenarioId / appliedScenarioId
   useEffect(() => {
@@ -509,17 +512,43 @@ export function BalancingScenariosCard({
 
             {/* TAB 1: Shopfloor Workstation Layout */}
             {detailTab === "workstations" && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-[#8C7E6E]">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-[11px] text-[#8C7E6E] flex-wrap gap-2">
                   <span>
                     Theoretical Manning Ratio: <span className="font-mono font-bold text-[#221912]">T_i = SMV / Pitch Time</span>. Stations with <span className="font-mono text-emerald-700 font-bold">T_i ≈ 1.0</span> are perfectly balanced.
                   </span>
-                  <span className="font-mono text-[10px] text-[#8C7E6E]">
-                    {currentSelected.workstations?.length || 0} benches allocated
-                  </span>
+                  
+                  {/* Visual vs Table View Sub-toggle */}
+                  <div className="flex items-center gap-1 bg-[#F6F1E8] p-1 rounded-xl border border-[#E6DDCE]">
+                    <button
+                      onClick={() => setWorkstationViewMode("flow")}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                        workstationViewMode === "flow"
+                          ? "bg-white text-[#221912] shadow-2xs"
+                          : "text-[#8C7E6E] hover:text-[#221912]"
+                      }`}
+                    >
+                      <Workflow className="w-3.5 h-3.5" />
+                      <span>Flow Architecture</span>
+                    </button>
+                    <button
+                      onClick={() => setWorkstationViewMode("table")}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                        workstationViewMode === "table"
+                          ? "bg-white text-[#221912] shadow-2xs"
+                          : "text-[#8C7E6E] hover:text-[#221912]"
+                      }`}
+                    >
+                      <Table className="w-3.5 h-3.5" />
+                      <span>Manning Table</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="overflow-x-auto rounded-xl border border-[#E6DDCE] bg-white">
+                {workstationViewMode === "flow" ? (
+                  <WorkstationFlowPreview scenario={currentSelected} />
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-[#E6DDCE] bg-white">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="border-b border-[#E6DDCE] bg-[#FDFCFB] text-[10px] font-bold text-[#8C7E6E] uppercase">
@@ -651,6 +680,7 @@ export function BalancingScenariosCard({
                     </tbody>
                   </table>
                 </div>
+                )}
               </div>
             )}
 

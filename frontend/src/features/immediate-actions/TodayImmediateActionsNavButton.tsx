@@ -107,37 +107,37 @@ export function TodayImmediateActionsNavButton() {
   return (
     <Link
       to="/immediate-actions"
-      className={`group relative inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 border ${
+      className={`group relative inline-flex items-center gap-2 h-9 px-3 rounded-xl text-xs font-bold transition-all duration-200 border cursor-pointer ${
         isActive
-          ? "bg-[#221912] text-white border-[#221912] shadow-sm"
+          ? "bg-[#FAF2EC] text-[#9C5B3C] border-[#9C5B3C] shadow-xs"
           : hasCritical
-          ? "bg-rose-50 text-rose-950 border-rose-300 hover:bg-rose-100 hover:border-rose-400 hover:shadow-xs"
-          : "bg-white text-[#221912] border-[#E6DDCE] hover:bg-[#F6F1E8] hover:border-[#D8C9B8]"
+          ? "bg-[#FFF6F4] text-[#B83A3A] border-[#F2D2CC] hover:bg-[#FDEEEC] hover:border-[#E8B4AA] shadow-2xs"
+          : "bg-white text-[#221912] border-[#E6DDCE] hover:bg-[#FAF7F2] hover:border-[#9C5B3C]/50 shadow-2xs"
       }`}
       title="Open Today's Immediate Actions (>5m Unmarked Attendance Escalations)"
     >
-      <div className="relative flex items-center justify-center">
+      <span className="relative flex h-2 w-2 shrink-0">
         {hasCritical ? (
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-500 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-600"></span>
-          </span>
+          <>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+          </>
         ) : (
-          <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
         )}
-      </div>
+      </span>
 
-      <span className="tracking-tight font-bold">
+      <span className="tracking-tight font-bold whitespace-nowrap hidden md:inline">
         Immediate Actions
       </span>
 
       {hasCritical ? (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10.5px] font-mono font-black bg-rose-600 text-white shadow-2xs">
-          {criticalCount} Critical
+        <span className="inline-flex items-center px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold bg-rose-100 text-rose-800 border border-rose-200">
+          {criticalCount}
         </span>
       ) : (
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-          All Clear
+        <span className="inline-flex items-center px-1.5 py-0.2 rounded-md text-[9.5px] font-bold bg-[#F3F5F2] text-[#77876F] border border-[#d4decb]">
+          Clear
         </span>
       )}
     </Link>

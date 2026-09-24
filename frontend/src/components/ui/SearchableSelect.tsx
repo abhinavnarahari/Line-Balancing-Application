@@ -126,15 +126,15 @@ export function SearchableSelect({
         className={cn(
           "w-full h-10 bg-white border rounded-lg px-3 text-xs text-[#0F172A] flex items-center justify-between transition-all cursor-pointer shadow-2xs",
           isOpen
-            ? "border-[#2563EB] ring-2 ring-[#2563EB]/20"
-            : "border-[#E2E8F0] hover:border-[#2563EB]/60",
+            ? "border-[#9C5B3C] ring-2 ring-[#9C5B3C]/20"
+            : "border-[#E2E8F0] hover:border-[#9C5B3C]/60",
           disabled && "opacity-50 cursor-not-allowed hover:border-[#E2E8F0]"
         )}
       >
         <div className="flex-1 flex items-center gap-2 overflow-hidden mr-2">
           {isOpen ? (
             <div className="flex-1 flex items-center gap-2 w-full">
-              <Search className="w-3.5 h-3.5 text-[#2563EB] shrink-0" />
+              <Search className="w-3.5 h-3.5 text-[#9C5B3C] shrink-0" />
               <input
                 ref={inputRef}
                 type="text"
@@ -177,7 +177,7 @@ export function SearchableSelect({
           <ChevronDown
             className={cn(
               "w-3.5 h-3.5 text-[#64748B] transition-transform duration-200",
-              isOpen && "rotate-180 text-[#2563EB]"
+              isOpen && "rotate-180 text-[#9C5B3C]"
             )}
           />
         </div>
@@ -212,9 +212,9 @@ export function SearchableSelect({
                       className={cn(
                         "w-full px-3 py-2 text-xs rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer",
                         isSelected
-                          ? "bg-[#F8FAFC] text-[#0F172A] font-semibold"
+                          ? "bg-[#FAF7F2] text-[#9C5B3C] font-semibold"
                           : isHighlighted
-                          ? "bg-[#F8FAFC] text-[#0F172A]"
+                          ? "bg-[#FAF7F2] text-[#221912]"
                           : "text-[#475569]"
                       )}
                     >
@@ -226,7 +226,7 @@ export function SearchableSelect({
                           <span className="text-[#64748B] text-xs font-mono font-normal">({opt.sublabel})</span>
                         )}
                       </div>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-[#2563EB] shrink-0 ml-2" />}
+                      {isSelected && <Check className="w-3.5 h-3.5 text-[#9C5B3C] shrink-0 ml-2" />}
                     </div>
                   );
                 })

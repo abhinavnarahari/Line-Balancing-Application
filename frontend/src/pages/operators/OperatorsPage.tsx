@@ -9,6 +9,7 @@ import { OperatorForm } from "../../features/operators/OperatorForm";
 import { operatorsApi, type Operator } from "../../features/operators/api";
 import { Button } from "../../components/ui/Button";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { notifyMasterDataUpdated } from "../../utils/masterDataEvents";
 
 export function OperatorsPage() {
   const [operators, setOperators] = useState<Operator[]>([]);
@@ -48,6 +49,7 @@ export function OperatorsPage() {
   const handleSubmit = async (data: Omit<Operator, "id" | "createdAt" | "updatedAt">) => {
     if (editingOperator) await operatorsApi.updateOperator(editingOperator.id, data);
     else await operatorsApi.createOperator(data);
+    notifyMasterDataUpdated("operator");
     await loadOperators();
     setIsFormOpen(false);
     setEditingOperator(null);
@@ -59,6 +61,7 @@ export function OperatorsPage() {
 
   const handleToggleActive = async (id: string) => {
     await operatorsApi.toggleActive(id);
+    notifyMasterDataUpdated("operator");
     await loadOperators();
   };
 
@@ -111,13 +114,13 @@ export function OperatorsPage() {
         onImport={handleImport}
         eyebrow="Workforce Directory"
         title="Sewing Operators Master"
-        description="Register and manage sewing machine operators, skill competencies, and factory floor allocations."
+
         action={
           !isFormOpen && (
             <Button
               onClick={() => { setEditingOperator(null); setIsFormOpen(true); }}
               size="md"
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20"
+              className="bg-[#9C5B3C] hover:bg-[#854D33] text-white shadow-sm shadow-[#9C5B3C]/20"
             >
               <Plus className="h-4 w-4 mr-1.5" />
               Register Operator
@@ -133,14 +136,14 @@ export function OperatorsPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
+          className="rounded-2xl border border-[#E6DDCE] bg-white p-4 shadow-xs flex items-center justify-between"
         >
           <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Workforce</p>
-            <p className="text-2xl font-extrabold text-slate-900 font-mono">{kpiStats.total}</p>
-            <p className="text-[11px] font-medium text-slate-500">Registered floor operators</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">Total Workforce</p>
+            <p className="text-2xl font-extrabold text-[#221912] font-mono">{kpiStats.total}</p>
+            <p className="text-[11px] font-medium text-[#8C7E6E]">Registered floor operators</p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-[#FAF7F2] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C] shadow-xs">
             <Users className="w-5 h-5" />
           </div>
         </motion.div>
@@ -150,17 +153,17 @@ export function OperatorsPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, delay: 0.05 }}
-          className="rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-white to-emerald-50/40 p-4 shadow-xs flex items-center justify-between"
+          className="rounded-2xl border border-[#d4decb] bg-[#F3F5F2]/60 p-4 shadow-xs flex items-center justify-between"
         >
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Active Operators</p>
+              <span className="w-2 h-2 rounded-full bg-[#77876F] animate-pulse" />
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#77876F]">Active Operators</p>
             </div>
-            <p className="text-2xl font-extrabold text-emerald-900 font-mono">{kpiStats.activeCount}</p>
-            <p className="text-[11px] font-medium text-emerald-700">Ready for line balancing</p>
+            <p className="text-2xl font-extrabold text-[#221912] font-mono">{kpiStats.activeCount}</p>
+            <p className="text-[11px] font-medium text-[#77876F]">Ready for line balancing</p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-[#F3F5F2] border border-[#d4decb] flex items-center justify-center text-[#77876F] shadow-xs">
             <UserCheck className="w-5 h-5" />
           </div>
         </motion.div>
@@ -170,14 +173,14 @@ export function OperatorsPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, delay: 0.1 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
+          className="rounded-2xl border border-[#E6DDCE] bg-white p-4 shadow-xs flex items-center justify-between"
         >
           <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Departments</p>
-            <p className="text-2xl font-extrabold text-indigo-700 font-mono">{kpiStats.deptCount}</p>
-            <p className="text-[11px] font-medium text-slate-500">Sewing, Finishing & Prep</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">Departments</p>
+            <p className="text-2xl font-extrabold text-[#9C5B3C] font-mono">{kpiStats.deptCount}</p>
+            <p className="text-[11px] font-medium text-[#8C7E6E]">Sewing, Finishing & Prep</p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-[#FAF7F2] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C] shadow-xs">
             <Briefcase className="w-5 h-5" />
           </div>
         </motion.div>
@@ -187,14 +190,14 @@ export function OperatorsPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, delay: 0.15 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
+          className="rounded-2xl border border-[#E6DDCE] bg-white p-4 shadow-xs flex items-center justify-between"
         >
           <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Workforce Profile</p>
-            <p className="text-2xl font-extrabold text-purple-700 font-mono">{kpiStats.avgAge} yrs</p>
-            <p className="text-[11px] font-medium text-slate-500">Average operator age</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">Workforce Profile</p>
+            <p className="text-2xl font-extrabold text-[#221912] font-mono">{kpiStats.avgAge} yrs</p>
+            <p className="text-[11px] font-medium text-[#8C7E6E]">Average operator age</p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-[#FAF7F2] border border-[#E6DDCE] flex items-center justify-center text-[#8C7E6E] shadow-xs">
             <ShieldCheck className="w-5 h-5" />
           </div>
         </motion.div>

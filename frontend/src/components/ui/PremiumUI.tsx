@@ -40,12 +40,12 @@ export function PageHeader({ eyebrow, title, description, action, showImportExpo
           <p className="text-xs text-[#8C7E6E] max-w-2xl leading-relaxed">{description}</p>
         )}
       </div>
-      <div className="shrink-0 flex items-center gap-3">
+      <div className="shrink-0 flex items-center gap-2.5 flex-wrap">
         {showImportExport && (
-          <div className="flex items-center gap-2 mr-2">
-            <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] rounded-lg transition-colors border border-transparent hover:border-[#E6DDCE] cursor-pointer">
-              <Upload className="h-3.5 w-3.5" />
-              Import Excel
+          <div className="flex items-center gap-2">
+            <label className="h-9 px-3.5 rounded-xl border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer">
+              <Upload className="w-3.5 h-3.5 text-[#9C5B3C]" />
+              <span>Import</span>
               <input type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file && onImport) onImport(file);
@@ -53,13 +53,14 @@ export function PageHeader({ eyebrow, title, description, action, showImportExpo
               }} />
             </label>
             <button
+              type="button"
               onClick={() => onExport && onExport()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] rounded-lg transition-colors border border-transparent hover:border-[#E6DDCE] cursor-pointer"
+              className="h-9 px-3.5 rounded-xl border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
             >
-              <Download className="h-3.5 w-3.5" />
-              Export Excel
+              <Download className="w-3.5 h-3.5 text-[#9C5B3C]" />
+              <span>Export</span>
             </button>
-            <div className="h-5 w-px bg-[#E6DDCE] mx-2" />
+            <div className="h-5 w-px bg-[#E6DDCE] mx-1" />
           </div>
         )}
         {action && action}

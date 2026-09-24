@@ -61,7 +61,7 @@ const getShiftBadgeStyle = (code: string) => {
       return "bg-[#EFE9DF] text-[#614328] border border-[#D8C9B8]";
     case "GENERAL":
     default:
-      return "bg-[#F8FAFC] text-[#334155] border border-[#E2E8F0]";
+      return "bg-[#FAF7F2] text-[#8C7E6E] border border-[#E6DDCE]";
   }
 };
 
@@ -79,8 +79,7 @@ function ShiftHistoryPanel({ shift }: { shift: Shift }) {
           setLogs(Array.isArray(data) ? data : []);
         }
       })
-      .catch((err) => {
-        console.error("Failed to load shift history:", err);
+      .catch(() => {
         if (isMounted) setLogs([]);
       })
       .finally(() => {
@@ -94,8 +93,8 @@ function ShiftHistoryPanel({ shift }: { shift: Shift }) {
 
   if (loading) {
     return (
-      <div className="p-4 bg-[#F8FAFC] border-t border-[#F1F5F9] flex items-center justify-center gap-2 text-xs text-[#64748B]">
-        <div className="w-3.5 h-3.5 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
+      <div className="p-4 bg-[#FAF7F2] border-t border-[#E6DDCE] flex items-center justify-center gap-2 text-xs text-[#8C7E6E]">
+        <div className="w-3.5 h-3.5 border-2 border-[#9C5B3C] border-t-transparent rounded-full animate-spin" />
         <span>Loading past changes...</span>
       </div>
     );
@@ -103,20 +102,20 @@ function ShiftHistoryPanel({ shift }: { shift: Shift }) {
 
   if (logs.length === 0) {
     return (
-      <div className="p-4 bg-[#F8FAFC] border-t border-[#F1F5F9] text-center text-xs text-[#64748B] italic">
+      <div className="p-4 bg-[#FAF7F2] border-t border-[#E6DDCE] text-center text-xs text-[#8C7E6E] italic">
         No recorded past changes for this shift yet.
       </div>
     );
   }
 
   return (
-    <div className="p-4 bg-[#F8FAFC] border-t border-[#F1F5F9]">
+    <div className="p-4 bg-[#FAF7F2] border-t border-[#E6DDCE]">
       <div className="flex items-center gap-2 mb-3">
-        <History className="w-3.5 h-3.5 text-[#2563EB]" />
-        <h4 className="text-xs font-bold text-[#0F172A]">
+        <History className="w-3.5 h-3.5 text-[#9C5B3C]" />
+        <h4 className="text-xs font-bold text-[#221912]">
           Past Changes · {shift.shiftName} ({shift.shiftCode})
         </h4>
-        <span className="text-[11px] font-medium text-[#64748B]">
+        <span className="text-[11px] font-medium text-[#8C7E6E]">
           ({logs.length} {logs.length === 1 ? "change" : "changes"})
         </span>
       </div>
@@ -226,18 +225,18 @@ export function ShiftList({ shifts, onToggleActive, onEdit, onDelete, loading }:
                   </div>
 
                   {/* Timing Box */}
-                  <div className="bg-[#F8FAFC] p-3 rounded-xl border border-[#F1F5F9] mb-4 space-y-2">
+                  <div className="bg-[#FAF7F2] p-3 rounded-xl border border-[#E6DDCE] mb-4 space-y-2">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-[#64748B] font-medium flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#2563EB]" /> Time
+                      <span className="text-[#8C7E6E] font-medium flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" /> Time
                       </span>
-                      <span className="font-semibold text-xs text-[#0F172A] tracking-wide">
+                      <span className="font-semibold text-xs text-[#221912] tracking-wide">
                         {formattedStartTime} – {formattedEndTime}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-[#EDE4D8]">
-                      <span className="text-[#64748B] font-medium">Duration</span>
-                      <span className="font-semibold text-[11px] text-[#2563EB] bg-white px-2 py-0.5 rounded-md border border-[#E2E8F0] shadow-2xs">
+                    <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-[#E6DDCE]">
+                      <span className="text-[#8C7E6E] font-medium">Duration</span>
+                      <span className="font-semibold text-[11px] text-[#9C5B3C] bg-white px-2 py-0.5 rounded-md border border-[#E6DDCE] shadow-2xs">
                         {duration}
                       </span>
                     </div>
@@ -245,14 +244,14 @@ export function ShiftList({ shifts, onToggleActive, onEdit, onDelete, loading }:
                 </div>
 
                 {/* Card Action Buttons: Toggle, Edit, Delete */}
-                <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#F1F5F9]">
+                <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#E6DDCE]">
                   <div className="flex items-center gap-1.5">
                     <ToggleSwitch
                       checked={shift.active}
                       onChange={() => onToggleActive(shift.id)}
                       title={shift.active ? "Shift Active (Click to pause)" : "Shift Paused (Click to activate)"}
                     />
-                    <span className="text-[11px] font-medium text-[#64748B]">
+                    <span className="text-[11px] font-medium text-[#8C7E6E]">
                       {shift.active ? "Active" : "Paused"}
                     </span>
                   </div>
@@ -261,7 +260,7 @@ export function ShiftList({ shifts, onToggleActive, onEdit, onDelete, loading }:
                     <button
                       type="button"
                       onClick={() => onEdit(shift)}
-                      className="p-1.5 rounded-lg text-[#64748B] hover:text-[#0F172A] hover:bg-[#F8FAFC] border border-[#E2E8F0] hover:border-[#D8C7B5] transition-colors cursor-pointer shadow-2xs"
+                      className="p-1.5 rounded-lg text-[#8C7E6E] hover:text-[#221912] hover:bg-[#FAF7F2] border border-[#E6DDCE] hover:border-[#9C5B3C] transition-colors cursor-pointer shadow-2xs"
                       title="Edit Shift"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
@@ -270,7 +269,7 @@ export function ShiftList({ shifts, onToggleActive, onEdit, onDelete, loading }:
                     <button
                       type="button"
                       onClick={() => { if (window.confirm(`Are you sure you want to delete "${shift.shiftName}"?`)) onDelete(shift.id); }}
-                      className="p-1.5 rounded-lg text-[#A89F91] hover:text-rose-600 bg-[#F8FAFC] hover:bg-rose-50 border border-[#E2E8F0] hover:border-rose-200 transition-colors cursor-pointer shadow-2xs"
+                      className="p-1.5 rounded-lg text-[#A89F91] hover:text-rose-600 bg-[#FAF7F2] hover:bg-rose-50 border border-[#E6DDCE] hover:border-rose-200 transition-colors cursor-pointer shadow-2xs"
                       title="Delete Shift"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -311,8 +310,8 @@ export function ShiftList({ shifts, onToggleActive, onEdit, onDelete, loading }:
                 <div key={shift.id} className="contents">
                   <motion.tr
                     className={cn(
-                      "group border-b border-[#F1F5F9] transition-colors duration-100 cursor-pointer",
-                      isExpanded ? "bg-[#F8FAFC]" : "bg-white hover:bg-[#FFFFFF]"
+                      "group border-b border-[#E6DDCE]/60 transition-colors duration-100 cursor-pointer",
+                      isExpanded ? "bg-[#FAF7F2]" : "bg-white hover:bg-[#FAF7F2]/50"
                     )}
                     initial={{ opacity: 0, x: -4 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -327,15 +326,15 @@ export function ShiftList({ shifts, onToggleActive, onEdit, onDelete, loading }:
                         {shift.shiftCode}
                       </span>
                     </TableCell>
-                    <TableCell className="font-semibold text-xs text-[#0F172A]">
+                    <TableCell className="font-semibold text-xs text-[#221912]">
                       <div className="flex items-center gap-1.5">
                         <span>{shift.shiftName}</span>
-                        <ChevronDown className={cn("w-3.5 h-3.5 text-[#64748B] transition-transform duration-200", isExpanded && "rotate-180 text-[#2563EB]")} />
+                        <ChevronDown className={cn("w-3.5 h-3.5 text-[#8C7E6E] transition-transform duration-200", isExpanded && "rotate-180 text-[#9C5B3C]")} />
                       </div>
                     </TableCell>
-                    <TableCell className="text-xs font-semibold text-[#0F172A]">{formatTime(shift.startTime)}</TableCell>
-                    <TableCell className="text-xs font-semibold text-[#0F172A]">{formatTime(shift.endTime)}</TableCell>
-                    <TableCell className="text-xs text-[#2563EB] font-semibold">
+                    <TableCell className="text-xs font-semibold text-[#221912]">{formatTime(shift.startTime)}</TableCell>
+                    <TableCell className="text-xs font-semibold text-[#221912]">{formatTime(shift.endTime)}</TableCell>
+                    <TableCell className="text-xs text-[#9C5B3C] font-semibold">
                       {formatDuration(shift.startTime, shift.endTime)}
                     </TableCell>
                     <TableCell>

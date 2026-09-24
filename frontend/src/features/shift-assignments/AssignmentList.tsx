@@ -212,7 +212,7 @@ export function AssignmentList({ assignments, operators, shifts, onEndAssignment
               <select 
                 value={pageSize} 
                 onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                className="text-xs bg-white border border-[#E2E8F0] rounded-sm h-7 px-2 focus:ring-[#2563EB] focus:border-[#2563EB] text-[#0F172A]"
+                className="text-xs bg-white border border-[#E6DDCE] rounded-sm h-7 px-2 focus:ring-[#9C5B3C] focus:border-[#9C5B3C] text-[#221912]"
               >
                 <option value={25}>25</option>
                 <option value={50}>50</option>

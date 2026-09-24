@@ -30,7 +30,7 @@ export function ToggleSwitch({
       title={title || (checked ? "Active - Click to pause" : "Inactive - Click to activate")}
       onClick={() => !disabled && onChange(!checked)}
       className={cn(
-        "relative inline-flex shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/30",
+        "relative inline-flex shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9C5B3C]/30",
         isSm ? "h-5 w-9 p-0.5" : "h-6 w-11 p-0.5",
         checked
           ? "bg-[#10B981] shadow-xs"

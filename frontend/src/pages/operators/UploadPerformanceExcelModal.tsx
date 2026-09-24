@@ -320,18 +320,18 @@ export function UploadPerformanceExcelModal({
     >
       <div className="space-y-4">
         {/* Template Download Banner */}
-        <div className="flex items-center justify-between p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
+        <div className="flex items-center justify-between p-3.5 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE]">
           <div className="flex items-center gap-2.5">
-            <FileSpreadsheet className="w-5 h-5 text-[#2563EB]" />
+            <FileSpreadsheet className="w-5 h-5 text-[#9C5B3C]" />
             <div>
-              <div className="text-xs font-bold text-[#0F172A]">Download Standard Template</div>
-              <div className="text-[11px] text-[#64748B]">Excel template pre-formatted with required columns</div>
+              <div className="text-xs font-bold text-[#221912]">Download Standard Template</div>
+              <div className="text-[11px] text-[#8C7E6E]">Excel template pre-formatted with required columns</div>
             </div>
           </div>
           <button
             type="button"
             onClick={handleDownloadTemplate}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-[#0F172A] text-xs font-bold rounded-lg border border-[#E2E8F0] hover:border-[#2563EB] hover:text-[#2563EB] transition-colors shadow-2xs cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-[#221912] text-xs font-bold rounded-lg border border-[#E6DDCE] hover:border-[#9C5B3C] hover:text-[#9C5B3C] transition-colors shadow-2xs cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" /> Template
           </button>
@@ -340,7 +340,7 @@ export function UploadPerformanceExcelModal({
         {/* Drag & Drop / File Input Box */}
         <div
           onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-[#E2E8F0] hover:border-[#2563EB] bg-[#F8FAFC] hover:bg-[#F8FAFC] rounded-xl p-6 text-center cursor-pointer transition-colors"
+          className="border-2 border-dashed border-[#E6DDCE] hover:border-[#9C5B3C] bg-[#FAF7F2]/50 hover:bg-[#FAF7F2] rounded-xl p-6 text-center cursor-pointer transition-colors"
         >
           <input
             type="file"
@@ -349,11 +349,11 @@ export function UploadPerformanceExcelModal({
             accept=".xlsx, .xls, .csv"
             className="hidden"
           />
-          <Upload className="w-8 h-8 text-[#2563EB] mx-auto mb-2" />
-          <p className="text-xs font-bold text-[#0F172A]">
+          <Upload className="w-8 h-8 text-[#9C5B3C] mx-auto mb-2" />
+          <p className="text-xs font-bold text-[#221912]">
             {file ? file.name : "Click to select or drag & drop Excel / CSV file"}
           </p>
-          <p className="text-[11px] text-[#64748B] mt-1">Supports .xlsx, .xls, and .csv files</p>
+          <p className="text-[11px] text-[#8C7E6E] mt-1">Supports .xlsx, .xls, and .csv files</p>
         </div>
 
         {/* Errors Box */}
@@ -375,15 +375,15 @@ export function UploadPerformanceExcelModal({
         {parsedRows.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
+              <span className="text-xs font-bold text-[#221912] flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 Parsed {parsedRows.length} Test Runs ({groupedSummary.length} Operation Summaries)
               </span>
             </div>
 
-            <div className="border border-[#E2E8F0] rounded-lg overflow-hidden max-h-48 overflow-y-auto bg-white text-xs">
+            <div className="border border-[#E6DDCE] rounded-lg overflow-hidden max-h-48 overflow-y-auto bg-white text-xs">
               <table className="w-full text-left border-collapse">
-                <thead className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[10px] font-bold text-[#64748B] uppercase">
+                <thead className="bg-[#FAF7F2] border-b border-[#E6DDCE] text-[10px] font-bold text-[#8C7E6E] uppercase">
                   <tr>
                     <th className="py-2 px-3">Operator</th>
                     <th className="py-2 px-3">Operation</th>
@@ -392,17 +392,17 @@ export function UploadPerformanceExcelModal({
                     <th className="py-2 px-3 text-right">Auto Rating</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#F1F5F9]">
+                <tbody className="divide-y divide-[#E6DDCE]/60">
                   {groupedSummary.map((item) => (
-                    <tr key={item.key} className="hover:bg-[#F8FAFC]/50">
-                      <td className="py-2 px-3 font-semibold text-[#0F172A]">
-                        {item.operatorName} <span className="text-[#64748B] font-normal font-mono text-[10px]">({item.employeeId})</span>
+                    <tr key={item.key} className="hover:bg-[#FAF7F2]/50">
+                      <td className="py-2 px-3 font-semibold text-[#221912]">
+                        {item.operatorName} <span className="text-[#8C7E6E] font-normal font-mono text-[10px]">({item.employeeId})</span>
                       </td>
-                      <td className="py-2 px-3 text-[#0F172A]">{item.operationName}</td>
-                      <td className="py-2 px-2 text-center font-bold text-[#0F172A]">{item.count}</td>
-                      <td className="py-2 px-2 text-center font-mono font-bold text-[#2563EB]">{item.avg}s</td>
+                      <td className="py-2 px-3 text-[#221912]">{item.operationName}</td>
+                      <td className="py-2 px-2 text-center font-bold text-[#221912]">{item.count}</td>
+                      <td className="py-2 px-2 text-center font-mono font-bold text-[#9C5B3C]">{item.avg}s</td>
                       <td className="py-2 px-3 text-right">
-                        <span className="inline-block bg-[#0F172A] text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                        <span className="inline-block bg-[#221912] text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
                           Rating {item.rating}
                         </span>
                       </td>
@@ -415,11 +415,11 @@ export function UploadPerformanceExcelModal({
         )}
 
         {/* Action Buttons: Import as Draft vs Submit */}
-        <div className="flex items-center justify-between gap-2.5 pt-2 border-t border-[#F1F5F9]">
+        <div className="flex items-center justify-between gap-2.5 pt-2 border-t border-[#E6DDCE]">
           <button
             type="button"
             onClick={onClose}
-            className="px-3.5 h-9 text-xs font-semibold text-[#64748B] border border-[#E2E8F0] rounded-lg hover:bg-[#F8FAFC] cursor-pointer"
+            className="px-3.5 h-9 text-xs font-semibold text-[#8C7E6E] border border-[#E6DDCE] rounded-lg hover:bg-[#FAF7F2] cursor-pointer"
           >
             Cancel
           </button>
@@ -429,7 +429,7 @@ export function UploadPerformanceExcelModal({
               type="button"
               onClick={() => handleUploadSubmit("DRAFT")}
               disabled={uploading || parsedRows.length === 0}
-              className="px-4 h-9 text-xs font-bold text-[#0F172A] bg-white border border-[#E2E8F0] hover:border-[#2563EB] hover:bg-[#F8FAFC] rounded-lg disabled:opacity-50 transition-colors cursor-pointer shadow-2xs"
+              className="px-4 h-9 text-xs font-bold text-[#221912] bg-white border border-[#E6DDCE] hover:border-[#9C5B3C] hover:bg-[#FAF7F2] rounded-lg disabled:opacity-50 transition-colors cursor-pointer shadow-2xs"
             >
               Import as Draft
             </button>

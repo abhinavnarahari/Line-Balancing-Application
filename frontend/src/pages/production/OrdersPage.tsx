@@ -15,6 +15,7 @@ import { OrderForm } from "../../features/orders/OrderForm";
 import { stylesApi, type Style } from "../../features/styles/api";
 import { sizesApi, type Size } from "../../features/sizes/api";
 import { exportToExcel } from "../../utils/excel";
+import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 // Helper for Color Swatch
 function getColorHex(colorName: string): string {
@@ -61,29 +62,6 @@ function getPlannedCountdown(plannedDateStr?: string): number | null {
   target.setHours(0, 0, 0, 0);
   const diffDays = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   return diffDays;
-}
-
-// Buyer avatar initials
-function getInitials(name: string) {
-  if (!name) return "PO";
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
-
-// Buyer avatar background color generator
-function getAvatarBg(name: string) {
-  const colors = [
-    "bg-blue-100 text-blue-800 border-blue-200",
-    "bg-indigo-100 text-indigo-800 border-indigo-200",
-    "bg-purple-100 text-purple-800 border-purple-200",
-    "bg-emerald-100 text-emerald-800 border-emerald-200",
-    "bg-amber-100 text-amber-800 border-amber-200",
-    "bg-teal-100 text-teal-800 border-teal-200",
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i);
-  return colors[Math.abs(hash) % colors.length];
 }
 
 export function OrdersPage() {
@@ -135,6 +113,8 @@ export function OrdersPage() {
     loadData();
   }, []);
 
+  useMasterDataSubscription(["style", "size", "order", "all"], loadData);
+
   const handleSubmit = async (data: CreateOrderDTO) => {
     try {
       if (editingOrder && editingOrder.id) {
@@ -144,6 +124,7 @@ export function OrdersPage() {
       }
       setIsFormOpen(false);
       setEditingOrder(null);
+      notifyMasterDataUpdated("order");
       await loadData();
     } catch (err: any) {
       console.error("Failed to save order:", err);
@@ -157,6 +138,7 @@ export function OrdersPage() {
       await ordersApi.deleteOrder(deletingOrder.id);
       showToast(`✓ Order "${deletingOrder.orderNo}" deleted successfully`);
       setDeletingOrder(null);
+      notifyMasterDataUpdated("order");
       await loadData();
     } catch (err: any) {
       console.error("Failed to delete order:", err);
@@ -170,6 +152,7 @@ export function OrdersPage() {
       setOrders(prev =>
         prev.map(o => (String(o.id) === String(id) ? { ...o, status: status as OrderStatus } : o))
       );
+      notifyMasterDataUpdated("order");
     } catch (e) {
       console.error("Failed to update status", e);
       loadData();
@@ -272,16 +255,17 @@ export function OrdersPage() {
       <PageHeader
         eyebrow="Production Management"
         title="Order Register & Breakdown"
-        description="Track commercial garment purchase orders, size distributions, delivery schedules, and line balancing readiness."
+
         action={
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <button
+              type="button"
               onClick={handleExport}
               disabled={orders.length === 0}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 shadow-xs transition-colors cursor-pointer"
+              className="h-9 px-3.5 rounded-xl border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
-              <Download className="w-4 h-4 text-slate-500" />
-              Export Excel
+              <Download className="w-3.5 h-3.5 text-[#9C5B3C]" />
+              <span>Export</span>
             </button>
             <Button
               onClick={() => {
@@ -376,9 +360,9 @@ export function OrdersPage() {
       {/* ── Main Data Card & Filter Controls ──────────────────────── */}
       <DataCard noPad className="border border-[#E6DDCE] shadow-[0_1px_3px_rgba(34,25,18,0.05)] rounded-2xl overflow-hidden bg-white">
         {/* Controls Toolbar */}
-        <div className="p-4 sm:p-5 border-b border-[#F0EAE0] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-[#FDFBF7]">
+        <div className="p-4 sm:p-5 border-b border-[#F0EAE0] flex flex-col xl:flex-row xl:items-center justify-between gap-3.5 bg-[#FDFBF7]">
           {/* Status Segmented Tabs */}
-          <div className="flex flex-wrap items-center gap-1 bg-white p-1 rounded-xl border border-[#E6DDCE] shadow-2xs">
+          <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#E6DDCE] shadow-2xs overflow-x-auto max-w-full shrink-0">
             {[
               { id: "ALL", label: "All Orders", count: orders.length },
               { id: "PLANNED", label: "Planned", count: orders.filter(o => o.status === "PLANNED").length },
@@ -391,7 +375,7 @@ export function OrdersPage() {
                 <button
                   key={tab.id}
                   onClick={() => setStatusFilter(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                     active
                       ? "bg-[#9C5B3C] text-white shadow-xs"
                       : "text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8]"
@@ -411,21 +395,21 @@ export function OrdersPage() {
           </div>
 
           {/* Search & Select Filters */}
-          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+          <div className="flex items-center gap-2.5 w-full xl:w-auto flex-wrap sm:flex-nowrap">
             {/* Search Input */}
-            <div className="relative flex-1 sm:w-64">
+            <div className="relative flex-1 sm:w-60 min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C7E6E]" />
               <input
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search PO, style, buyer, color..."
-                className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition-all font-medium"
+                className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-[#E6DDCE] rounded-xl text-[#221912] placeholder:text-[#8C7E6E] focus:outline-none focus:border-[#9C5B3C] transition-all font-medium shadow-2xs"
               />
               {search && (
                 <button
                   onClick={() => setSearch("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8C7E6E] hover:text-[#221912]"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -436,7 +420,7 @@ export function OrdersPage() {
             <select
               value={buyerFilter}
               onChange={e => setBuyerFilter(e.target.value)}
-              className="text-xs font-semibold px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer shadow-2xs"
+              className="text-xs font-semibold px-3 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-[#221912] focus:outline-none focus:border-[#9C5B3C] cursor-pointer shadow-2xs shrink-0"
             >
               <option value="ALL">All Buyers</option>
               {distinctBuyers.map(b => (
@@ -450,7 +434,7 @@ export function OrdersPage() {
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as any)}
-              className="text-xs font-semibold px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer shadow-2xs"
+              className="text-xs font-semibold px-3 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-[#221912] focus:outline-none focus:border-[#9C5B3C] cursor-pointer shadow-2xs shrink-0"
             >
               <option value="orderDate">Order Date (Newest)</option>
               <option value="delivery">Delivery (Earliest First)</option>
@@ -576,20 +560,9 @@ export function OrdersPage() {
 
                       {/* Column 3: Buyer */}
                       <td className="py-3.5 px-5 align-middle whitespace-nowrap">
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-[11px] border shrink-0 ${getAvatarBg(
-                              order.buyer
-                            )}`}
-                          >
-                            {getInitials(order.buyer)}
-                          </div>
-                          <div>
-                            <span className="text-xs font-bold text-[#221912] block capitalize">
-                              {order.buyer}
-                            </span>
-                          </div>
-                        </div>
+                        <span className="text-xs font-bold text-[#221912] block capitalize">
+                          {order.buyer}
+                        </span>
                       </td>
 
                       {/* Column 4: Quantity */}

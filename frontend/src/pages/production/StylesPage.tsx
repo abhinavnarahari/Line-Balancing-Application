@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Search, Edit2, BookOpen, Building2, CheckCircle2, Calendar, X } from "lucide-react";
+import { Plus, Search, Edit2, X } from "lucide-react";
 import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { motion } from "framer-motion";
 import { Button } from "../../components/ui/Button";
@@ -9,27 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { stylesApi, type Style, type CreateStyleDTO, type UpdateStyleDTO } from "../../features/styles/api";
 import { StyleForm } from "../../features/styles/StyleForm";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
-
-function getBuyerColor(name: string) {
-  const colors = [
-    "bg-blue-100 text-blue-800 border-blue-200",
-    "bg-indigo-100 text-indigo-800 border-indigo-200",
-    "bg-purple-100 text-purple-800 border-purple-200",
-    "bg-emerald-100 text-emerald-800 border-emerald-200",
-    "bg-amber-100 text-amber-800 border-amber-200",
-    "bg-teal-100 text-teal-800 border-teal-200",
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i);
-  return colors[Math.abs(hash) % colors.length];
-}
-
-function getInitials(name: string) {
-  if (!name) return "BY";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 export function StylesPage() {
   const [styles, setStyles] = useState<Style[]>([]);
@@ -56,25 +36,12 @@ export function StylesPage() {
     loadStyles();
   }, []);
 
+  useMasterDataSubscription(["style", "all"], loadStyles);
+
   // Distinct buyers
   const distinctBuyers = useMemo(() => {
     return Array.from(new Set(styles.map(s => s.buyer).filter(Boolean))).sort();
   }, [styles]);
-
-  // Executive KPI summary stats
-  const kpiStats = useMemo(() => {
-    const total = styles.length;
-    const active = styles.filter(s => s.active);
-    const buyersCount = distinctBuyers.length;
-    const seasons = Array.from(new Set(styles.map(s => s.season).filter(Boolean))).length;
-
-    return {
-      total,
-      activeCount: active.length,
-      buyersCount,
-      seasons,
-    };
-  }, [styles, distinctBuyers]);
 
   const handleSubmit = async (data: CreateStyleDTO | UpdateStyleDTO) => {
     if (editingStyle) {
@@ -84,11 +51,13 @@ export function StylesPage() {
     }
     setIsFormOpen(false);
     setEditingStyle(null);
+    notifyMasterDataUpdated("style");
     loadStyles();
   };
 
   const handleToggle = async (id: string | number) => {
     await stylesApi.toggleActive(id);
+    notifyMasterDataUpdated("style");
     loadStyles();
   };
 
@@ -150,13 +119,13 @@ export function StylesPage() {
         onImport={handleImport}
         eyebrow="Commercial Catalog"
         title="Style & Garment Catalog"
-        description="Catalog of garment designs, buyer style specifications, and production classifications."
+
         action={
           !isFormOpen && (
             <Button
               onClick={() => { setEditingStyle(null); setIsFormOpen(true); }}
               size="md"
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20"
+              className="bg-[#9C5B3C] hover:bg-[#854D33] text-white shadow-sm"
             >
               <Plus className="h-4 w-4 mr-1.5" />
               Add Style
@@ -164,80 +133,6 @@ export function StylesPage() {
           )
         }
       />
-
-      {/* ── Executive KPI Cards ───────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Styles */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
-        >
-          <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Styles</p>
-            <p className="text-2xl font-extrabold text-slate-900 font-mono">{kpiStats.total}</p>
-            <p className="text-[11px] font-medium text-slate-500">Catalogued garment styles</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-xs">
-            <BookOpen className="w-5 h-5" />
-          </div>
-        </motion.div>
-
-        {/* Active Production Styles */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, delay: 0.05 }}
-          className="rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-white to-emerald-50/40 p-4 shadow-xs flex items-center justify-between"
-        >
-          <div className="space-y-1">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Active Styles</p>
-            </div>
-            <p className="text-2xl font-extrabold text-emerald-900 font-mono">{kpiStats.activeCount}</p>
-            <p className="text-[11px] font-medium text-emerald-700">In production orders</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-xs">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </motion.div>
-
-        {/* Commercial Buyers */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, delay: 0.1 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
-        >
-          <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Commercial Buyers</p>
-            <p className="text-2xl font-extrabold text-indigo-700 font-mono">{kpiStats.buyersCount}</p>
-            <p className="text-[11px] font-medium text-slate-500">Brands & retail clients</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
-            <Building2 className="w-5 h-5" />
-          </div>
-        </motion.div>
-
-        {/* Catalog Seasons */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, delay: 0.15 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
-        >
-          <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Active Seasons</p>
-            <p className="text-2xl font-extrabold text-purple-700 font-mono">{kpiStats.seasons}</p>
-            <p className="text-[11px] font-medium text-slate-500">Spring, Autumn & Winter</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shadow-xs">
-            <Calendar className="w-5 h-5" />
-          </div>
-        </motion.div>
-      </div>
 
       {/* ── Modal Form ────────────────────────────────────────────── */}
       <Modal
@@ -261,7 +156,7 @@ export function StylesPage() {
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-slate-900">Style Catalog</h3>
-              <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-700 border border-blue-200">
+              <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-[#FAF7F2] text-[#9C5B3C] border border-[#E6DDCE]">
                 {filteredStyles.length}
               </span>
             </div>
@@ -280,7 +175,7 @@ export function StylesPage() {
                   onClick={() => setStatusFilter(f)}
                   className={`px-3 py-1 text-xs font-bold rounded-lg transition-colors cursor-pointer capitalize ${
                     statusFilter === f
-                      ? "bg-blue-600 text-white shadow-2xs"
+                      ? "bg-[#9C5B3C] text-white shadow-2xs"
                       : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
@@ -294,7 +189,7 @@ export function StylesPage() {
               <select
                 value={buyerFilter}
                 onChange={e => setBuyerFilter(e.target.value)}
-                className="h-8.5 bg-white border border-slate-200 rounded-xl px-3 text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500 shadow-2xs cursor-pointer"
+                className="h-8.5 bg-white border border-slate-200 rounded-xl px-3 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
               >
                 <option value="ALL">All Buyers ({distinctBuyers.length})</option>
                 {distinctBuyers.map(b => (
@@ -311,7 +206,7 @@ export function StylesPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search style no, buyer…"
-                className="w-full pl-8 pr-8 py-1.5 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
+                className="w-full pl-8 pr-8 py-1.5 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#9C5B3C] shadow-2xs"
               />
               {search && (
                 <button
@@ -361,20 +256,11 @@ export function StylesPage() {
                       </span>
                     </TableCell>
 
-                    {/* Buyer with avatar */}
+                    {/* Buyer */}
                     <TableCell className="align-middle whitespace-nowrap">
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-extrabold border shadow-2xs ${getBuyerColor(
-                            style.buyer || ""
-                          )}`}
-                        >
-                          {getInitials(style.buyer || "")}
-                        </div>
-                        <span className="font-bold text-xs text-slate-900">
-                          {style.buyer || "—"}
-                        </span>
-                      </div>
+                      <span className="font-bold text-xs text-slate-900">
+                        {style.buyer || "—"}
+                      </span>
                     </TableCell>
 
                     {/* Description */}

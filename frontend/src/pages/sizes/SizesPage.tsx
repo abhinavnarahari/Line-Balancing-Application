@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Edit2, Layers, CheckCircle2, Tag, ArrowRight } from "lucide-react";
+import { Plus, Edit2, ArrowRight, Layers } from "lucide-react";
 import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { motion } from "framer-motion";
 import { Button } from "../../components/ui/Button";
@@ -9,6 +9,7 @@ import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { sizesApi, type Size } from "../../features/sizes/api";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 export function SizesPage() {
   const [sizes, setSizes] = useState<Size[]>([]);
@@ -31,19 +32,7 @@ export function SizesPage() {
     loadSizes();
   }, []);
 
-  // Executive KPI stats
-  const kpiStats = useMemo(() => {
-    const total = sizes.length;
-    const active = sizes.filter(s => s.active);
-    const sorted = [...sizes].sort((a, b) => a.sequence - b.sequence);
-    const range = sorted.length > 0 ? `${sorted[0].code} → ${sorted[sorted.length - 1].code}` : "—";
-
-    return {
-      total,
-      activeCount: active.length,
-      range,
-    };
-  }, [sizes]);
+  useMasterDataSubscription(["size", "all"], loadSizes);
 
   const openCreate = () => {
     setEditingSize(null);
@@ -65,6 +54,7 @@ export function SizesPage() {
     try {
       if (editingSize) await sizesApi.updateSize(editingSize.id, formData);
       else await sizesApi.createSize(formData);
+      notifyMasterDataUpdated("size");
       await loadSizes();
       setIsFormOpen(false);
       setEditingSize(null);
@@ -75,6 +65,7 @@ export function SizesPage() {
 
   const handleToggle = async (id: string | number) => {
     await sizesApi.toggleActive(id);
+    notifyMasterDataUpdated("size");
     await loadSizes();
   };
 
@@ -119,95 +110,25 @@ export function SizesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        showImportExport={true}
+        onExport={handleExport}
+        onImport={handleImport}
         eyebrow="Master Data Configuration"
         title="Apparel Size Definitions"
-        description="Standardized dimensional sizing matrix, grading sequence, and ratio profiles."
         action={
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              size="md"
-              onClick={handleExport}
-              className="bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
-            >
-              Export
-            </Button>
-            <label className="cursor-pointer">
-              <span className="inline-flex items-center justify-center px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-xl shadow-2xs transition-colors">
-                Import
-              </span>
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) handleImport(f);
-                }}
-              />
-            </label>
-            <Button
-              variant="primary"
-              size="md"
-              onClick={openCreate}
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-            >
-              <Plus className="w-4 h-4 mr-1.5" />
-              Add Garment Size
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={openCreate}
+            className="bg-[#9C5B3C] hover:bg-[#854D33] text-white shadow-sm"
+          >
+            <Plus className="w-4 h-4 mr-1.5" />
+            Add Garment Size
+          </Button>
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
-        >
-          <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Configured Sizes</p>
-            <p className="text-2xl font-extrabold text-slate-900 font-mono">{kpiStats.total}</p>
-            <p className="text-[11px] font-medium text-slate-500">Active size specifications</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-xs">
-            <Layers className="w-5 h-5" />
-          </div>
-        </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, delay: 0.05 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
-        >
-          <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Active In Matrix</p>
-            <p className="text-2xl font-extrabold text-emerald-600 font-mono">{kpiStats.activeCount}</p>
-            <p className="text-[11px] font-medium text-slate-500">Available on order forms</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shadow-xs">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, delay: 0.1 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
-        >
-          <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Current Size Span</p>
-            <p className="text-2xl font-extrabold text-indigo-700 font-mono">{kpiStats.range}</p>
-            <p className="text-[11px] font-medium text-slate-500">Graded range sequence</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
-            <Tag className="w-5 h-5" />
-          </div>
-        </motion.div>
-      </div>
 
       <Modal
         isOpen={isFormOpen}
@@ -223,7 +144,7 @@ export function SizesPage() {
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
             <Button type="button" variant="ghost" size="md" onClick={() => setIsFormOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="primary" size="md" loading={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button type="submit" variant="primary" size="md" loading={saving} className="bg-[#9C5B3C] hover:bg-[#854D33] text-white">
               {editingSize ? "Update Size" : "Create Size"}
             </Button>
           </div>
@@ -290,7 +211,7 @@ export function SizesPage() {
 
                     {/* Size Code */}
                     <TableCell className="align-middle whitespace-nowrap">
-                      <span className="font-mono font-extrabold text-slate-900 text-sm bg-blue-50 text-blue-700 px-3 py-1 rounded-xl border border-blue-200 shadow-2xs">
+                      <span className="font-mono font-extrabold text-[#9C5B3C] text-sm bg-[#FAF7F2] px-3 py-1 rounded-xl border border-[#E6DDCE] shadow-2xs">
                         {s.code}
                       </span>
                     </TableCell>

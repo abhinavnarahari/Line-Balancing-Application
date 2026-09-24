@@ -30,32 +30,6 @@ export interface OperatorComboboxProps {
   className?: string;
 }
 
-// Deterministic vibrant avatar gradient generator
-function getAvatarGradient(name: string): string {
-  const gradients = [
-    "from-blue-500 to-indigo-600 text-white",
-    "from-emerald-500 to-teal-600 text-white",
-    "from-violet-500 to-purple-600 text-white",
-    "from-amber-500 to-orange-600 text-white",
-    "from-rose-500 to-pink-600 text-white",
-    "from-cyan-500 to-blue-600 text-white",
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % gradients.length;
-  return gradients[index];
-}
-
-// Extract clean 2-letter uppercase initials
-function getInitials(name: string): string {
-  if (!name) return "OP";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 // Human-friendly role formatting
 function formatRole(role?: string): string {
   if (!role || role === "OPERATOR") return "";
@@ -393,8 +367,8 @@ export function OperatorCombobox({
 
     if (rating === 3) {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200 shadow-2xs">
-          <Star className="w-2.5 h-2.5 fill-blue-500 text-blue-600" />
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FAF7F2] text-[#9C5B3C] border border-[#E6DDCE] shadow-2xs">
+          <Star className="w-2.5 h-2.5 fill-[#9C5B3C] text-[#9C5B3C]" />
           <span>★ {rating}</span>
         </span>
       );
@@ -423,12 +397,12 @@ export function OperatorCombobox({
         }}
         className={`w-full min-h-[34px] rounded-xl px-2.5 py-1 text-xs transition-all cursor-pointer flex items-center justify-between gap-2 shadow-2xs select-none border ${
           isOpen
-            ? "border-blue-500 ring-2 ring-blue-500/15 bg-white"
+            ? "border-[#9C5B3C] ring-2 ring-[#9C5B3C]/15 bg-white"
             : selectedOperator
             ? isSkillMismatch
               ? "border-amber-300 bg-amber-50/20 hover:border-amber-400 hover:bg-amber-50/40"
               : "border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/50"
-            : "border-dashed border-slate-300 bg-slate-50/50 hover:border-blue-400 hover:bg-blue-50/30 text-slate-500"
+            : "border-dashed border-slate-300 bg-slate-50/50 hover:border-[#9C5B3C]/60 hover:bg-[#FAF7F2] text-slate-500"
         } ${disabled ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
         title={
           selectedOperator
@@ -438,18 +412,9 @@ export function OperatorCombobox({
       >
         {selectedOperator ? (
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            {/* Operator Avatar with Attendance Indicator */}
-            <div className="relative shrink-0">
-              <div
-                className={`w-6 h-6 rounded-full bg-gradient-to-br ${getAvatarGradient(
-                  selectedOperator.name
-                )} flex items-center justify-center font-bold text-[9.5px] shadow-2xs`}
-              >
-                {getInitials(selectedOperator.name)}
-              </div>
-              <div className="absolute -bottom-0.5 -right-0.5">
-                {renderAttendanceDot(selectedAttendance)}
-              </div>
+            {/* Attendance Status Dot */}
+            <div className="shrink-0 flex items-center">
+              {renderAttendanceDot(selectedAttendance)}
             </div>
 
             {/* Operator Info */}
@@ -493,7 +458,7 @@ export function OperatorCombobox({
           )}
           <ChevronDown
             className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
-              isOpen ? "rotate-180 text-blue-600" : ""
+              isOpen ? "rotate-180 text-[#9C5B3C]" : ""
             }`}
           />
         </div>
@@ -517,7 +482,7 @@ export function OperatorCombobox({
             {/* Header: Title & Slot Context */}
             <div className="px-3.5 pt-3 pb-2 bg-gradient-to-r from-slate-50 to-slate-100/60 border-b border-slate-200/80 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">
+                <div className="w-5 h-5 rounded-md bg-[#FAF7F2] text-[#9C5B3C] border border-[#E6DDCE] flex items-center justify-center font-bold text-xs">
                   <User className="w-3 h-3" />
                 </div>
                 <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
@@ -547,7 +512,7 @@ export function OperatorCombobox({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by name, EMP ID, role, or rating..."
-                  className="w-full h-8.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-blue-500 rounded-xl pl-8 pr-7 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/15 transition-all font-medium"
+                  className="w-full h-8.5 bg-slate-50 focus:bg-white border border-slate-200 focus:border-[#9C5B3C] rounded-xl pl-8 pr-7 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#9C5B3C]/15 transition-all font-medium"
                 />
                 {searchQuery && (
                   <button
@@ -567,7 +532,7 @@ export function OperatorCombobox({
                   onClick={() => setActiveTab("all")}
                   className={`px-2 py-0.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer ${
                     activeTab === "all"
-                      ? "bg-blue-600 text-white shadow-2xs"
+                      ? "bg-[#9C5B3C] text-white shadow-2xs"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200/80"
                   }`}
                 >
@@ -607,8 +572,8 @@ export function OperatorCombobox({
                   onClick={() => setActiveTab("expert")}
                   className={`px-2 py-0.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1 ${
                     activeTab === "expert"
-                      ? "bg-indigo-600 text-white shadow-2xs"
-                      : "bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-200/60"
+                      ? "bg-[#78350F] text-white shadow-2xs"
+                      : "bg-[#FAF7F2] text-[#78350F] hover:bg-[#F5EBE1] border border-[#E6DDCE]"
                   }`}
                 >
                   <Star className="w-2.5 h-2.5" />
@@ -621,8 +586,8 @@ export function OperatorCombobox({
                     onClick={() => setActiveTab("floater")}
                     className={`px-2 py-0.5 rounded-lg font-bold transition-all shrink-0 cursor-pointer ${
                       activeTab === "floater"
-                        ? "bg-purple-600 text-white shadow-2xs"
-                        : "bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200/60"
+                        ? "bg-[#B48259] text-white shadow-2xs"
+                        : "bg-[#FAF7F2] text-[#8C7E6E] hover:bg-[#F5EBE1] border border-[#E6DDCE]"
                     }`}
                   >
                     Floaters ({stats.floaterCount})
@@ -665,7 +630,7 @@ export function OperatorCombobox({
                       setSearchQuery("");
                       setActiveTab("all");
                     }}
-                    className="text-[11px] font-bold text-blue-600 hover:underline cursor-pointer"
+                    className="text-[11px] font-bold text-[#9C5B3C] hover:underline cursor-pointer"
                   >
                     Reset filters &amp; show all {availableOperators.length} operators
                   </button>
@@ -686,23 +651,14 @@ export function OperatorCombobox({
                       onClick={() => handleSelect(String(op.id))}
                       className={`px-2.5 py-2 rounded-xl text-xs transition-all cursor-pointer flex items-center justify-between gap-2 border ${
                         isSelected
-                          ? "bg-blue-50/80 border-blue-200 text-blue-900 font-semibold"
+                          ? "bg-[#FAF7F2] border-[#E6DDCE] text-[#9C5B3C] font-semibold"
                           : "border-transparent hover:bg-slate-50 hover:border-slate-200 text-slate-700"
                       }`}
                     >
-                      {/* Left: Avatar + Indicator */}
+                      {/* Left: Attendance Indicator & Info */}
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div className="relative shrink-0">
-                          <div
-                            className={`w-7 h-7 rounded-full bg-gradient-to-br ${getAvatarGradient(
-                              op.name
-                            )} flex items-center justify-center font-bold text-[10px] shadow-2xs`}
-                          >
-                            {getInitials(op.name)}
-                          </div>
-                          <div className="absolute -bottom-0.5 -right-0.5">
-                            {renderAttendanceDot(attendance)}
-                          </div>
+                        <div className="shrink-0 flex items-center">
+                          {renderAttendanceDot(attendance)}
                         </div>
 
                         {/* Middle: Name, ID, Role & Attendance status */}
@@ -715,7 +671,7 @@ export function OperatorCombobox({
                               {op.employeeId}
                             </span>
                             {op.role && op.role !== "OPERATOR" && (
-                              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200/80 shrink-0">
+                              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-[#FAF7F2] text-[#9C5B3C] border border-[#E6DDCE] shrink-0">
                                 {formatRole(op.role)}
                               </span>
                             )}
@@ -764,7 +720,7 @@ export function OperatorCombobox({
                       <div className="flex items-center gap-2 shrink-0">
                         {renderStarBadge(skill, !meetsReq && requiredSkillRating !== "ANY")}
                         {isSelected && (
-                          <div className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                          <div className="w-5 h-5 rounded-full bg-[#9C5B3C] text-white flex items-center justify-center shrink-0 shadow-2xs">
                             <Check className="w-3 h-3 stroke-[2.5]" />
                           </div>
                         )}

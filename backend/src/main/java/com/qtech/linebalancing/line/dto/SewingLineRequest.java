@@ -17,12 +17,20 @@ public class SewingLineRequest {
     @NotBlank(message = "Line name is required")
     private String lineName;
 
+    private String lineType;
     private String floor;
+    private String department;
     private String supervisorName;
+    private String ieInCharge;
+    private String qcInspector;
+
+    private Integer workstationCount;
 
     @NotNull(message = "Number of operators is required")
     @Min(value = 1, message = "Operator count must be at least 1")
     private Integer operatorCount;
+
+    private Integer helperCount;
 
     @NotNull(message = "Number of machines is required")
     @Min(value = 1, message = "Machine count must be at least 1")
@@ -41,5 +49,9 @@ public class SewingLineRequest {
     @DecimalMax(value = "100.00", message = "Target efficiency must be <= 100")
     private BigDecimal targetEfficiencyPercent;
 
+    private String operationalStatus;
+    private String currentStyle;
+    private String currentBulletin;
     private Boolean active;
+    private String notes;
 }

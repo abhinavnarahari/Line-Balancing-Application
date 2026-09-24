@@ -1,16 +1,26 @@
 package com.qtech.linebalancing.operation.service;
 
+import com.qtech.linebalancing.capacity.entity.CapacityPlan;
+import com.qtech.linebalancing.capacity.repository.CapacityPlanRepository;
 import com.qtech.linebalancing.common.exception.BusinessRuleException;
 import com.qtech.linebalancing.common.exception.ResourceNotFoundException;
 import com.qtech.linebalancing.operation.dto.OperationRequest;
 import com.qtech.linebalancing.operation.dto.OperationResponse;
 import com.qtech.linebalancing.operation.entity.Operation;
 import com.qtech.linebalancing.operation.repository.OperationRepository;
+import com.qtech.linebalancing.operationbulletin.entity.BulletinLine;
+import com.qtech.linebalancing.operationbulletin.entity.OperationBulletin;
+import com.qtech.linebalancing.operationbulletin.repository.BulletinLineRepository;
+import com.qtech.linebalancing.operationbulletin.repository.OperationBulletinRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +29,9 @@ import java.util.List;
 public class OperationService {
 
     private final OperationRepository operationRepository;
+    private final BulletinLineRepository bulletinLineRepository;
+    private final OperationBulletinRepository operationBulletinRepository;
+    private final CapacityPlanRepository capacityPlanRepository;
 
     public List<OperationResponse> getAll(Boolean active) {
         List<Operation> ops = (active != null)
@@ -59,7 +72,46 @@ public class OperationService {
         if (request.getMachineType() != null) {
             op.setMachineType(request.getMachineType().trim());
         }
-        return toResponse(operationRepository.save(op));
+        Operation saved = operationRepository.save(op);
+
+        // Synchronize updated SMV and Machine Type across all Operation Bulletin lines
+        if (request.getStandardSmv() != null) {
+            List<BulletinLine> lines = bulletinLineRepository.findByOperationId(id);
+            if (lines != null && !lines.isEmpty()) {
+                Set<OperationBulletin> affectedBulletins = new HashSet<>();
+                for (BulletinLine line : lines) {
+                    line.setSmv(request.getStandardSmv());
+                    if (request.getMachineType() != null && !request.getMachineType().isBlank()) {
+                        line.setMachineType(request.getMachineType().trim());
+                    }
+                    if (line.getBulletin() != null) {
+                        affectedBulletins.add(line.getBulletin());
+                    }
+                }
+                bulletinLineRepository.saveAll(lines);
+
+                for (OperationBulletin b : affectedBulletins) {
+                    List<BulletinLine> bLines = bulletinLineRepository.findByBulletinIdOrderBySequenceAsc(b.getId());
+                    BigDecimal newTotal = bLines.stream()
+                            .map(BulletinLine::getSmv)
+                            .filter(Objects::nonNull)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    b.setTotalSmv(newTotal);
+                    operationBulletinRepository.save(b);
+
+                    // Also update Capacity Plans matching this bulletin
+                    List<CapacityPlan> cPlans = capacityPlanRepository.findByBulletinId(b.getId());
+                    if (cPlans != null && !cPlans.isEmpty()) {
+                        for (CapacityPlan cp : cPlans) {
+                            cp.setTotalSmvMinutes(newTotal.doubleValue());
+                        }
+                        capacityPlanRepository.saveAll(cPlans);
+                    }
+                }
+            }
+        }
+
+        return toResponse(saved);
     }
 
     @Transactional

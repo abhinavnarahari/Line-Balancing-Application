@@ -91,37 +91,37 @@ export function OperationTestHistoryModal({
       <div className="space-y-6">
         {/* Metric Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
-            <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wide">Current Rating</div>
-            <div className="text-base font-bold text-[#0F172A] mt-1 flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-[#2563EB]" />
+          <div className="p-3.5 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE]">
+            <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Current Rating</div>
+            <div className="text-base font-bold text-[#221912] mt-1 flex items-center gap-1.5">
+              <Award className="w-4 h-4 text-[#9C5B3C]" />
               {currentRating > 0 ? `Rating ${currentRating}` : "Not Rated"}
             </div>
             {currentRating > 0 && (
-              <div className="text-[10px] text-[#2563EB] font-bold mt-0.5 font-mono">{getRatingRangeLabel(currentRating, operation.name)}</div>
+              <div className="text-[10px] text-[#9C5B3C] font-bold mt-0.5 font-mono">{getRatingRangeLabel(currentRating, operation.name)}</div>
             )}
           </div>
 
-          <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
-            <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wide">Total Tests</div>
-            <div className="text-base font-bold text-[#0F172A] mt-1 flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-[#2563EB]" />
+          <div className="p-3.5 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE]">
+            <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Total Tests</div>
+            <div className="text-base font-bold text-[#221912] mt-1 flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-[#9C5B3C]" />
               {submittedLogs.length} runs
             </div>
-            <div className="text-[10px] text-[#64748B] mt-0.5">Across {groupedLogs.length} test dates</div>
+            <div className="text-[10px] text-[#8C7E6E] mt-0.5">Across {groupedLogs.length} test dates</div>
           </div>
 
-          <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
-            <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wide">Submitted Avg</div>
-            <div className="text-base font-bold text-[#2563EB] font-mono mt-1">
+          <div className="p-3.5 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE]">
+            <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Submitted Avg</div>
+            <div className="text-base font-bold text-[#9C5B3C] font-mono mt-1">
               {overallAvg > 0 ? `${overallAvg.toFixed(1)}s` : "--"}
             </div>
-            <div className="text-[10px] text-[#64748B] mt-0.5">Average cycle time</div>
+            <div className="text-[10px] text-[#8C7E6E] mt-0.5">Average cycle time</div>
           </div>
 
-          <div className="p-3.5 bg-[#F8FAFC] rounded-xl border border-[#E2E8F0]">
-            <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wide">Draft Tests</div>
-            <div className="text-base font-bold text-[#0F172A] mt-1">
+          <div className="p-3.5 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE]">
+            <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Draft Tests</div>
+            <div className="text-base font-bold text-[#221912] mt-1">
               {draftLogs.length} pending
             </div>
             <div className="text-[10px] text-amber-700 font-medium mt-0.5">
@@ -133,24 +133,24 @@ export function OperationTestHistoryModal({
         {/* Chronological Performance Tests History */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-[#2563EB]" />
+            <h4 className="text-xs font-bold text-[#221912] uppercase tracking-wider flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-[#9C5B3C]" />
               Past Performance Test Runs
             </h4>
-            <span className="text-[11px] text-[#64748B]">
+            <span className="text-[11px] text-[#8C7E6E]">
               {opLogs.length} total test records
             </span>
           </div>
 
           {opLogs.length === 0 ? (
-            <div className="py-8 bg-[#F8FAFC] rounded-xl border border-dashed border-[#E2E8F0] text-center text-xs text-[#64748B]">
+            <div className="py-8 bg-[#FAF7F2] rounded-xl border border-dashed border-[#E6DDCE] text-center text-xs text-[#8C7E6E]">
               No performance test data recorded for this operation yet.
             </div>
           ) : (
-            <div className="border border-[#F1F5F9] rounded-xl overflow-hidden bg-white shadow-2xs">
+            <div className="border border-[#E6DDCE] rounded-xl overflow-hidden bg-white shadow-2xs">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-[#F8FAFC] border-b border-[#F1F5F9] text-[10px] font-bold text-[#64748B] uppercase">
+                  <tr className="bg-[#FAF7F2] border-b border-[#E6DDCE] text-[10px] font-bold text-[#8C7E6E] uppercase">
                     <th className="py-2.5 px-3.5">Date</th>
                     <th className="py-2.5 px-3.5">Timed Runs</th>
                     <th className="py-2.5 px-2 text-center">Count</th>
@@ -160,25 +160,25 @@ export function OperationTestHistoryModal({
                     <th className="py-2.5 px-3 text-right">Recorded By</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#F1F5F9]">
+                <tbody className="divide-y divide-[#E6DDCE]/60">
                   {groupedLogs.map((group, idx) => {
                     const isDraft = group.status === "DRAFT";
                     return (
-                      <tr key={idx} className="hover:bg-[#F8FAFC]/40 transition-colors">
-                        <td className="py-3 px-3.5 font-medium text-[#0F172A]">{group.date}</td>
+                      <tr key={idx} className="hover:bg-[#FAF7F2]/40 transition-colors">
+                        <td className="py-3 px-3.5 font-medium text-[#221912]">{group.date}</td>
                         <td className="py-3 px-3.5">
                           <div className="flex items-center gap-1 flex-wrap">
                             {group.times.map((t, i) => (
-                              <span key={i} className="px-1.5 py-0.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-[10px] font-mono font-bold text-[#0F172A]">
+                              <span key={i} className="px-1.5 py-0.5 bg-[#FAF7F2] border border-[#E6DDCE] rounded text-[10px] font-mono font-bold text-[#221912]">
                                 {t}s
                               </span>
                             ))}
                           </div>
                         </td>
-                        <td className="py-3 px-2 text-center font-bold text-[#0F172A]">{group.times.length}</td>
-                        <td className="py-3 px-2 text-center font-mono font-bold text-[#2563EB]">{group.avg}s</td>
+                        <td className="py-3 px-2 text-center font-bold text-[#221912]">{group.times.length}</td>
+                        <td className="py-3 px-2 text-center font-mono font-bold text-[#9C5B3C]">{group.avg}s</td>
                         <td className="py-3 px-3 text-center">
-                          <span className="inline-block px-2 py-0.5 bg-[#0F172A] text-white font-bold rounded text-[10px] shadow-2xs">
+                          <span className="inline-block px-2 py-0.5 bg-[#221912] text-white font-bold rounded text-[10px] shadow-2xs">
                             Rating {group.rating}
                           </span>
                         </td>
@@ -193,7 +193,7 @@ export function OperationTestHistoryModal({
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-3 text-right text-[#64748B]">{group.tester}</td>
+                        <td className="py-3 px-3 text-right text-[#8C7E6E]">{group.tester}</td>
                       </tr>
                     );
                   })}
@@ -205,23 +205,23 @@ export function OperationTestHistoryModal({
 
         {/* Rating Progression History */}
         {assessmentHistory.length > 0 && (
-          <div className="space-y-3 pt-1 border-t border-[#F1F5F9]">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-[#0F172A] uppercase tracking-wider">
-              <History className="w-3.5 h-3.5 text-[#2563EB]" />
+          <div className="space-y-3 pt-1 border-t border-[#E6DDCE]">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-[#221912] uppercase tracking-wider">
+              <History className="w-3.5 h-3.5 text-[#9C5B3C]" />
               Skill Matrix Revision History
             </div>
             
             <div className="space-y-2">
               {assessmentHistory.map((h, i) => (
-                <div key={h.id || i} className="flex items-center justify-between p-2.5 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] text-xs">
+                <div key={h.id || i} className="flex items-center justify-between p-2.5 bg-[#FAF7F2] rounded-lg border border-[#E6DDCE] text-xs">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-[#0F172A]">Revision #{h.revision}</span>
-                    <span className="text-[#64748B] text-[11px]">· {h.effectiveDate}</span>
-                    {h.notes && <span className="text-[#64748B] text-[11px] italic">({h.notes})</span>}
+                    <span className="font-bold text-[#221912]">Revision #{h.revision}</span>
+                    <span className="text-[#8C7E6E] text-[11px]">· {h.effectiveDate}</span>
+                    {h.notes && <span className="text-[#8C7E6E] text-[11px] italic">({h.notes})</span>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-[#2563EB] font-bold">{h.cycleTimeSeconds}s</span>
-                    <span className="px-2 py-0.5 bg-[#0F172A] text-white text-[10px] font-bold rounded">
+                    <span className="font-mono text-[#9C5B3C] font-bold">{h.cycleTimeSeconds}s</span>
+                    <span className="px-2 py-0.5 bg-[#221912] text-white text-[10px] font-bold rounded">
                       Rating {h.rating}
                     </span>
                   </div>
@@ -232,11 +232,11 @@ export function OperationTestHistoryModal({
         )}
 
         {/* Close Button */}
-        <div className="flex justify-end pt-2 border-t border-[#F1F5F9]">
+        <div className="flex justify-end pt-2 border-t border-[#E6DDCE]">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 h-9 text-xs font-bold text-[#0F172A] bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] rounded-lg cursor-pointer transition-colors shadow-2xs"
+            className="px-5 h-9 text-xs font-bold text-[#221912] bg-white border border-[#E6DDCE] hover:bg-[#FAF7F2] rounded-lg cursor-pointer transition-colors shadow-2xs"
           >
             Close
           </button>

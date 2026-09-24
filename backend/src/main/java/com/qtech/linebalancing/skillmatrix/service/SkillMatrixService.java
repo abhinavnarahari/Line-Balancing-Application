@@ -183,6 +183,18 @@ public class SkillMatrixService {
                 if (seconds <= 39.0) return 3;
                 if (seconds <= 44.0) return 2;
                 return 1;
+            } else if (name.contains("poly bag") || name.contains("poly")) {
+                if (seconds <= 35.0) return 5;
+                if (seconds <= 38.0) return 4;
+                if (seconds <= 43.0) return 3;
+                if (seconds <= 49.0) return 2;
+                return 1;
+            } else if (name.contains("carton")) {
+                if (seconds <= 42.0) return 5;
+                if (seconds <= 46.0) return 4;
+                if (seconds <= 52.0) return 3;
+                if (seconds <= 60.0) return 2;
+                return 1;
             }
         }
         if (standardSmv != null && standardSmv > 0) {
@@ -411,7 +423,13 @@ public class SkillMatrixService {
         r.setId(sa.getId()); r.setOperatorId(sa.getOperator().getId());
         r.setOperatorName(sa.getOperator().getName()); r.setEmployeeId(sa.getOperator().getEmployeeId());
         r.setOperationId(sa.getOperation().getId()); r.setOperationName(sa.getOperation().getName());
-        r.setOperationCode(sa.getOperation().getOperationCode()); r.setRating(sa.getRating());
+        r.setOperationCode(sa.getOperation().getOperationCode());
+        int rating = sa.getRating() != null ? sa.getRating() : 3;
+        if (sa.getCycleTimeSeconds() != null && sa.getCycleTimeSeconds() > 0) {
+            Double stdSmv = sa.getOperation().getStandardSmv() != null ? sa.getOperation().getStandardSmv().doubleValue() : null;
+            rating = cycleTimeToRating(sa.getCycleTimeSeconds(), sa.getOperation().getName(), stdSmv);
+        }
+        r.setRating(rating);
         r.setCycleTimeSeconds(sa.getCycleTimeSeconds()); r.setRevision(sa.getRevision());
         r.setEffectiveDate(sa.getEffectiveDate()); r.setCurrent(sa.isCurrent());
         r.setNotes(sa.getNotes()); r.setCreatedAt(sa.getCreatedAt()); r.setUpdatedAt(sa.getUpdatedAt());

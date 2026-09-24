@@ -73,8 +73,8 @@ export function OperationRatingModal({
         maxSec: benchmark?.rating4?.maxSec || Math.round(currentSmv * 60 * 1.05),
         efficiencyLabel: benchmark?.rating4?.efficiencyLabel || "90–100%",
         criteria: benchmark?.rating4?.criteria || "Consistent cycle time, minimal supervision, high seam quality",
-        tagColor: "bg-sky-50 text-sky-700 border-sky-200",
-        pillColor: "bg-sky-600 text-white",
+        tagColor: "bg-[#FAF7F2] text-[#9C5B3C] border-[#E6DDCE]",
+        pillColor: "bg-[#9C5B3C] text-white",
       },
       {
         rating: 3,
@@ -261,8 +261,8 @@ export function OperationRatingModal({
           maxSec: defaultBenchmark.rating4?.maxSec || 32,
           efficiencyLabel: defaultBenchmark.rating4?.efficiencyLabel || "90–100%",
           criteria: defaultBenchmark.rating4?.criteria || "Consistent cycle time, minimal supervision, high seam quality",
-          tagColor: "bg-sky-50 text-sky-700 border-sky-200",
-          pillColor: "bg-sky-600 text-white",
+          tagColor: "bg-[#FAF7F2] text-[#9C5B3C] border-[#E6DDCE]",
+          pillColor: "bg-[#9C5B3C] text-white",
         },
         {
           rating: 3,
@@ -368,11 +368,11 @@ export function OperationRatingModal({
                   min="0.01"
                   value={smvMinutes}
                   onChange={(e) => setSmvMinutes(Math.max(0.01, parseFloat(e.target.value) || 0.01))}
-                  className="w-20 h-7 text-xs font-mono font-bold bg-white border border-slate-300 rounded px-1.5 text-slate-900 focus:outline-none focus:border-blue-500 text-center"
+                  className="w-20 h-7 text-xs font-mono font-bold bg-white border border-slate-300 rounded px-1.5 text-slate-900 focus:outline-none focus:border-[#9C5B3C] text-center"
                 />
                 <span className="text-xs font-bold text-slate-600 font-mono">SAM</span>
               </div>
-              <span className="text-[11px] font-mono text-blue-700 font-semibold block">
+              <span className="text-[11px] font-mono text-[#9C5B3C] font-semibold block">
                 {targetCycleSec.toFixed(1)}s target cycle
               </span>
             </div>
@@ -410,7 +410,7 @@ export function OperationRatingModal({
         <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
           <div className="bg-slate-50/80 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <Sparkles className="w-3.5 h-3.5 text-[#9C5B3C]" />
               <span className="text-xs font-bold text-slate-800">
                 Skill Qualification Thresholds (Cycle Time in Seconds)
               </span>
@@ -463,7 +463,7 @@ export function OperationRatingModal({
                             min="1"
                             value={tier.minSec}
                             onChange={(e) => handleTierChange(tier.rating, "minSec", e.target.value)}
-                            className="w-14 h-7 text-xs font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded px-1 text-center focus:outline-none focus:border-blue-500"
+                            className="w-14 h-7 text-xs font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded px-1 text-center focus:outline-none focus:border-[#9C5B3C]"
                             title="Minimum cycle time (seconds)"
                           />
                           <span className="text-slate-400 font-bold text-xs">–</span>
@@ -473,7 +473,7 @@ export function OperationRatingModal({
                             min="1"
                             value={tier.maxSec}
                             onChange={(e) => handleTierChange(tier.rating, "maxSec", e.target.value)}
-                            className="w-14 h-7 text-xs font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded px-1 text-center focus:outline-none focus:border-blue-500"
+                            className="w-14 h-7 text-xs font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded px-1 text-center focus:outline-none focus:border-[#9C5B3C]"
                             title="Maximum cycle time (seconds)"
                           />
                           <span className="text-[11px] font-mono text-slate-500 pr-1">sec</span>
@@ -493,7 +493,7 @@ export function OperationRatingModal({
                           type="text"
                           value={tier.criteria}
                           onChange={(e) => handleTierChange(tier.rating, "criteria", e.target.value)}
-                          className="w-full text-[11px] text-slate-700 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white px-1 py-0.5 rounded transition-colors focus:outline-none"
+                          className="w-full text-[11px] text-slate-700 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#9C5B3C] focus:bg-white px-1 py-0.5 rounded transition-colors focus:outline-none"
                           placeholder="IE evaluation criteria..."
                         />
                       </td>
@@ -528,7 +528,7 @@ export function OperationRatingModal({
               onClick={handleSave}
               loading={saving}
               size="sm"
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-xs font-bold"
+              className="bg-[#9C5B3C] hover:bg-[#854D33] text-white shadow-xs font-bold"
             >
               <Check className="w-4 h-4 mr-1.5" />
               Save Benchmark Configuration

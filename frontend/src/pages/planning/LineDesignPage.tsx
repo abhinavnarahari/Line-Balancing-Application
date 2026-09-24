@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { 
   Cpu, 
@@ -12,8 +12,7 @@ import {
   Sparkles,
   Pencil,
   Trash2,
-  X,
-  RotateCcw
+  X
 } from "lucide-react";
 
 import { PageHeader, DataCard } from "../../components/ui/PremiumUI";
@@ -29,6 +28,7 @@ import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/a
 import { generateLineBalancingScenarios } from "../../features/bulletins/lineBalancingScenarios";
 import { saveAppliedBulletinScenario } from "../../features/bulletins/bulletinScenarioStore";
 import { WorkstationFlowPreview } from "../../features/linedesign/WorkstationFlowPreview";
+import { useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 export function LineDesignPage() {
   const navigate = useNavigate();
@@ -72,43 +72,46 @@ export function LineDesignPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      try {
-        const [plansRes, ordersRes, linesRes, machinesRes, bulRes, designsRes] = await Promise.all([
-          capacityApi.getPlans(),
-          ordersApi.getOrders(),
-          linesApi.getLines(true),
-          machinesApi.getMachines({ active: true }),
-          bulletinsApi.getBulletins(),
-          lineDesignApi.getDesigns(),
-        ]);
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [plansRes, ordersRes, linesRes, machinesRes, bulRes, designsRes] = await Promise.all([
+        capacityApi.getPlans(),
+        ordersApi.getOrders(),
+        linesApi.getLines(true),
+        machinesApi.getMachines({ active: true }),
+        bulletinsApi.getBulletins(),
+        lineDesignApi.getDesigns(),
+      ]);
 
-        setCapacityPlans(plansRes || []);
-        setOrders(ordersRes || []);
-        setSewingLines(linesRes || []);
-        setInventoryMachines(machinesRes || []);
-        setBulletins(bulRes || []);
-        setExistingDesigns(designsRes || []);
+      setCapacityPlans(plansRes || []);
+      setOrders(ordersRes || []);
+      setSewingLines(linesRes || []);
+      setInventoryMachines(machinesRes || []);
+      setBulletins(bulRes || []);
+      setExistingDesigns(designsRes || []);
 
-        if (plansRes && plansRes.length > 0 && !selectedPlanId) {
-          setSelectedPlanId(String(plansRes[0].id));
-        }
-        if (ordersRes && ordersRes.length > 0 && !selectedOrderId) {
-          setSelectedOrderId(String(ordersRes[0].id));
-        }
-        if (linesRes && linesRes.length > 0 && !selectedLineId) {
-          setSelectedLineId(String(linesRes[0].id));
-        }
-      } catch (err) {
-        console.error("Failed to load line design dependencies:", err);
-      } finally {
-        setLoading(false);
+      if (plansRes && plansRes.length > 0 && !selectedPlanId) {
+        setSelectedPlanId(String(plansRes[0].id));
       }
+      if (ordersRes && ordersRes.length > 0 && !selectedOrderId) {
+        setSelectedOrderId(String(ordersRes[0].id));
+      }
+      if (linesRes && linesRes.length > 0 && !selectedLineId) {
+        setSelectedLineId(String(linesRes[0].id));
+      }
+    } catch (err) {
+      console.error("Failed to load line design dependencies:", err);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  useEffect(() => {
     loadData();
   }, []);
+
+  useMasterDataSubscription(["line", "machine", "bulletin", "order", "all"], loadData);
 
   const currentPlan = useMemo(() => {
     return capacityPlans.find(p => String(p.id) === String(selectedPlanId)) || null;
@@ -279,9 +282,9 @@ export function LineDesignPage() {
     setSaving(true);
     try {
       const selectedLine = sewingLines.find(l => String(l.id) === String(selectedLineId));
-      const targetHourly = currentPlan?.targetHourlyOutput || (activeScenario ? activeScenario.hourlyOutputPlanned : 70);
-      const plannedEff = currentPlan?.plannedEfficiency || (activeScenario?.lineBalanceEfficiency ? Number(activeScenario.lineBalanceEfficiency.toFixed(1)) : 80);
-      const pitchSecs = currentPlan?.designedPitchSecs || (activeScenario ? Number((activeScenario.pitchTime * 60).toFixed(1)) : 41.1);
+      const targetHourly = (activeScenario ? activeScenario.hourlyOutputPlanned : undefined) || currentPlan?.targetHourlyOutput || 70;
+      const plannedEff = (activeScenario?.lineBalanceEfficiency ? Number(activeScenario.lineBalanceEfficiency.toFixed(1)) : undefined) || currentPlan?.plannedEfficiency || 80;
+      const pitchSecs = (activeScenario ? Number((activeScenario.pitchTime * 60).toFixed(1)) : undefined) || currentPlan?.designedPitchSecs || 41.1;
 
       const payload: LineDesignRequest = {
         designCode: designCode || `LD-LINE-${selectedLineId}`,
@@ -384,7 +387,7 @@ export function LineDesignPage() {
       <PageHeader
         eyebrow="Industrial Engineering & Line Layout"
         title="Line Design & Workstation Architecture"
-        description="Allocate sewing floor physical line, workstation count, operator budget, and reconcile machine equipment inventory."
+
         action={
           <div className="flex items-center gap-2.5">
             {editingDesignId && (
@@ -621,28 +624,11 @@ export function LineDesignPage() {
                 </span>
               </div>
 
-              <div className="flex justify-between items-baseline p-2.5 bg-[#F6F1E8]/50 rounded-xl border border-[#E6DDCE]">
-                <span className="text-[#8C7E6E] font-bold">Layout Bottleneck Pace:</span>
-                <span className="text-xl font-black font-mono text-slate-800">
-                  {activeScenario ? (activeScenario.bottleneckCycleTime * 60).toFixed(1) : (currentPlan?.customerTaktSecs ? currentPlan.customerTaktSecs.toFixed(1) : "51.4")}s
-                </span>
-              </div>
-
               <div className="flex justify-between items-baseline p-2.5 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE]">
                 <span className="text-[#8C7E6E] font-bold">Target Demand Output:</span>
                 <span className="text-xl font-black font-mono text-emerald-700">
                   {currentPlan?.targetHourlyOutput || (activeScenario ? activeScenario.hourlyOutputPlanned : 70)} pcs/hr
                 </span>
-              </div>
-
-              <div className="flex justify-between items-baseline p-2.5 bg-[#F6F1E8]/50 rounded-xl border border-[#E6DDCE]">
-                <span className="text-[#8C7E6E] font-bold">Layout Output Capacity:</span>
-                <div className="text-right">
-                  <span className="text-xl font-black font-mono text-[#9C5B3C]">
-                    {activeScenario ? activeScenario.hourlyOutputPlanned : (currentPlan?.targetHourlyOutput || 70)}
-                  </span>
-                  <span className="text-[10px] text-[#8C7E6E] ml-1">pcs/hr @ {currentPlan?.plannedEfficiency || (activeScenario?.plannedEfficiency || 80)}%</span>
-                </div>
               </div>
             </div>
           </div>

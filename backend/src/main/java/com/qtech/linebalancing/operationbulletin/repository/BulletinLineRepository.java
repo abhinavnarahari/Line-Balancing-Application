@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface BulletinLineRepository extends JpaRepository<BulletinLine, Long> {
     List<BulletinLine> findByBulletinIdOrderBySequenceAsc(Long bulletinId);
+    List<BulletinLine> findByOperationId(Long operationId);
 }

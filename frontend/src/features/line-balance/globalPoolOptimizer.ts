@@ -8,7 +8,7 @@
 
 import type { OperationAffinity } from "../operations/api";
 import type { Operator } from "../operators/api";
-import type { SkillAssessment } from "../skill-matrix/api";
+import { cycleTimeToRating, type SkillAssessment } from "../skill-matrix/api";
 
 export interface OptimizerStationSlot {
   stationIndex: number;
@@ -138,14 +138,21 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
     attendanceMap.set(String(a.operatorId), a.status?.toUpperCase() || "PRESENT");
   });
 
-  // Operator ID -> Map of Operation ID -> SkillAssessment
+  // Operator ID -> Map of Operation ID/Code/Name -> SkillAssessment
   const skillMatrixMap = new Map<string, Map<string, SkillAssessment>>();
   skillAssessments.forEach(sa => {
     const opIdStr = String(sa.operatorId);
     if (!skillMatrixMap.has(opIdStr)) {
       skillMatrixMap.set(opIdStr, new Map());
     }
-    skillMatrixMap.get(opIdStr)!.set(String(sa.operationId), sa);
+    const inner = skillMatrixMap.get(opIdStr)!;
+    inner.set(String(sa.operationId), sa);
+    if (sa.operationCode) {
+      inner.set(sa.operationCode.trim().toUpperCase(), sa);
+    }
+    if (sa.operationName) {
+      inner.set(sa.operationName.trim().toLowerCase(), sa);
+    }
   });
 
   // Operation ID -> Array of Affinities where primary = operation
@@ -156,6 +163,13 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
       affinityMap.set(pId, []);
     }
     affinityMap.get(pId)!.push(aff);
+    if (aff.primaryOperationCode) {
+      const codeKey = aff.primaryOperationCode.trim().toUpperCase();
+      if (!affinityMap.has(codeKey)) {
+        affinityMap.set(codeKey, []);
+      }
+      affinityMap.get(codeKey)!.push(aff);
+    }
   });
 
   // 2. Flatten Line Stations into Demand Slots
@@ -228,23 +242,36 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
     let transferPct = 100;
 
     // Check direct primary skill match
-    const directSkill = opSkills?.get(targetOpIdStr);
-    if (directSkill && directSkill.rating) {
-      rating = directSkill.rating;
+    const directSkill = opSkills?.get(targetOpIdStr) ||
+      (slot.operationCode ? opSkills?.get(slot.operationCode.trim().toUpperCase()) : undefined) ||
+      (slot.operationName ? opSkills?.get(slot.operationName.trim().toLowerCase()) : undefined);
+
+    if (directSkill) {
+      if (directSkill.cycleTimeSeconds && directSkill.cycleTimeSeconds > 0) {
+        rating = cycleTimeToRating(directSkill.cycleTimeSeconds, slot.operationName || directSkill.operationName, slot.smvSeconds / 60);
+      } else {
+        rating = directSkill.rating || 1;
+      }
     } else {
       // Check operational affinity fallback
       // Find if this operator has any skill on an alternative operation that affinitizes to the target
-      const possibleAffinities = affinityMap.get(targetOpIdStr) || [];
+      const possibleAffinities = affinityMap.get(targetOpIdStr) || 
+        (slot.operationCode ? affinityMap.get(slot.operationCode.trim().toUpperCase()) : undefined) || 
+        [];
       let bestAffinityRating = 0;
       let bestAff: OperationAffinity | null = null;
 
       for (const aff of possibleAffinities) {
         const altOpIdStr = String(aff.alternativeOperationId);
-        const altSkill = opSkills?.get(altOpIdStr);
-        if (altSkill && altSkill.rating) {
-          const effectiveRating = altSkill.rating;
-          if (effectiveRating > bestAffinityRating) {
-            bestAffinityRating = effectiveRating;
+        const altSkill = opSkills?.get(altOpIdStr) || 
+          (aff.alternativeOperationCode ? opSkills?.get(aff.alternativeOperationCode.trim().toUpperCase()) : undefined);
+        if (altSkill) {
+          let effRating = altSkill.rating || 1;
+          if (altSkill.cycleTimeSeconds && altSkill.cycleTimeSeconds > 0) {
+            effRating = cycleTimeToRating(altSkill.cycleTimeSeconds, aff.alternativeOperationName || altSkill.operationName);
+          }
+          if (effRating > bestAffinityRating) {
+            bestAffinityRating = effRating;
             bestAff = aff;
           }
         }
@@ -286,65 +313,56 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
       }
     }
 
-    // Skill Requirement Alignment & Penalty / Bonus calculation
+    // 1. Skill Rating and Qualification Scoring
+    // Higher star operators (5 > 4 > 3 > 2 > 1) are fundamentally faster, higher-skilled, and more capable.
+    // Lower cost = better candidate.
+    const baseSkillCost = -(rating * 2000); // ★5: -10000, ★4: -8000, ★3: -6000, ★2: -4000, ★1: -2000
+
     let skillReqCost = 0;
     if (targetRating !== null) {
-      if (!isAffinity && directSkill) {
-        if (isPlusRating) {
-          if (rating >= targetRating) {
-            // Qualified for 3+ or 4+
-            skillReqCost = -2500 - (rating - targetRating) * 50;
-          } else {
-            // Deficit
-            skillReqCost = 4000 * (targetRating - rating);
-          }
-        } else {
-          if (rating === targetRating) {
-            // Exact target match: HIGHEST PRIORITY!
-            skillReqCost = -3500;
-          } else if (rating > targetRating) {
-            // Overqualified (e.g. 5-star on a 3-star station).
-            // Apply cost penalty so exact 3-star operators are chosen first,
-            // conserving 5-star operators for 5-star and 4-star stations!
-            skillReqCost = -1000 + (rating - targetRating) * 900;
-          } else {
-            // Underqualified / Skill Deficit
-            skillReqCost = 4500 * (targetRating - rating);
-          }
-        }
-      } else if (isAffinity) {
-        // Affinity match
-        if (rating >= targetRating) {
-          skillReqCost = 400;
-        } else {
-          skillReqCost = 2500 + 2000 * (targetRating - rating);
-        }
+      if (rating >= targetRating) {
+        // Meets or exceeds required rating (fully qualified)
+        skillReqCost = -2000;
       } else {
-        // No skill / novice
-        skillReqCost = 6000 + 2000 * targetRating;
+        // Underqualified / skill deficit penalty
+        skillReqCost = 5000 * (targetRating - rating);
       }
     }
 
-    // Cost function modeling Google Maps routing / latency:
-    // Pacing criticality: Stations with high SMV relative to takt are the line's bottlenecks.
+    // 2. Direct Primary Skill vs Affinity vs Novice
+    let skillTypeCost = 0;
+    if (directSkill) {
+      skillTypeCost = -2000; // Direct certification bonus
+    } else if (isAffinity) {
+      skillTypeCost = 400;   // Operational affinity slight detour
+    } else {
+      skillTypeCost = 10000; // Novice uncertified heavy penalty
+    }
+
+    // 3. Existing Operator Retention Priority
+    // If this operator is ALREADY assigned to this slot (e.g. from Line Architecture),
+    // apply a strong retention bonus so existing planned layouts are preserved.
+    const isCurrentAssignee = slot.currentOperatorId && String(slot.currentOperatorId) === opIdStr;
+    const retentionBonus = isCurrentAssignee ? -25000 : 0;
+
+    // 4. Bottleneck Pacing Criticality:
+    // Stations with high SMV relative to takt are the line's bottlenecks.
     const slotTargetSecs = slot.smvSeconds;
     const bottleneckCriticality = Math.max(1, slotTargetSecs / Math.max(1, taktTimeSecs));
+    const skillDeficit = Math.max(0, 1.15 - effectiveEff);
+    const bottleneckMismatchCost = bottleneckCriticality * skillDeficit * 1500;
 
-    // Attendance penalty
+    // 5. Attendance Penalty
     const attStatus = attendanceMap.get(opIdStr) || "PRESENT";
     let attPenalty = 0;
-    if (attStatus === "ABSENT") attPenalty = 10000;
-    else if (attStatus === "LATE") attPenalty = 50;
+    if (attStatus === "ABSENT") attPenalty = 30000;
+    else if (attStatus === "LATE") attPenalty = 100;
 
-    // Skill mismatch penalty
-    const skillDeficit = Math.max(0, 1.20 - effectiveEff);
-    const bottleneckMismatchCost = bottleneckCriticality * skillDeficit * 500;
-
-    // Affinity preference penalty (favor direct skill over affinity, but affinity over general novice)
-    const affinityPenalty = isAffinity ? 120 : (directSkill ? 0 : 400);
+    // 6. Efficiency Multiplier Benefit
+    const efficiencyCost = -(effectiveEff * 1000);
 
     // Total cost (lower is better)
-    const totalCost = skillReqCost + bottleneckMismatchCost + affinityPenalty + attPenalty - (effectiveEff * 100);
+    const totalCost = baseSkillCost + skillReqCost + skillTypeCost + retentionBonus + bottleneckMismatchCost + attPenalty + efficiencyCost;
 
     return {
       operator: op,
@@ -411,21 +429,18 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
     assignedOperatorIds.add(String(chosen.operator.id));
   }
 
-  // 7. Bottleneck-Relieving 2-Opt Local Search (Google Maps bottleneck detour analogy)
-  // Identify if any station's cycle time is pacing the line, and test if a swap with a slack station improves line efficiency.
+  // 7. Calculate Per-Station Effective Cycle Times
   const currentStationTimes = new Map<number, number>();
   const stationAllocations = new Map<number, MatchCandidate[]>();
 
   demandSlots.forEach(slot => {
-    const cand = slot.currentOperatorId && fillOnlyEmpty
-      ? {
-          operator: operators.find(o => String(o.id) === String(slot.currentOperatorId))!,
-          rating: 3,
-          efficiencyMultiplier: 0.85,
-          isAffinity: false,
-          cost: 0,
-        }
-      : slotAssignments.get(slot);
+    let cand: MatchCandidate | null | undefined = slotAssignments.get(slot);
+    if (!cand && slot.currentOperatorId) {
+      const existingOp = operators.find(o => String(o.id) === String(slot.currentOperatorId));
+      if (existingOp) {
+        cand = getCandidateEvaluation(existingOp, slot);
+      }
+    }
 
     if (cand) {
       if (!stationAllocations.has(slot.stationNum)) {
@@ -451,7 +466,13 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
   let unfulfilledSlots = 0;
 
   demandSlots.forEach(slot => {
-    const chosen = slotAssignments.get(slot);
+    let chosen: MatchCandidate | null | undefined = slotAssignments.get(slot);
+    if (!chosen && slot.currentOperatorId) {
+      const existingOp = operators.find(o => String(o.id) === String(slot.currentOperatorId));
+      if (existingOp) {
+        chosen = getCandidateEvaluation(existingOp, slot);
+      }
+    }
 
     if (chosen) {
       updatedStationAssignments[slot.stationIndex][slot.slotIndex] = chosen.operator.id;
@@ -477,10 +498,8 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
         affinityDowngrade: chosen.affinityDowngrade,
       });
     } else {
-      if (!fillOnlyEmpty || !slot.currentOperatorId) {
-        updatedStationAssignments[slot.stationIndex][slot.slotIndex] = null;
-        unfulfilledSlots++;
-      }
+      updatedStationAssignments[slot.stationIndex][slot.slotIndex] = null;
+      unfulfilledSlots++;
       slotDetails.push({
         stationIndex: slot.stationIndex,
         stationNum: slot.stationNum,

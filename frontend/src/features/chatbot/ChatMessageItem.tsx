@@ -47,49 +47,149 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
     }
   };
 
-  const renderFormattedText = (text: string) => {
-    const lines = text.split("\n");
-    return lines.map((line, idx) => {
-      // Bullet list items
-      if (line.trim().startsWith("• ") || line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
-        const content = line.trim().substring(2);
-        return (
-          <li key={idx} className="ml-3.5 list-disc text-xs text-[#33251A] leading-relaxed marker:text-[#9C5B3C]">
-            {renderInlineMarkdown(content)}
-          </li>
-        );
+  /**
+   * Enterprise Markdown Block Parser (Supports Tables, Headers, Code, Lists, Callouts)
+   */
+  const renderMarkdownBlocks = (rawText: string) => {
+    const lines = rawText.split("\n");
+    const elements: React.ReactNode[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // 1. Table Detection (| ... |)
+      if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+        const tableLines: string[] = [];
+        while (i < lines.length && lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|")) {
+          tableLines.push(lines[i].trim());
+          i++;
+        }
+
+        if (tableLines.length >= 2) {
+          const headerRow = tableLines[0].split("|").slice(1, -1).map(h => h.trim());
+          // Skip divider row (index 1)
+          const dataRows = tableLines.slice(2).map(r => r.split("|").slice(1, -1).map(c => c.trim()));
+
+          elements.push(
+            <div key={`tbl-${i}`} className="my-3 overflow-x-auto rounded-xl border border-[#E8E2D9] bg-white shadow-2xs">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#FAF7F2] border-b border-[#E8E2D9] text-[11px] font-bold text-[#6B5C50] uppercase tracking-wider">
+                    {headerRow.map((h, hIdx) => (
+                      <th key={hIdx} className="py-2.5 px-3 whitespace-nowrap">
+                        {renderInlineFormatting(h)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F0EAE1]">
+                  {dataRows.map((row, rIdx) => (
+                    <tr key={rIdx} className="hover:bg-[#FAF7F2]/60 transition-colors">
+                      {row.map((cell, cIdx) => (
+                        <td key={cIdx} className="py-2 px-3 text-[#221912] font-medium whitespace-nowrap">
+                          {renderInlineFormatting(cell)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+          continue;
+        }
       }
-      // Numbered list items
-      if (/^\d+\.\s/.test(line.trim())) {
-        const dotIdx = line.indexOf(".");
-        const num = line.substring(0, dotIdx + 1);
-        const content = line.substring(dotIdx + 1).trim();
-        return (
-          <div key={idx} className="flex items-start gap-1.5 text-xs text-[#33251A] leading-relaxed my-0.5">
-            <span className="font-bold text-[#9C5B3C] shrink-0 font-mono">{num}</span>
-            <span>{renderInlineMarkdown(content)}</span>
+
+      // 2. Headings (###, ####, ##)
+      if (trimmed.startsWith("### ")) {
+        elements.push(
+          <div key={`h3-${i}`} className="text-sm font-extrabold text-[#221912] mt-3.5 mb-1.5 flex items-center gap-1.5">
+            <span>{renderInlineFormatting(trimmed.substring(4))}</span>
           </div>
         );
+        i++;
+        continue;
       }
-      if (line.trim() === "") {
-        return <div key={idx} className="h-1.5" />;
+      if (trimmed.startsWith("#### ")) {
+        elements.push(
+          <div key={`h4-${i}`} className="text-xs font-bold text-[#8C7E6E] uppercase tracking-wider mt-2.5 mb-1">
+            {renderInlineFormatting(trimmed.substring(5))}
+          </div>
+        );
+        i++;
+        continue;
       }
-      return (
-        <p key={idx} className="text-xs text-[#33251A] leading-relaxed">
-          {renderInlineMarkdown(line)}
+
+      // 3. Bullet Lists (- , * , • )
+      if (trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("• ")) {
+        elements.push(
+          <li key={`li-${i}`} className="ml-4 list-disc text-xs text-[#33251A] leading-relaxed marker:text-[#9C5B3C] my-0.5">
+            {renderInlineFormatting(trimmed.substring(2))}
+          </li>
+        );
+        i++;
+        continue;
+      }
+
+      // 4. Numbered Lists (1. , 2. )
+      if (/^\d+\.\s/.test(trimmed)) {
+        const dotIdx = trimmed.indexOf(".");
+        const num = trimmed.substring(0, dotIdx + 1);
+        const content = trimmed.substring(dotIdx + 1).trim();
+        elements.push(
+          <div key={`num-${i}`} className="flex items-start gap-1.5 text-xs text-[#33251A] leading-relaxed my-0.5">
+            <span className="font-bold text-[#9C5B3C] shrink-0 font-mono">{num}</span>
+            <span>{renderInlineFormatting(content)}</span>
+          </div>
+        );
+        i++;
+        continue;
+      }
+
+      // 5. Blank Lines
+      if (trimmed === "") {
+        elements.push(<div key={`blank-${i}`} className="h-1.5" />);
+        i++;
+        continue;
+      }
+
+      // 6. Regular Paragraph
+      elements.push(
+        <p key={`p-${i}`} className="text-xs text-[#33251A] leading-relaxed my-0.5">
+          {renderInlineFormatting(line)}
         </p>
       );
-    });
+      i++;
+    }
+
+    return elements;
   };
 
-  const renderInlineMarkdown = (text: string) => {
-    const parts = text.split(/(\*\*.*?\*\*)/g);
-    return parts.map((part, i) => {
+  const renderInlineFormatting = (text: string) => {
+    // Regex matches bold (**bold**), code (`code`), or italics (*italic*)
+    const parts = text.split(/(\*\*.*?\*\*|`.*?`|\*.*?\*)/g);
+    return parts.map((part, idx) => {
       if (part.startsWith("**") && part.endsWith("**")) {
         return (
-          <strong key={i} className="font-bold text-[#1E1712]">
+          <strong key={idx} className="font-black text-[#1E1712]">
             {part.slice(2, -2)}
           </strong>
+        );
+      }
+      if (part.startsWith("`") && part.endsWith("`")) {
+        return (
+          <code key={idx} className="px-1.5 py-0.5 rounded-md bg-[#FAF7F2] border border-[#E8E2D9] font-mono text-[11px] font-bold text-[#9C5B3C]">
+            {part.slice(1, -1)}
+          </code>
+        );
+      }
+      if (part.startsWith("*") && part.endsWith("*") && !part.startsWith("**")) {
+        return (
+          <em key={idx} className="text-[#6B5C50] italic">
+            {part.slice(1, -1)}
+          </em>
         );
       }
       return part;
@@ -110,22 +210,22 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
       </div>
 
       {/* Message Content Container */}
-      <div className={`max-w-[88%] flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+      <div className={`max-w-[92%] sm:max-w-[88%] flex flex-col ${isUser ? "items-end" : "items-start"}`}>
         <div
-          className={`rounded-2xl px-4 py-3 shadow-xs border ${
+          className={`rounded-2xl px-4 py-3.5 shadow-xs border ${
             isUser
               ? "bg-[#1E1712] text-white border-[#33251A] rounded-tr-xs"
               : "bg-white text-[#221912] border-[#E8E2D9] rounded-tl-xs"
           }`}
         >
           {/* Text Content */}
-          <div className={`space-y-1 ${isUser ? "[&_*]:!text-white" : ""}`}>
-            {renderFormattedText(message.messageText)}
+          <div className={`space-y-0.5 ${isUser ? "[&_*]:!text-white" : ""}`}>
+            {renderMarkdownBlocks(message.messageText)}
           </div>
 
           {/* Structured Payload Metrics Card */}
           {message.structuredPayload?.metrics && (
-            <div className="mt-3 grid grid-cols-2 gap-2 bg-[#FAF7F2] p-2.5 rounded-xl border border-[#E8E2D9]">
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 bg-[#FAF7F2] p-2.5 rounded-xl border border-[#E8E2D9]">
               {Object.entries(message.structuredPayload.metrics).map(([key, val]) => (
                 <div key={key} className="bg-white p-2 rounded-lg border border-[#EDE7DE] shadow-2xs">
                   <div className="text-[10px] uppercase font-bold text-[#8C7E6E] tracking-wider truncate">{key}</div>

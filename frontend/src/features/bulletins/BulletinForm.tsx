@@ -23,9 +23,6 @@ import type { CreateBulletinDTO, BulletinLine, OperationBulletin, BulletinStatus
 import type { Style } from "../styles/api";
 import type { Operation } from "../operations/api";
 import { machinesApi, type Machine } from "../machines/api";
-import { 
-  ALL_GARMENT_MACHINE_PRESETS 
-} from "./garmentMachinery";
 
 export const GARMENT_SECTIONS = [
   { id: "FRONT_PREP", label: "Front Preparation", color: "bg-blue-50 text-blue-800 border-blue-200" },
@@ -124,19 +121,68 @@ export function BulletinForm({
     return [];
   });
 
-  // Machine inventory
+  // Machine inventory from Master Data
   const [inventoryMachines, setInventoryMachines] = useState<Machine[]>([]);
   useEffect(() => {
-    machinesApi.getMachines({ active: true })
+    machinesApi.getMachines()
       .then(res => setInventoryMachines(res || []))
-      .catch(() => []);
+      .catch(console.error);
   }, []);
 
-  const extraInventoryTypes = useMemo(() => {
-    const invTypes = new Set(inventoryMachines.map(m => m.machineType?.trim()).filter(Boolean));
-    ALL_GARMENT_MACHINE_PRESETS.forEach(p => invTypes.delete(p));
-    return Array.from(invTypes);
+  // Distinct Machine Types aggregated from Factory Machine Master
+  const masterMachineTypes = useMemo(() => {
+    const typeMap = new Map<string, { count: number; brands: Set<string> }>();
+    inventoryMachines.forEach(m => {
+      const t = m.machineType?.trim();
+      if (!t) return;
+      if (!typeMap.has(t)) {
+        typeMap.set(t, { count: 0, brands: new Set() });
+      }
+      const entry = typeMap.get(t)!;
+      entry.count += 1;
+      if (m.brand?.trim()) entry.brands.add(m.brand.trim());
+    });
+
+    return Array.from(typeMap.entries()).map(([type, data]) => ({
+      type,
+      count: data.count,
+      brandsSummary: Array.from(data.brands).slice(0, 3).join(", "),
+    }));
   }, [inventoryMachines]);
+
+  // Standard industry preset lists
+  const standardMachineTypes = useMemo(() => [
+    "Single Needle Lockstitch",
+    "Single Needle Lockstitch (SNLS)",
+    "3-Thread Overlock",
+    "4-Thread Overlock",
+    "5-Thread Overlock / Safety Stitch",
+    "Flatlock / Interlock",
+    "Feed-off-the-Arm Machine (FOA)",
+    "Double Needle Lockstitch (DNLS)",
+    "Buttonhole Machine",
+    "Button Attach Machine",
+    "Bar Tack Machine",
+    "Blind Stitch Machine",
+    "Zig-Zag Machine",
+  ], []);
+
+  const manualWorkstations = useMemo(() => [
+    "Manual / Trim Station",
+    "Manual / Hand Ironing & Pressing",
+    "Manual / Quality Inspection Check",
+    "Manual / Folding & Packing Table",
+  ], []);
+
+  const isCustomMachine = (val?: string) => {
+    if (!val || !val.trim()) return false;
+    const v = val.trim();
+    if (masterMachineTypes.some(m => m.type === v)) return false;
+    if (inventoryMachines.some(m => `${m.machineCode} - ${m.machineType}` === v || m.machineCode === v)) return false;
+    if (standardMachineTypes.some(s => s === v)) return false;
+    if (manualWorkstations.some(w => w === v)) return false;
+    return true;
+  };
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -680,40 +726,79 @@ export function BulletinForm({
                   isExpanded ? "border-[#9C5B3C] bg-[#FFFDFB] shadow-sm" : "border-[#E6DDCE] bg-white hover:border-[#9C5B3C]/50"
                 }`}
               >
-                {/* Main Row */}
-                <div className="p-3.5 flex flex-wrap items-center justify-between gap-3">
+                {/* Main Card Body */}
+                <div className="p-3.5 space-y-2.5">
+                  {/* Row 1: Sequence + Operation Dropdown + Quick Actions */}
                   <div className="flex items-center gap-2.5">
                     {/* Sequence Badge */}
-                    <span className="w-7 h-7 rounded-xl bg-[#F6F1E8] border border-[#E6DDCE] font-mono font-black text-xs text-[#221912] flex items-center justify-center">
+                    <span className="w-7 h-7 rounded-xl bg-[#F6F1E8] border border-[#E6DDCE] font-mono font-black text-xs text-[#221912] flex items-center justify-center shrink-0 shadow-2xs">
                       {line.sequence}
                     </span>
 
-                    {/* Section Tag */}
-                    <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${sectionObj.color}`}>
-                      {sectionObj.label}
-                    </span>
-
-                    {/* Operation Select / Name */}
-                    <div className="w-56 sm:w-64">
+                    {/* Operation Select / Name (Takes full width of row) */}
+                    <div className="flex-1 min-w-0">
                       <select
                         value={line.operationId}
                         onChange={(e) => handleUpdateLine(index, { operationId: e.target.value })}
-                        className="w-full px-2.5 py-1.5 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl text-xs font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
+                        className="w-full px-3 py-1.5 bg-[#FAF7F2] border border-[#E6DDCE] rounded-xl text-xs font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] shadow-2xs cursor-pointer hover:bg-white transition-all"
                       >
                         {operations.map(o => (
                           <option key={o.id} value={o.id}>
-                            {o.operationCode || o.code || `OP-${o.id}`} - {o.name}
+                            {o.operationCode || o.code || `OP-${o.id}`} — {o.name}
                           </option>
                         ))}
                       </select>
                     </div>
+
+                    {/* Top Right Actions: Reorder, Advanced Settings & Delete */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => handleMoveLine(index, "UP")}
+                        className="p-1.5 rounded-lg border border-[#E6DDCE] bg-white text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] disabled:opacity-30 cursor-pointer shadow-2xs transition-colors"
+                        title="Move Up"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === lines.length - 1}
+                        onClick={() => handleMoveLine(index, "DOWN")}
+                        className="p-1.5 rounded-lg border border-[#E6DDCE] bg-white text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] disabled:opacity-30 cursor-pointer shadow-2xs transition-colors"
+                        title="Move Down"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedLineIndex(isExpanded ? null : index)}
+                        className={`p-1.5 rounded-lg border text-xs font-bold transition-all cursor-pointer shadow-2xs ${
+                          isExpanded 
+                            ? "bg-[#9C5B3C] text-white border-[#9C5B3C]" 
+                            : "bg-white text-[#8C7E6E] border-[#E6DDCE] hover:text-[#221912] hover:border-[#9C5B3C]"
+                        }`}
+                        title="Engineering Parameters & Constraints"
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveLine(index)}
+                        className="p-1.5 rounded-lg border border-[#E6DDCE] bg-white text-rose-500 hover:text-rose-700 hover:bg-rose-50 hover:border-rose-300 shadow-2xs transition-colors cursor-pointer"
+                        title="Remove Operation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Core Metrics: SMV, Machine, Skill */}
-                  <div className="flex flex-wrap items-center gap-3 text-xs">
+                  {/* Row 2: Parameters Grid (SMV, Machine, Skill, WIP Limit) */}
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs">
                     {/* SMV Sec input */}
-                    <div className="flex items-center gap-1 bg-[#F6F1E8] px-2 py-1 rounded-xl border border-[#E6DDCE]">
-                      <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" />
+                    <div className="flex items-center gap-1.5 bg-[#FAF7F2] px-2.5 py-1 rounded-xl border border-[#E6DDCE] shadow-2xs" title="Standard Minute Value (SMV) in seconds">
+                      <Clock className="w-3.5 h-3.5 text-[#9C5B3C] shrink-0" />
+                      <span className="text-[10px] font-bold text-[#8C7E6E] uppercase">SMV:</span>
                       <input
                         type="number"
                         step="0.1"
@@ -723,105 +808,96 @@ export function BulletinForm({
                           const sec = parseFloat(e.target.value) || 0;
                           handleUpdateLine(index, { smv: sec / 60 });
                         }}
-                        className="w-14 bg-transparent font-mono font-black text-[#9C5B3C] text-right focus:outline-hidden"
+                        className="w-12 bg-white px-1.5 py-0.5 rounded border border-[#E6DDCE] font-mono font-black text-[#9C5B3C] text-right focus:outline-hidden focus:border-[#9C5B3C]"
                       />
-                      <span className="font-mono text-[10px] font-bold text-[#8C7E6E]">s</span>
+                      <span className="font-mono text-[11px] font-bold text-[#8C7E6E]">s</span>
                     </div>
 
-                    {/* Machine Type */}
-                    <div className="w-36">
-                      <input
-                        type="text"
-                        value={line.machineType}
+                    {/* Machine Dropdown (Populated from Master Data) */}
+                    <div className="flex items-center gap-1.5 bg-[#FAF7F2] px-2.5 py-1 rounded-xl border border-[#E6DDCE] shadow-2xs flex-1 min-w-[200px]" title="Machine equipment required">
+                      <Cpu className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <span className="text-[10px] font-bold text-[#8C7E6E] uppercase shrink-0">Machine:</span>
+                      <select
+                        value={line.machineType || ""}
                         onChange={(e) => handleUpdateLine(index, { machineType: e.target.value })}
-                        placeholder="Machine Type"
-                        className="w-full px-2 py-1 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl text-xs font-mono font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-                        list={`machines-list-${index}`}
-                      />
-                      <datalist id={`machines-list-${index}`}>
-                        {ALL_GARMENT_MACHINE_PRESETS.map(m => (
-                          <option key={m} value={m} />
-                        ))}
-                        {extraInventoryTypes.map(m => (
-                          <option key={`inv-${m}`} value={m} />
-                        ))}
-                      </datalist>
+                        className="w-full bg-white px-2 py-0.5 rounded border border-[#E6DDCE] text-xs font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer truncate"
+                      >
+                        <option value="" disabled>Select Machine...</option>
+
+                        {isCustomMachine(line.machineType) && (
+                          <optgroup label="⚠️ Current Assignment">
+                            <option value={line.machineType}>{line.machineType}</option>
+                          </optgroup>
+                        )}
+
+                        {masterMachineTypes.length > 0 && (
+                          <optgroup label="🏭 Factory Master Machines (Active)">
+                            {masterMachineTypes.map(m => (
+                              <option key={`mt-${m.type}`} value={m.type}>
+                                {m.type} ({m.count} {m.count === 1 ? 'unit' : 'units'}{m.brandsSummary ? ` • ${m.brandsSummary}` : ''})
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+
+                        {inventoryMachines.length > 0 && (
+                          <optgroup label="🏷️ Specific Machine Units (Asset Inventory)">
+                            {inventoryMachines.map(m => (
+                              <option key={`mu-${m.id}`} value={`${m.machineCode} - ${m.machineType}`}>
+                                {m.machineCode} - {m.machineType} {m.brand ? `(${m.brand}${m.model ? ' ' + m.model : ''})` : ''}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+
+                        <optgroup label="🧵 Standard Apparel Machinery">
+                          {standardMachineTypes.map(m => (
+                            <option key={`std-${m}`} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </optgroup>
+
+                        <optgroup label="✋ Manual & QC Workstations">
+                          {manualWorkstations.map(w => (
+                            <option key={`man-${w}`} value={w}>
+                              {w}
+                            </option>
+                          ))}
+                        </optgroup>
+                      </select>
                     </div>
 
                     {/* Skill Rating (1-5) */}
-                    <div className="flex items-center gap-1 bg-[#F6F1E8] px-2 py-1 rounded-xl border border-[#E6DDCE]">
-                      <span className="text-[10px] font-bold uppercase text-[#8C7E6E]">Skill:</span>
+                    <div className="flex items-center gap-1.5 bg-[#FAF7F2] px-2.5 py-1 rounded-xl border border-[#E6DDCE] shadow-2xs" title="Skill Rating required">
+                      <ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span className="text-[10px] font-bold text-[#8C7E6E] uppercase">Skill:</span>
                       <select
                         value={line.skillRatingRequired}
                         onChange={(e) => handleUpdateLine(index, { skillRatingRequired: parseInt(e.target.value, 10) as any })}
-                        className="bg-transparent font-bold text-amber-700 text-xs focus:outline-hidden cursor-pointer"
+                        className="bg-white px-2 py-0.5 rounded border border-[#E6DDCE] font-bold text-amber-800 text-xs focus:outline-hidden cursor-pointer"
                       >
-                        <option value={1}>★ 1 - Basic</option>
-                        <option value={2}>★★ 2 - Semi-Skill</option>
-                        <option value={3}>★★★ 3 - Skilled</option>
-                        <option value={4}>★★★★ 4 - High Skill</option>
-                        <option value={5}>★★★★★ 5 - Master</option>
+                        <option value={1}>★ 1 Basic</option>
+                        <option value={2}>★★ 2 Semi-Skilled</option>
+                        <option value={3}>★★★ 3 Skilled</option>
+                        <option value={4}>★★★★ 4 High Skill</option>
+                        <option value={5}>★★★★★ 5 Master</option>
                       </select>
                     </div>
 
                     {/* WIP Threshold input */}
-                    <div className="flex items-center gap-1 bg-[#F6F1E8] px-2 py-1 rounded-xl border border-[#E6DDCE]" title="WIP Buffer Threshold (in pieces) - alerts bottleneck if queue exceeds this limit">
-                      <Layers className="w-3.5 h-3.5 text-amber-700" />
-                      <span className="text-[10px] font-bold uppercase text-[#8C7E6E]">WIP Limit:</span>
+                    <div className="flex items-center gap-1.5 bg-[#FAF7F2] px-2.5 py-1 rounded-xl border border-[#E6DDCE] shadow-2xs" title="WIP Buffer Threshold (in pieces)">
+                      <Layers className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                      <span className="text-[10px] font-bold text-[#8C7E6E] uppercase">WIP Limit:</span>
                       <input
                         type="number"
                         min="1"
                         step="1"
                         value={line.wipThreshold ?? 20}
                         onChange={(e) => handleUpdateLine(index, { wipThreshold: parseInt(e.target.value, 10) || 20 })}
-                        className="w-10 bg-transparent font-mono font-bold text-amber-900 text-right focus:outline-hidden"
+                        className="w-10 bg-white px-1.5 py-0.5 rounded border border-[#E6DDCE] font-mono font-bold text-amber-900 text-center focus:outline-hidden focus:border-[#9C5B3C]"
                       />
-                      <span className="font-mono text-[10px] font-bold text-[#8C7E6E]">pcs</span>
-                    </div>
-
-                    {/* Expand/Collapse Engineering Details */}
-                    <button
-                      type="button"
-                      onClick={() => setExpandedLineIndex(isExpanded ? null : index)}
-                      className={`p-1.5 rounded-lg border text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 ${
-                        isExpanded 
-                          ? "bg-[#9C5B3C] text-white border-[#9C5B3C]" 
-                          : "bg-[#F6F1E8] text-[#8C7E6E] border-[#E6DDCE] hover:text-[#221912]"
-                      }`}
-                      title="Toggle Engineering Parameters & Precedence"
-                    >
-                      <Sliders className="w-3.5 h-3.5" />
-                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    </button>
-
-                    {/* Reorder and Delete */}
-                    <div className="flex items-center gap-0.5 border-l border-[#E6DDCE] pl-2">
-                      <button
-                        type="button"
-                        disabled={index === 0}
-                        onClick={() => handleMoveLine(index, "UP")}
-                        className="p-1 rounded text-[#8C7E6E] hover:text-[#221912] disabled:opacity-30 cursor-pointer"
-                        title="Move Up"
-                      >
-                        <ArrowUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={index === lines.length - 1}
-                        onClick={() => handleMoveLine(index, "DOWN")}
-                        className="p-1 rounded text-[#8C7E6E] hover:text-[#221912] disabled:opacity-30 cursor-pointer"
-                        title="Move Down"
-                      >
-                        <ArrowDown className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveLine(index)}
-                        className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer ml-1"
-                        title="Remove Operation"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <span className="font-mono text-[11px] font-bold text-[#8C7E6E]">pcs</span>
                     </div>
                   </div>
                 </div>
@@ -862,37 +938,31 @@ export function BulletinForm({
                       {/* Stitch Type */}
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Stitch Classification</label>
-                        <input
-                          type="text"
+                        <select
                           value={line.stitchType || ""}
                           onChange={(e) => handleUpdateLine(index, { stitchType: e.target.value })}
-                          placeholder="e.g. 301 SNLS"
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs text-[#221912]"
-                          list={`stitch-list-${index}`}
-                        />
-                        <datalist id={`stitch-list-${index}`}>
+                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs font-semibold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer"
+                        >
+                          <option value="">Select Stitch Type (Optional)</option>
                           {STITCH_TYPES.map(st => (
-                            <option key={st} value={st} />
+                            <option key={st} value={st}>{st}</option>
                           ))}
-                        </datalist>
+                        </select>
                       </div>
 
                       {/* Seam Type */}
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Seam Classification</label>
-                        <input
-                          type="text"
+                        <select
                           value={line.seamType || ""}
                           onChange={(e) => handleUpdateLine(index, { seamType: e.target.value })}
-                          placeholder="e.g. SSa-1"
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs text-[#221912]"
-                          list={`seam-list-${index}`}
-                        />
-                        <datalist id={`seam-list-${index}`}>
+                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs font-semibold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer"
+                        >
+                          <option value="">Select Seam Type (Optional)</option>
                           {SEAM_TYPES.map(st => (
-                            <option key={st} value={st} />
+                            <option key={st} value={st}>{st}</option>
                           ))}
-                        </datalist>
+                        </select>
                       </div>
                     </div>
 

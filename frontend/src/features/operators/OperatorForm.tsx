@@ -88,13 +88,13 @@ export function OperatorForm({ existingOperators = [], initialData, onSubmit, on
         />
 
         <div className="flex flex-col space-y-2">
-          <label htmlFor="gender" className="text-sm font-medium text-[#475569]">Gender</label>
+          <label htmlFor="gender" className="text-xs font-bold uppercase tracking-wider text-[#8C7E6E]">Gender</label>
           <select
             id="gender"
             name="gender"
             value={formData.gender}
             onChange={handleChange}
-            className="flex h-11 w-full bg-white border border-[#F1F5F9] px-4 py-2 text-sm text-[#0F172A] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+            className="flex h-10 w-full bg-white border border-[#E6DDCE] rounded-xl px-3.5 py-2 text-xs font-semibold text-[#221912] shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#9C5B3C]/15 focus:border-[#9C5B3C]"
           >
             <option value="Female">Female</option>
             <option value="Male">Male</option>
@@ -103,13 +103,13 @@ export function OperatorForm({ existingOperators = [], initialData, onSubmit, on
         </div>
 
         <div className="flex flex-col space-y-2">
-          <label htmlFor="role" className="text-sm font-medium text-[#475569]">Role / Designation</label>
+          <label htmlFor="role" className="text-xs font-bold uppercase tracking-wider text-[#8C7E6E]">Role / Designation</label>
           <select
             id="role"
             name="role"
             value={formData.role}
             onChange={handleChange}
-            className="flex h-11 w-full bg-white border border-[#F1F5F9] px-4 py-2 text-sm text-[#0F172A] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+            className="flex h-10 w-full bg-white border border-[#E6DDCE] rounded-xl px-3.5 py-2 text-xs font-semibold text-[#221912] shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#9C5B3C]/15 focus:border-[#9C5B3C]"
           >
             <option value="OPERATOR">Sewing Operator</option>
             <option value="HELPER">Floor Helper</option>
@@ -120,13 +120,13 @@ export function OperatorForm({ existingOperators = [], initialData, onSubmit, on
         </div>
 
         <div className="flex flex-col space-y-2">
-          <label htmlFor="department" className="text-sm font-medium text-[#475569]">Department</label>
+          <label htmlFor="department" className="text-xs font-bold uppercase tracking-wider text-[#8C7E6E]">Department</label>
           <select
             id="department"
             name="department"
             value={formData.department}
             onChange={handleChange}
-            className="flex h-11 w-full bg-white border border-[#F1F5F9] px-4 py-2 text-sm text-[#0F172A] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+            className="flex h-10 w-full bg-white border border-[#E6DDCE] rounded-xl px-3.5 py-2 text-xs font-semibold text-[#221912] shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#9C5B3C]/15 focus:border-[#9C5B3C]"
           >
             <option value="Sewing">Sewing</option>
             <option value="Finishing">Finishing</option>
@@ -146,7 +146,7 @@ export function OperatorForm({ existingOperators = [], initialData, onSubmit, on
         />
 
         <div className="flex flex-col space-y-2">
-          <label htmlFor="active" className="text-sm font-medium text-[#475569]">Status</label>
+          <label htmlFor="active" className="text-xs font-bold uppercase tracking-wider text-[#8C7E6E]">Status</label>
           <select
             id="active"
             name="active"
@@ -154,7 +154,7 @@ export function OperatorForm({ existingOperators = [], initialData, onSubmit, on
             onChange={(e) =>
               setFormData((prev) => ({ ...prev, active: e.target.value === "true" }))
             }
-            className="flex h-11 w-full bg-white border border-[#F1F5F9] px-4 py-2 text-sm text-[#0F172A] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB]"
+            className="flex h-10 w-full bg-white border border-[#E6DDCE] rounded-xl px-3.5 py-2 text-xs font-semibold text-[#221912] shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#9C5B3C]/15 focus:border-[#9C5B3C]"
           >
             <option value="true">Active</option>
             <option value="false">Inactive</option>

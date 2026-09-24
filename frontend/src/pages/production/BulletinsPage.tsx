@@ -13,7 +13,8 @@ import {
   Copy, 
   Trash2, 
   Eye, 
-  Sliders
+  Sliders,
+  X
 } from "lucide-react";
 import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
@@ -28,6 +29,7 @@ import { BulletinDetailModal } from "../../features/bulletins/BulletinDetailModa
 
 import { stylesApi, type Style } from "../../features/styles/api";
 import { operationsApi, type Operation } from "../../features/operations/api";
+import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 export function BulletinsPage() {
   const [bulletins, setBulletins] = useState<OperationBulletin[]>([]);
@@ -75,6 +77,8 @@ export function BulletinsPage() {
   };
 
   useEffect(() => { loadData(); }, []);
+
+  useMasterDataSubscription(["operation", "style", "bulletin", "all"], loadData);
 
   // Executive KPI Aggregations
   const kpis = useMemo(() => {
@@ -153,6 +157,7 @@ export function BulletinsPage() {
       }
       setIsFormOpen(false);
       setEditingBulletin(null);
+      notifyMasterDataUpdated("bulletin");
       await loadData();
     } catch (err: any) {
       console.error("Failed to save bulletin:", err);
@@ -165,6 +170,7 @@ export function BulletinsPage() {
     try {
       await bulletinsApi.updateStatus(id, newStatus);
       showToast(`✓ Status updated to ${newStatus}`);
+      notifyMasterDataUpdated("bulletin");
       await loadData();
     } catch (err: any) {
       console.error("Failed to update status:", err);
@@ -181,6 +187,7 @@ export function BulletinsPage() {
       setCloningBulletin(null);
       setCloneCode("");
       setCloneName("");
+      notifyMasterDataUpdated("bulletin");
       loadData();
     } catch (err) {
       console.error("Clone failed:", err);
@@ -196,6 +203,7 @@ export function BulletinsPage() {
       showToast(`✓ Deleted bulletin '${deletingBulletin.bulletinCode}'`);
       setDeletingBulletin(null);
       if (viewingBulletin?.id === deletingBulletin.id) setViewingBulletin(null);
+      notifyMasterDataUpdated("bulletin");
       loadData();
     } catch (err) {
       console.error("Delete failed:", err);
@@ -238,15 +246,15 @@ export function BulletinsPage() {
       <PageHeader
         eyebrow="Industrial Engineering"
         title="Operation Bulletins"
-        description="Standard garment operation routing, machine assignments, SMVs, and theoretical line pace engineering."
+
         action={
           <div className="flex items-center gap-2.5">
             <button
               type="button"
               onClick={handleExportAllExcel}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition-colors cursor-pointer"
+              className="h-9 px-3.5 rounded-xl border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-[#9C5B3C]" />
               <span>Export Library</span>
             </button>
 
@@ -315,114 +323,121 @@ export function BulletinsPage() {
       <DataCard noPad className="border border-[#E6DDCE] shadow-[0_1px_3px_rgba(34,25,18,0.05)] rounded-2xl overflow-hidden bg-white">
         
         {/* Filter Toolbar */}
-        <div className="p-4 sm:p-5 bg-[#FDFCFB] border-b border-[#E6DDCE] flex flex-col md:flex-row md:items-center justify-between gap-3.5">
-          <div className="flex flex-wrap items-center gap-3 flex-1">
-            
+        <div className="p-4 sm:p-5 bg-[#FDFBF7] border-b border-[#E6DDCE] flex flex-col xl:flex-row xl:items-center justify-between gap-3.5">
+          {/* Status Filter Pills */}
+          <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#E6DDCE] shadow-2xs overflow-x-auto max-w-full shrink-0">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("ALL")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                statusFilter === "ALL"
+                  ? "bg-[#221912] text-white shadow-2xs"
+                  : "text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8]"
+              }`}
+            >
+              <span>All Bulletins</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                statusFilter === "ALL" ? "bg-stone-700 text-white" : "bg-[#F6F1E8] text-[#8C7E6E]"
+              }`}>
+                {kpis.total}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter("PUBLISHED")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                statusFilter === "PUBLISHED"
+                  ? "bg-emerald-700 text-white shadow-2xs"
+                  : "text-emerald-800 hover:bg-emerald-50"
+              }`}
+            >
+              <span>Published</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-extrabold ${
+                statusFilter === "PUBLISHED" ? "bg-emerald-800 text-white" : "bg-emerald-100 text-emerald-800"
+              }`}>
+                {kpis.published}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter("DRAFT")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                statusFilter === "DRAFT"
+                  ? "bg-amber-600 text-white shadow-2xs"
+                  : "text-amber-800 hover:bg-amber-50"
+              }`}
+            >
+              <span>Drafts</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-extrabold ${
+                statusFilter === "DRAFT" ? "bg-amber-700 text-white" : "bg-amber-100 text-amber-800"
+              }`}>
+                {kpis.drafts}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter("ARCHIVED")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                statusFilter === "ARCHIVED"
+                  ? "bg-slate-700 text-white shadow-2xs"
+                  : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              <span>Archived</span>
+            </button>
+          </div>
+
+          {/* Search, Style, and Sort Filters */}
+          <div className="flex items-center gap-2.5 w-full xl:w-auto flex-wrap sm:flex-nowrap">
             {/* Search Input */}
-            <div className="relative w-full sm:w-64">
+            <div className="relative flex-1 sm:w-64 min-w-[200px]">
               <Search className="w-4 h-4 text-[#8C7E6E] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search code, name, style, operation..."
-                className="w-full pl-9 pr-3 py-2 bg-white border border-[#E6DDCE] rounded-xl text-xs font-medium text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] shadow-2xs"
+                className="w-full pl-9 pr-8 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs font-medium text-[#221912] placeholder:text-[#8C7E6E] focus:outline-hidden focus:border-[#9C5B3C] shadow-2xs"
               />
-            </div>
-
-            {/* Status Filter Pills */}
-            <div className="flex items-center gap-1 bg-[#F6F1E8] p-1 rounded-xl border border-[#E6DDCE]">
-              <button
-                type="button"
-                onClick={() => setStatusFilter("ALL")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  statusFilter === "ALL"
-                    ? "bg-[#221912] text-white shadow-2xs"
-                    : "text-[#8C7E6E] hover:text-[#221912]"
-                }`}
-              >
-                All ({kpis.total})
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStatusFilter("PUBLISHED")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  statusFilter === "PUBLISHED"
-                    ? "bg-emerald-700 text-white shadow-2xs"
-                    : "text-emerald-800 hover:bg-emerald-50"
-                }`}
-              >
-                <span>Published</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-extrabold">
-                  {kpis.published}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStatusFilter("DRAFT")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                  statusFilter === "DRAFT"
-                    ? "bg-amber-600 text-white shadow-2xs"
-                    : "text-amber-800 hover:bg-amber-50"
-                }`}
-              >
-                <span>Drafts</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-100 text-amber-800 font-extrabold">
-                  {kpis.drafts}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setStatusFilter("ARCHIVED")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  statusFilter === "ARCHIVED"
-                    ? "bg-slate-700 text-white shadow-2xs"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                Archived
-              </button>
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8C7E6E] hover:text-[#221912]"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Style Filter Dropdown */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-[#8C7E6E] hidden sm:inline">Style:</span>
-              <select
-                value={styleFilter}
-                onChange={(e) => setStyleFilter(e.target.value)}
-                className="px-3 py-2 bg-white border border-[#E6DDCE] rounded-xl text-xs font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] shadow-2xs"
-              >
-                <option value="ALL">All Garment Styles</option>
-                {styles.map(s => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.styleNo} {s.buyer ? `(${s.buyer})` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={styleFilter}
+              onChange={(e) => setStyleFilter(e.target.value)}
+              className="text-xs font-semibold px-3 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer shadow-2xs shrink-0"
+            >
+              <option value="ALL">All Garment Styles</option>
+              {styles.map(s => (
+                <option key={s.id} value={String(s.id)}>
+                  {s.styleNo} {s.buyer ? `(${s.buyer})` : ""}
+                </option>
+              ))}
+            </select>
 
             {/* Sort Selector */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-bold text-[#8C7E6E] hidden sm:inline">Sort:</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-2 bg-white border border-[#E6DDCE] rounded-xl text-xs font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] shadow-2xs"
-              >
-                <option value="CREATED_DESC">Latest First</option>
-                <option value="CODE_ASC">Code (A to Z)</option>
-                <option value="SMV_DESC">SMV (High to Low)</option>
-                <option value="SMV_ASC">SMV (Low to High)</option>
-              </select>
-            </div>
-
-          </div>
-
-          <div className="text-xs font-bold text-[#8C7E6E]">
-            Showing <strong className="text-[#221912]">{filteredBulletins.length}</strong> of {bulletins.length} bulletins
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="text-xs font-semibold px-3 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer shadow-2xs shrink-0"
+            >
+              <option value="CREATED_DESC">Latest First</option>
+              <option value="CODE_ASC">Code (A to Z)</option>
+              <option value="SMV_DESC">SMV (High to Low)</option>
+              <option value="SMV_ASC">SMV (Low to High)</option>
+            </select>
           </div>
         </div>
 

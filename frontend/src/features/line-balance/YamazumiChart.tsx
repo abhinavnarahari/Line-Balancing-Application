@@ -26,10 +26,10 @@ export function YamazumiChart({ data, taktTime }: YamazumiChartProps) {
         
         {/* Takt Time Line */}
         <div 
-          className="absolute left-0 right-0 border-t-2 border-dashed border-[#2563EB] z-10 flex items-end transition-all duration-500"
+          className="absolute left-0 right-0 border-t-2 border-dashed border-[#9C5B3C] z-10 flex items-end transition-all duration-500"
           style={{ bottom: `calc(${taktTimePercent}% + 32px)` }}
         >
-          <span className="absolute -top-6 right-0 text-xs font-semibold text-[#2563EB] bg-white px-2">
+          <span className="absolute -top-6 right-0 text-xs font-semibold text-[#9C5B3C] bg-white px-2">
             Takt Time: {taktTime.toFixed(2)}m
           </span>
         </div>
@@ -62,7 +62,7 @@ export function YamazumiChart({ data, taktTime }: YamazumiChartProps) {
                   transition={{ type: "spring", stiffness: 60, damping: 15 }}
                   className={`w-full max-w-[40px] rounded-t-sm shadow-sm ${
                     isUnassigned ? 'bg-transparent' :
-                    isBottleneck ? 'bg-[#DBEAFE]' : 'bg-[#059669]'
+                    isBottleneck ? 'bg-amber-100' : 'bg-[#059669]'
                   }`}
                   style={{
                     opacity: isUnassigned ? 0 : 1
@@ -71,7 +71,7 @@ export function YamazumiChart({ data, taktTime }: YamazumiChartProps) {
                   {/* Highlight the portion above takt time in a different color */}
                   {isBottleneck && (
                     <motion.div 
-                      className="w-full bg-[#2563EB] rounded-t-sm"
+                      className="w-full bg-[#9C5B3C] rounded-t-sm"
                       initial={{ height: 0 }}
                       animate={{ height: `${((station.actualTime - taktTime) / station.actualTime) * 100}%` }}
                       transition={{ delay: 0.3 }}

@@ -2,26 +2,27 @@ package com.qtech.linebalancing.chatbot.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.qtech.linebalancing.chatbot.agent.EnterpriseAgentEngine;
 import com.qtech.linebalancing.chatbot.dto.*;
 import com.qtech.linebalancing.chatbot.entity.ChatConversation;
 import com.qtech.linebalancing.chatbot.entity.ChatFeedback;
 import com.qtech.linebalancing.chatbot.entity.ChatMessage;
-import com.qtech.linebalancing.chatbot.intent.IntentClassifierService;
-import com.qtech.linebalancing.chatbot.llm.LLMClient;
 import com.qtech.linebalancing.chatbot.repository.ChatConversationRepository;
 import com.qtech.linebalancing.chatbot.repository.ChatFeedbackRepository;
 import com.qtech.linebalancing.chatbot.repository.ChatMessageRepository;
-import com.qtech.linebalancing.chatbot.retrieval.ChatDataRetrievalService;
-import com.qtech.linebalancing.chatbot.retrieval.DataRetrievalResult;
 import com.qtech.linebalancing.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,9 +33,7 @@ public class ChatbotService {
     private final ChatConversationRepository conversationRepository;
     private final ChatMessageRepository messageRepository;
     private final ChatFeedbackRepository feedbackRepository;
-    private final IntentClassifierService intentClassifier;
-    private final ChatDataRetrievalService dataRetrievalService;
-    private final LLMClient llmClient;
+    private final EnterpriseAgentEngine agentEngine;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -59,35 +58,42 @@ public class ChatbotService {
                 .build();
         messageRepository.save(userMessage);
 
-        // 3. Classify intent & extract entities
-        IntentClassifierService.ClassificationResult classification =
-                intentClassifier.classify(request.getMessage(), request.getContext());
+        // 3. Retrieve conversation history for multi-turn context
+        List<ChatMessage> previousMessages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversation.getId());
+        List<Map<String, String>> history = new ArrayList<>();
+        // Keep up to last 8 messages
+        int startIdx = Math.max(0, previousMessages.size() - 8);
+        for (int i = startIdx; i < previousMessages.size() - 1; i++) {
+            ChatMessage pm = previousMessages.get(i);
+            String role = pm.getSender() == ChatMessage.MessageSender.USER ? "user" : "assistant";
+            history.add(Map.of("role", role, "content", pm.getMessageText()));
+        }
 
-        // 4. Retrieve Grounded Application Facts
-        DataRetrievalResult retrievalResult =
-                dataRetrievalService.retrieveData(classification.intent(), classification.entities(), request.getContext());
+        // 4. Run Enterprise Agent Engine
+        EnterpriseAgentEngine.AgentResult result = agentEngine.execute(
+                request.getMessage(),
+                request.getContext(),
+                history
+        );
 
-        // 5. Generate Grounded AI Response
-        String responseText = llmClient.generateGroundedResponse(request.getMessage(), retrievalResult);
-
-        // 6. Serialize Structured Payload
+        // 5. Serialize Structured Payload
         String payloadJson = null;
-        if (retrievalResult.getStructuredPayload() != null) {
+        if (result.structuredPayload() != null) {
             try {
-                payloadJson = objectMapper.writeValueAsString(retrievalResult.getStructuredPayload());
+                payloadJson = objectMapper.writeValueAsString(result.structuredPayload());
             } catch (JsonProcessingException e) {
                 log.warn("Failed to serialize structured payload", e);
             }
         }
 
-        // 7. Persist Assistant Message
+        // 6. Persist Assistant Message
         ChatMessage assistantMessage = ChatMessage.builder()
                 .conversation(conversation)
                 .sender(ChatMessage.MessageSender.ASSISTANT)
-                .messageText(responseText)
-                .intent(classification.intent().name())
-                .dataSource("APPLICATION_DATA")
-                .dataAvailable(retrievalResult.isDataAvailable())
+                .messageText(result.responseText())
+                .intent(result.intent())
+                .dataSource(result.dataSource())
+                .dataAvailable(result.dataAvailable())
                 .structuredPayload(payloadJson)
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -104,10 +110,49 @@ public class ChatbotService {
                 .intent(assistantMessage.getIntent())
                 .dataSource(assistantMessage.getDataSource())
                 .dataAvailable(assistantMessage.getDataAvailable())
-                .structuredPayload(retrievalResult.getStructuredPayload())
-                .suggestedQuestions(retrievalResult.getSuggestedQuestions() != null ? retrievalResult.getSuggestedQuestions() : List.of())
+                .structuredPayload(result.structuredPayload())
+                .suggestedQuestions(result.suggestedQuestions() != null ? result.suggestedQuestions() : List.of())
                 .createdAt(assistantMessage.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * Real-time Streaming SSE Handler.
+     */
+    public SseEmitter streamMessage(ChatMessageRequest request) {
+        SseEmitter emitter = new SseEmitter(60000L); // 60s timeout
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Send initial typing / reasoning status
+                emitter.send(SseEmitter.event().name("status").data("Analyzing manufacturing master data & line state..."));
+
+                ChatMessageResponse response = processMessage(request);
+
+                // Stream response in smooth natural chunks
+                String fullText = response.getMessageText();
+                String[] words = fullText.split("(?<=\\s)|(?<=\\n)");
+                
+                StringBuilder accumulated = new StringBuilder();
+                for (String word : words) {
+                    accumulated.append(word);
+                    emitter.send(SseEmitter.event().name("chunk").data(word));
+                    Thread.sleep(12); // Smooth word streaming cadence
+                }
+
+                // Send completion payload
+                emitter.send(SseEmitter.event().name("complete").data(response));
+                emitter.complete();
+            } catch (Exception e) {
+                log.warn("SSE stream interrupted: {}", e.getMessage());
+                try {
+                    emitter.send(SseEmitter.event().name("error").data("Stream error: " + e.getMessage()));
+                    emitter.complete();
+                } catch (IOException ignored) {}
+            }
+        });
+
+        return emitter;
     }
 
     @Transactional(readOnly = true)

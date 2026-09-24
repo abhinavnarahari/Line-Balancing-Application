@@ -1,8 +1,6 @@
 import { useState, useEffect, useMemo, Fragment } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { 
-  AlertTriangle, 
-  CheckCircle, 
   Clock, 
   Plus, 
   CheckCircle2, 
@@ -14,13 +12,12 @@ import {
   ChevronLeft, 
   Edit2, 
   Trash2, 
-  UserCheck, 
   Layers, 
   Sliders, 
   TrendingUp, 
   Cpu, 
   ShieldCheck, 
-  Gauge 
+  Gauge
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { ordersApi, type Order } from "../../features/orders/api";
@@ -35,6 +32,7 @@ import { pieceProductionApi, type OperatorTimesheet24h, type PieceProductionLog 
 import { RecordPieceModal } from "../../features/production-logs/RecordPieceModal";
 import type { Shift } from "../../features/shifts/types";
 import { DataCard, DataCardHeader, EmptyState } from "../../components/ui/PremiumUI";
+import { useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 // 24 Hours array (0 to 23)
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => i);
@@ -61,6 +59,7 @@ export function ProductionMonitoringPage() {
   const [lines, setLines] = useState<SewingLine[]>([]);
   const [bulletins, setBulletins] = useState<OperationBulletin[]>([]);
   const [skillAssessments, setSkillAssessments] = useState<SkillAssessment[]>([]);
+  const [allLinePlans, setAllLinePlans] = useState<LinePlan[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 24h Timesheet data & Filters
@@ -77,7 +76,6 @@ export function ProductionMonitoringPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedShiftId, setSelectedShiftId] = useState<string>(paramShiftId || "ALL");
   const [selectedLineId, setSelectedLineId] = useState<string>(paramLineId || "ALL");
-  const [onlyActiveOperators, setOnlyActiveOperators] = useState<boolean>(false);
   const [expandedOperatorIds, setExpandedOperatorIds] = useState<Record<number, boolean>>({});
 
   // Line monitoring data
@@ -96,7 +94,7 @@ export function ProductionMonitoringPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ords, shfts, oprsList, opsList, lns, ts, bulls, skills] = await Promise.all([
+      const [ords, shfts, oprsList, opsList, lns, ts, bulls, skills, plans] = await Promise.all([
         ordersApi.getOrders(),
         shiftApi.getShifts(),
         operatorsApi.getOperators(),
@@ -105,6 +103,7 @@ export function ProductionMonitoringPage() {
         pieceProductionApi.get24hTimesheet(selectedDate).catch(() => []),
         bulletinsApi.getBulletins().catch(() => []),
         skillApi.getCurrentMatrix().catch(() => []),
+        linePlanApi.getAllPlans().catch(() => []),
       ]);
       setOrders(ords);
       setShifts(shfts.filter(s => s.active));
@@ -114,10 +113,17 @@ export function ProductionMonitoringPage() {
       setTimesheetData(ts);
       setBulletins(bulls);
       setSkillAssessments(skills);
+      setAllLinePlans(plans || []);
 
       if (ords.length > 0 && !selectedOrderId) {
         const match = paramOrderId ? ords.find(o => String(o.id) === String(paramOrderId)) : null;
-        setSelectedOrderId(String((match || ords[0]).id));
+        const targetOrdId = String((match || ords[0]).id);
+        setSelectedOrderId(targetOrdId);
+
+        const initialPlan = (plans || []).find(p => String(p.orderId) === targetOrdId && (!selectedLineId || selectedLineId === "ALL" || String(p.lineId) === String(selectedLineId)))
+          || (plans || []).find(p => String(p.orderId) === targetOrdId)
+          || null;
+        if (initialPlan) setLinePlan(initialPlan);
       }
     } catch (err) {
       console.error("Failed to load production monitoring data:", err);
@@ -126,13 +132,19 @@ export function ProductionMonitoringPage() {
     }
   };
 
+  // Auto-subscribe to live master data updates across the entire application
+  useMasterDataSubscription(["shift", "line", "operator", "bulletin", "order", "all"], loadData);
+
   useEffect(() => {
     loadData();
 
-    // Background live polling every 8s for timesheets
+    // Background live polling every 8s for timesheets and master data
     const pollInterval = setInterval(() => {
       pieceProductionApi.get24hTimesheet(selectedDate)
         .then(ts => setTimesheetData(ts || []))
+        .catch(() => {});
+      shiftApi.getShifts()
+        .then(shfts => setShifts(shfts.filter(s => s.active)))
         .catch(() => {});
     }, 8000);
 
@@ -141,21 +153,31 @@ export function ProductionMonitoringPage() {
 
   useEffect(() => {
     const fetchPlan = async () => {
-      if (!selectedOrderId) {
+      if (!selectedOrderId && selectedLineId === "ALL") {
         setLinePlan(null);
         return;
       }
       try {
-        const plan = await linePlanApi.getPlanForOrder(selectedOrderId);
+        let plan: LinePlan | null = null;
+        if (selectedOrderId) {
+          if (selectedLineId !== "ALL") {
+            plan = allLinePlans.find(p => String(p.orderId) === String(selectedOrderId) && String(p.lineId) === String(selectedLineId)) || null;
+          }
+          if (!plan) {
+            plan = await linePlanApi.getPlanForOrder(selectedOrderId);
+          }
+        }
+        if (!plan && selectedLineId !== "ALL") {
+          plan = allLinePlans.find(p => String(p.lineId) === String(selectedLineId)) || null;
+        }
         setLinePlan(plan);
-        setHourlyOutput({});
       } catch (err) {
-        console.warn("Failed to fetch plan for order:", err);
+        console.warn("Failed to fetch plan for order/line:", err);
         setLinePlan(null);
       }
     };
     fetchPlan();
-  }, [selectedOrderId]);
+  }, [selectedOrderId, selectedLineId, allLinePlans]);
 
   // Date Navigation Helpers
   const handlePrevDay = () => {
@@ -282,6 +304,82 @@ export function ProductionMonitoringPage() {
     return map;
   }, [operators]);
 
+  // Helper to determine if an operator is assigned to or belongs to a physical sewing line
+  const isOperatorOnLine = (
+    row: OperatorTimesheet24h,
+    opEntity: Operator | undefined,
+    lineObj: SewingLine | undefined,
+    allPlans: LinePlan[]
+  ): boolean => {
+    if (!lineObj) return true;
+
+    const targetLineIdStr = String(lineObj.id);
+    const targetLineCode = (lineObj.lineCode || "").toUpperCase().trim();
+    const targetLineName = (lineObj.lineName || "").toLowerCase().trim();
+
+    // 1. Check if assigned in any Line Plan for this line
+    const plansForLine = allPlans.filter(p =>
+      String(p.lineId) === targetLineIdStr ||
+      (p.lineCode && p.lineCode.toUpperCase() === targetLineCode)
+    );
+    if (plansForLine.length > 0) {
+      const isAssignedInPlan = plansForLine.some(p =>
+        (p.assignments || []).some(a => a.operatorId !== null && a.operatorId !== undefined && String(a.operatorId) === String(row.operatorId))
+      );
+      if (isAssignedInPlan) return true;
+
+      // Also check if operator has logged production logs on this line's order/line
+      const orderIdsForLine = plansForLine.map(p => String(p.orderId));
+      if (orderIdsForLine.length > 0 && row.rawLogs && row.rawLogs.length > 0) {
+        const hasLogForOrder = row.rawLogs.some(log => 
+          (log.orderId && orderIdsForLine.includes(String(log.orderId))) ||
+          ((log as any).lineId && String((log as any).lineId) === targetLineIdStr)
+        );
+        if (hasLogForOrder) return true;
+      }
+
+      // If line plans exist for this line, only operators assigned in plan or logged on line belong to this line
+      return false;
+    }
+
+    // 2. Fallback only if no line plans exist for this line:
+    if (opEntity && (opEntity as any).lineId && String((opEntity as any).lineId) === targetLineIdStr) {
+      return true;
+    }
+
+    const rowDept = (row.department || "").trim().toUpperCase();
+    const opDept = (opEntity?.department || "").trim().toUpperCase();
+    if (targetLineCode && (rowDept === targetLineCode || opDept === targetLineCode)) return true;
+    if (targetLineName && (rowDept.toLowerCase() === targetLineName || opDept.toLowerCase() === targetLineName)) return true;
+
+    return false;
+  };
+
+  // Filtered Timesheet Rows
+  const filteredTimesheet = useMemo(() => {
+    return timesheetData.filter(row => {
+      const opEntity = operatorMap.get(row.operatorId);
+
+      if (selectedLineId !== "ALL") {
+        const lineObj = lines.find(l => String(l.id) === String(selectedLineId) || l.lineCode === selectedLineId);
+        if (!isOperatorOnLine(row, opEntity, lineObj, allLinePlans)) {
+          return false;
+        }
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchName = row.operatorName?.toLowerCase().includes(q);
+        const matchEmp = row.employeeId?.toLowerCase().includes(q);
+        const matchDept = row.department?.toLowerCase().includes(q);
+        const matchMachine = row.machineCode?.toLowerCase().includes(q);
+        if (!matchName && !matchEmp && !matchDept && !matchMachine) return false;
+      }
+
+      return true;
+    });
+  }, [timesheetData, operatorMap, selectedLineId, searchQuery, lines, allLinePlans]);
+
   // Map Planned Line Balance Stations from LinePlan
   const plannedStations = useMemo(() => {
     if (!linePlan || !linePlan.assignments || linePlan.assignments.length === 0) return [];
@@ -319,16 +417,20 @@ export function ProductionMonitoringPage() {
     }> = {};
 
     let seq = 1;
-    linePlan.assignments.forEach(a => {
+    (linePlan.assignments || []).forEach(a => {
       const opId = String(a.operationId);
-      const op = operations.find(o => String(o.id) === opId);
       const bLine = styleBulletin?.lines.find(l => String(l.id) === String(a.bulletinLineId))
         || styleBulletin?.lines.find(l => String(l.operationId) === opId);
+      
+      const stnNum = bLine?.sequence ? Number(bLine.sequence) : (seq++);
+      const stnKey = `stn_${stnNum}`;
+
+      const op = operations.find(o => String(o.id) === opId);
       const smvVal = Number(bLine?.smv || op?.standardSmv || 0.5);
 
-      if (!grouped[opId]) {
-        grouped[opId] = {
-          stationNum: bLine?.sequence ? Number(bLine.sequence) : (seq++),
+      if (!grouped[stnKey]) {
+        grouped[stnKey] = {
+          stationNum: stnNum,
           bulletinLineId: a.bulletinLineId ?? bLine?.id ?? null,
           operationId: a.operationId,
           operationCode: bLine?.operationCode || op?.operationCode || "OP",
@@ -340,10 +442,10 @@ export function ProductionMonitoringPage() {
           isQcCheckpoint: !!a.isQcCheckpoint,
         };
       } else {
-        if (a.operatorId && !grouped[opId].operatorIds.includes(a.operatorId)) {
-          grouped[opId].operatorIds.push(a.operatorId);
+        if (a.operatorId && !grouped[stnKey].operatorIds.includes(a.operatorId)) {
+          grouped[stnKey].operatorIds.push(a.operatorId);
         }
-        if (a.isQcCheckpoint) grouped[opId].isQcCheckpoint = true;
+        if (a.isQcCheckpoint) grouped[stnKey].isQcCheckpoint = true;
       }
     });
 
@@ -373,13 +475,19 @@ export function ProductionMonitoringPage() {
 
       timesheetData.forEach(row => {
         if (assignedOpIds.includes(String(row.operatorId)) || assignedOpIds.length === 0) {
-          (row.rawLogs || []).forEach(log => {
-            if (String(log.operationId) === opIdStr || (!log.operationId && row.department === st.operationName)) {
-              totalGood += log.goodQty || 0;
-              totalReject += log.rejectQty || 0;
-              totalWorkMins += Number(log.actualTimeMinutes || 0);
-            }
-          });
+          if (row.rawLogs && row.rawLogs.length > 0) {
+            row.rawLogs.forEach(log => {
+              if (String(log.operationId) === opIdStr || (!log.operationId && row.department === st.operationName)) {
+                totalGood += log.goodQty || 0;
+                totalReject += log.rejectQty || 0;
+                totalWorkMins += Number(log.actualTimeMinutes || 0);
+              }
+            });
+          } else if ((row.totalGood || 0) > 0 || (row.totalCompleted || 0) > 0) {
+            totalGood += row.totalGood || row.totalCompleted || 0;
+            totalReject += row.totalReject || 0;
+            totalWorkMins += Number(row.totalWorkMinutes || 0);
+          }
         }
       });
       rawMap.set(st.stationNum, { good: totalGood, reject: totalReject, workMins: totalWorkMins });
@@ -440,10 +548,18 @@ export function ProductionMonitoringPage() {
 
   // End-Line Throughput Output (Theory of Constraints minimum completed pieces)
   const endLineOutput = useMemo(() => {
-    if (stationLiveExecution.length === 0) return 0;
-    const outputs = stationLiveExecution.map(s => s.totalGood);
-    return Math.min(...outputs);
-  }, [stationLiveExecution]);
+    if (stationLiveExecution.length > 0) {
+      const outputs = stationLiveExecution.map(s => s.totalGood).filter(g => g > 0);
+      if (outputs.length > 0) {
+        return Math.min(...outputs);
+      }
+    }
+    const completedList = filteredTimesheet.map(t => t.totalGood || 0).filter(g => g > 0);
+    if (completedList.length > 0) {
+      return Math.min(...completedList);
+    }
+    return 0;
+  }, [stationLiveExecution, filteredTimesheet]);
 
   const remainingShiftBalance = Math.max(0, targetOutput - endLineOutput);
 
@@ -481,14 +597,15 @@ export function ProductionMonitoringPage() {
       : null;
 
     if (!selectedShiftObj) return HOURS_24;
-    const [sh = 8] = selectedShiftObj.startTime.split(":").map(Number);
-    const [eh = 16] = selectedShiftObj.endTime.split(":").map(Number);
+    const [sh = 8] = (selectedShiftObj.startTime || "08:00").split(":").map(Number);
+    const [eh = 17, em = 0] = (selectedShiftObj.endTime || "17:00").split(":").map(Number);
+    const endH = em > 0 ? (eh + 1) % 24 : eh;
     const hrs: number[] = [];
-    if (sh <= eh) {
-      for (let h = sh; h < eh; h++) hrs.push(h);
+    if (sh <= endH) {
+      for (let h = sh; h < endH; h++) hrs.push(h);
     } else {
       for (let h = sh; h < 24; h++) hrs.push(h);
-      for (let h = 0; h < eh; h++) hrs.push(h);
+      for (let h = 0; h < endH; h++) hrs.push(h);
     }
     return hrs.length > 0 ? hrs : HOURS_24;
   }, [shifts, selectedShiftId]);
@@ -499,12 +616,13 @@ export function ProductionMonitoringPage() {
 
     const getShiftForHour = (hour: number) => {
       for (const s of shifts) {
-        const [sh = 0] = s.startTime.split(":").map(Number);
-        const [eh = 0] = s.endTime.split(":").map(Number);
-        if (sh <= eh) {
-          if (hour >= sh && hour < eh) return s;
+        const [sh = 0] = (s.startTime || "08:00").split(":").map(Number);
+        const [eh = 0, em = 0] = (s.endTime || "17:00").split(":").map(Number);
+        const endHourWithMinutes = em > 0 ? (eh + 1) % 24 : eh;
+        if (sh <= endHourWithMinutes) {
+          if (hour >= sh && hour < endHourWithMinutes) return s;
         } else {
-          if (hour >= sh || hour < eh) return s;
+          if (hour >= sh || hour < endHourWithMinutes) return s;
         }
       }
       return null;
@@ -542,7 +660,7 @@ export function ProductionMonitoringPage() {
 
         bands.push({
           title: currentShift ? currentShift.shiftName : "General Hours",
-          subTitle: `${startStr} – ${endStr}`,
+          subTitle: currentShift ? `${currentShift.startTime.slice(0, 5)} – ${currentShift.endTime.slice(0, 5)}` : `${startStr} – ${endStr}`,
           colSpan: currentCount,
           colorClass
         });
@@ -570,7 +688,7 @@ export function ProductionMonitoringPage() {
 
       bands.push({
         title: currentShift ? currentShift.shiftName : "General Hours",
-        subTitle: `${startStr} – ${endStr}`,
+        subTitle: currentShift ? `${currentShift.startTime.slice(0, 5)} – ${currentShift.endTime.slice(0, 5)}` : `${startStr} – ${endStr}`,
         colSpan: currentCount,
         colorClass
       });
@@ -579,71 +697,57 @@ export function ProductionMonitoringPage() {
     return bands;
   }, [displayedHours, shifts]);
 
-  // Filtered Timesheet Rows
-  const filteredTimesheet = useMemo(() => {
-    return timesheetData.filter(row => {
-      const opEntity = operatorMap.get(row.operatorId);
 
-      if (selectedLineId !== "ALL") {
-        const lineCode = lines.find(l => String(l.id) === selectedLineId)?.lineCode;
-        if (lineCode && row.department !== lineCode && opEntity?.department !== lineCode) {
-          return false;
-        }
-      }
 
-      if (onlyActiveOperators && row.totalCompleted === 0) return false;
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchName = row.operatorName?.toLowerCase().includes(q);
-        const matchEmp = row.employeeId?.toLowerCase().includes(q);
-        const matchDept = row.department?.toLowerCase().includes(q);
-        const matchMachine = row.machineCode?.toLowerCase().includes(q);
-        if (!matchName && !matchEmp && !matchDept && !matchMachine) return false;
-      }
-
-      return true;
-    });
-  }, [timesheetData, operatorMap, selectedLineId, onlyActiveOperators, searchQuery, lines]);
-
-  // 24h Timesheet Industrial Engineering Aggregates
+  // 24h Timesheet Industrial Engineering Aggregates (calculated from filtered rows)
   const kpis24h = useMemo(() => {
     let totalTarget = 0;
-    let totalCompleted = 0;
-    let totalGood = 0;
+    let totalOperationCompleted = 0;
+    let totalOperationGood = 0;
     let totalReject = 0;
     let totalWorkMins = 0;
     let totalEarnedMins = 0;
 
-    timesheetData.forEach(row => {
+    filteredTimesheet.forEach(row => {
       totalTarget += row.totalTarget || 0;
-      totalCompleted += row.totalCompleted || 0;
-      totalGood += row.totalGood || 0;
+      totalOperationCompleted += row.totalCompleted || 0;
+      totalOperationGood += row.totalGood || 0;
       totalReject += row.totalReject || 0;
       totalWorkMins += Number(row.totalWorkMinutes || 0);
       totalEarnedMins += Number(row.totalEarnedMinutes || 0);
     });
 
+    // In progressive sewing line operations (Theory of Constraints / Line Balancing),
+    // line finished output is governed by the flow-bounded End-Line station good output.
+    // The sum across all operators is the Total Operation Passes / Strokes.
+    const finishedGarments = (endLineOutput > 0 || stationLiveExecution.length > 0)
+      ? endLineOutput
+      : (filteredTimesheet.length > 0 ? Math.round(totalOperationCompleted / filteredTimesheet.length) : 0);
+
+    const goodFinishedGarments = finishedGarments;
+
     const efficiency = totalWorkMins > 0 ? ((totalEarnedMins / totalWorkMins) * 100).toFixed(1) : "0.0";
-    const qualityRate = totalCompleted > 0 ? ((totalGood / totalCompleted) * 100).toFixed(1) : "100.0";
-    const defectDhu = totalGood > 0 ? ((totalReject / (totalGood + totalReject)) * 100).toFixed(2) : "0.00";
+    const qualityRate = totalOperationCompleted > 0 ? ((totalOperationGood / totalOperationCompleted) * 100).toFixed(1) : "100.0";
+    const defectDhu = totalOperationGood > 0 ? ((totalReject / (totalOperationGood + totalReject)) * 100).toFixed(2) : "0.00";
 
     return {
       totalTarget,
-      totalCompleted,
-      totalGood,
+      totalOperationCompleted,
+      totalOperationGood,
+      finishedGarments,
+      goodFinishedGarments,
       totalReject,
       totalWorkMins: totalWorkMins.toFixed(1),
       totalEarnedMins: totalEarnedMins.toFixed(1),
       efficiency,
       qualityRate,
       defectDhu,
-      activeOperatorsCount: timesheetData.filter(t => t.totalCompleted > 0).length,
-      totalOperatorsCount: timesheetData.length,
+      activeOperatorsCount: filteredTimesheet.filter(t => t.totalCompleted > 0).length,
+      totalOperatorsCount: filteredTimesheet.length,
     };
-  }, [timesheetData]);
+  }, [filteredTimesheet, endLineOutput, stationLiveExecution]);
 
-  // Hourly Totals Matrix Calculation (Footer Row)
+  // Hourly Totals Matrix Calculation (Footer Row) calculated from filtered rows
   const hourlyTotals = useMemo(() => {
     const totals: Record<number, { good: number; reject: number; completed: number; workMins: number; earnedMins: number }> = {};
     
@@ -651,7 +755,7 @@ export function ProductionMonitoringPage() {
       totals[h] = { good: 0, reject: 0, completed: 0, workMins: 0, earnedMins: 0 };
     });
 
-    timesheetData.forEach(row => {
+    filteredTimesheet.forEach(row => {
       HOURS_24.forEach(h => {
         const slot = row.hourlySlots?.[h];
         if (slot) {
@@ -665,7 +769,7 @@ export function ProductionMonitoringPage() {
     });
 
     return totals;
-  }, [timesheetData]);
+  }, [filteredTimesheet]);
 
   // Quick cell click to log piece output
   const handleQuickCellClick = (operatorId: number, hour: number) => {
@@ -706,20 +810,19 @@ export function ProductionMonitoringPage() {
 
   // Export 24h Timesheet to Excel
   const handleExport24hExcel = () => {
-    if (timesheetData.length === 0) return;
+    if (filteredTimesheet.length === 0) return;
 
-    const rows = timesheetData.map(row => {
+    const rows = filteredTimesheet.map(row => {
       const op = operatorMap.get(row.operatorId);
       const rowObj: Record<string, any> = {
         "Emp ID": row.employeeId,
         "Operator Name": row.operatorName,
         "Role": op?.role || "OPERATOR",
         "Department / Line": row.department,
-        "Machine Code": row.machineCode || "—",
         "Total Target": row.totalTarget || 0,
         "Total Completed": row.totalCompleted || 0,
         "Total Good": row.totalGood || 0,
-        "Total Reject": row.totalReject || 0,
+        "Total Rework": row.totalReject || 0,
         "Work Minutes": row.totalWorkMinutes || 0,
         "Earned Minutes": row.totalEarnedMinutes || 0,
         "Pass %": row.totalCompleted > 0 ? `${((row.totalGood / row.totalCompleted) * 100).toFixed(1)}%` : "—",
@@ -753,48 +856,45 @@ export function ProductionMonitoringPage() {
   }
 
   return (
-    <div className="space-y-6 w-full p-6 lg:p-8 bg-slate-50 min-h-screen">
+    <div className="space-y-6 w-full max-w-[1600px] mx-auto p-4 sm:p-6 lg:p-8">
       {/* ── Header & Module Switcher ──────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
-              <Activity className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-slate-900">Production Monitoring</h1>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Live Line-Balancing Integrated
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Track hourly pitch pace, live operator execution, station bottlenecks, and 24h floor timesheets
-              </p>
-            </div>
+      <div className="bg-white rounded-2xl border border-[#E6DDCE] p-5 sm:p-6 shadow-[0_1px_3px_rgba(34,25,18,0.05)] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-black uppercase tracking-wider text-[#9C5B3C] shrink-0">
+              Live Production Governance
+            </span>
+            <span className="text-[#E6DDCE] hidden sm:inline">/</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+              Live Line-Balancing Integrated
+            </span>
           </div>
+
+          <h1 className="text-xl sm:text-2xl font-black text-[#221912] tracking-tight">
+            Production Monitoring &amp; Hourly Pitch Board
+          </h1>
         </div>
 
         {/* Global Action Bar */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
           <Link
             to={`/line-balance?orderId=${selectedOrderId || ""}&lineId=${selectedLineId !== "ALL" ? selectedLineId : ""}&shiftId=${selectedShiftId !== "ALL" ? selectedShiftId : ""}`}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="h-9 px-3.5 inline-flex items-center gap-1.5 text-xs font-bold text-[#8C7E6E] hover:text-[#221912] bg-white hover:bg-[#FAF8F5] border border-[#E6DDCE] rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
             title="Open this plan in Planned Lines & Balancing to adjust allocations & Takt Time"
           >
-            <Sliders className="w-4 h-4 text-[#9C5B3C]" />
-            <span>Edit in Line Balancing</span>
+            <Sliders className="w-3.5 h-3.5 text-[#9C5B3C]" />
+            <span className="whitespace-nowrap">Edit in Line Balancing</span>
           </Link>
 
           <button
             type="button"
             onClick={handleExport24hExcel}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition-colors cursor-pointer"
+            className="h-9 px-3.5 inline-flex items-center gap-1.5 text-xs font-bold text-[#8C7E6E] hover:text-[#221912] bg-white hover:bg-[#FAF8F5] border border-[#E6DDCE] rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
             title="Export full timesheet data to Excel"
           >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            Export Timesheet
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+            <span className="whitespace-nowrap">Export Timesheet</span>
           </button>
 
           <button
@@ -807,25 +907,26 @@ export function ProductionMonitoringPage() {
               setPreselectedMachineCode("");
               setIsRecordModalOpen(true);
             }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#9C5B3C] hover:bg-[#B06C49] text-white rounded-xl text-xs font-bold shadow-sm shadow-[#9C5B3C]/20 transition-all cursor-pointer"
+            className="h-9 px-3.5 inline-flex items-center gap-1.5 bg-[#9C5B3C] hover:bg-[#854B2F] text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer shrink-0"
           >
-            <Plus className="w-4 h-4" /> Log Piece Run
+            <Plus className="w-3.5 h-3.5" />
+            <span className="whitespace-nowrap">Log Piece Run</span>
           </button>
         </div>
       </div>
 
       {/* ── Navigation Tabs ────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      <div className="flex items-center gap-2 border-b border-[#E6DDCE] pb-2">
         <button
           type="button"
           onClick={() => setActiveTab("24h-timesheet")}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === "24h-timesheet"
-              ? "bg-white text-slate-900 border border-slate-200 shadow-xs"
-              : "text-slate-500 hover:text-slate-900"
+              ? "bg-white text-[#221912] border border-[#E6DDCE] shadow-2xs"
+              : "text-[#8C7E6E] hover:text-[#221912]"
           }`}
         >
-          <Clock className="w-4 h-4 text-blue-600" />
+          <Clock className="w-4 h-4 text-[#9C5B3C]" />
           <span>24-Hour Operator Timesheet</span>
         </button>
 
@@ -834,8 +935,8 @@ export function ProductionMonitoringPage() {
           onClick={() => setActiveTab("line-monitoring")}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === "line-monitoring"
-              ? "bg-white text-slate-900 border border-slate-200 shadow-xs"
-              : "text-slate-500 hover:text-slate-900"
+              ? "bg-white text-[#221912] border border-[#E6DDCE] shadow-2xs"
+              : "text-[#8C7E6E] hover:text-[#221912]"
           }`}
         >
           <Gauge className="w-4 h-4 text-[#9C5B3C]" />
@@ -854,14 +955,15 @@ export function ProductionMonitoringPage() {
       {activeTab === "24h-timesheet" && (
         <div className="space-y-6">
           {/* Filter Toolbar & Date Navigation */}
-          <div className="bg-white border border-[#E6DDCE] rounded-2xl p-5 shadow-[0_1px_3px_rgba(34,25,18,0.05)] flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3 flex-wrap">
+          <div className="bg-[#FDFBF7] border border-[#E6DDCE] rounded-2xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(34,25,18,0.05)] flex flex-col xl:flex-row xl:items-center justify-between gap-3.5">
+            {/* Left Controls: Date Picker + Shift Filter + Line Filter */}
+            <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
               {/* Date Controls */}
-              <div className="flex items-center gap-1.5 bg-[#F6F1E8] p-1 rounded-xl border border-[#E6DDCE]">
+              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#E6DDCE] shadow-2xs shrink-0">
                 <button
                   type="button"
                   onClick={handlePrevDay}
-                  className="p-1.5 rounded-lg hover:bg-white text-[#8C7E6E] hover:text-[#221912] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg hover:bg-[#F6F1E8] text-[#8C7E6E] hover:text-[#221912] transition-colors cursor-pointer"
                   title="Previous Day"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -870,12 +972,12 @@ export function ProductionMonitoringPage() {
                   type="date"
                   value={selectedDate}
                   onChange={e => setSelectedDate(e.target.value)}
-                  className="bg-transparent border-0 text-xs font-bold text-[#221912] focus:outline-none cursor-pointer font-mono px-1"
+                  className="bg-transparent border-0 text-xs font-bold text-[#221912] focus:outline-none cursor-pointer font-mono px-1.5"
                 />
                 <button
                   type="button"
                   onClick={handleNextDay}
-                  className="p-1.5 rounded-lg hover:bg-white text-[#8C7E6E] hover:text-[#221912] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-lg hover:bg-[#F6F1E8] text-[#8C7E6E] hover:text-[#221912] transition-colors cursor-pointer"
                   title="Next Day"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -883,100 +985,108 @@ export function ProductionMonitoringPage() {
                 <button
                   type="button"
                   onClick={handleToday}
-                  className="px-2 py-1 rounded-lg bg-white text-[10px] font-bold text-[#9C5B3C] border border-[#E6DDCE] hover:bg-[#FDFBF7] transition-colors cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg bg-[#FAF7F2] text-[10px] font-extrabold text-[#9C5B3C] border border-[#E6DDCE] hover:bg-white transition-colors cursor-pointer"
                 >
                   Today
                 </button>
               </div>
 
               {/* Shift Filter */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={selectedShiftId}
-                  onChange={e => setSelectedShiftId(e.target.value)}
-                  className="h-10 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-                >
-                  <option value="ALL">All Shifts (24 Hours)</option>
-                  {shifts.map(s => (
-                    <option key={s.id} value={String(s.id)}>
-                      {s.shiftName} ({s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <select
+                value={selectedShiftId}
+                onChange={e => setSelectedShiftId(e.target.value)}
+                className="px-3 py-2 bg-white border border-[#E6DDCE] rounded-xl text-xs font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer shrink-0"
+              >
+                <option value="ALL">All Shifts (24 Hours)</option>
+                {shifts.map(s => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.shiftName} ({s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)})
+                  </option>
+                ))}
+              </select>
 
               {/* Line Filter */}
-              <div className="flex items-center gap-2">
-                <select
-                  value={selectedLineId}
-                  onChange={e => setSelectedLineId(e.target.value)}
-                  className="h-10 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-                >
-                  <option value="ALL">All Physical Lines</option>
-                  {lines.map(l => (
-                    <option key={l.id} value={String(l.id)}>
-                      {l.lineCode} · {l.lineName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <select
+                value={selectedLineId}
+                onChange={e => setSelectedLineId(e.target.value)}
+                className="px-3 py-2 bg-white border border-[#E6DDCE] rounded-xl text-xs font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer shrink-0"
+              >
+                <option value="ALL">All Physical Lines</option>
+                {lines.map(l => (
+                  <option key={l.id} value={String(l.id)}>
+                    {l.lineCode} · {l.lineName}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Search Box & Active Filter Toggle */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative">
+            {/* Right Controls: Search Box */}
+            <div className="flex items-center gap-2.5 w-full xl:w-auto">
+              <div className="relative w-full sm:w-64 min-w-[200px]">
                 <Search className="w-4 h-4 text-[#8C7E6E] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   placeholder="Search operator, EMP ID, line..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-56 h-10 bg-white border border-[#E6DDCE] rounded-xl pl-9 pr-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs placeholder:text-[#A09383]"
+                  className="w-full pl-9 pr-3 py-2 bg-white border border-[#E6DDCE] rounded-xl text-xs font-medium text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs placeholder:text-[#8C7E6E]"
                 />
               </div>
-
-              <button
-                type="button"
-                onClick={() => setOnlyActiveOperators(!onlyActiveOperators)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer shadow-2xs ${
-                  onlyActiveOperators
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-400/20"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Active Operators Only</span>
-              </button>
             </div>
           </div>
 
           {/* 24h KPI Banner */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+            {/* 1. Active Operators */}
             <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#8C7E6E]">Active Operators</p>
               <p className="text-2xl font-black text-[#221912] font-mono mt-1">
                 {kpis24h.activeOperatorsCount} <span className="text-xs text-[#8C7E6E] font-normal">/ {kpis24h.totalOperatorsCount}</span>
               </p>
+              <p className="text-[10px] text-[#8C7E6E] mt-0.5 font-medium">
+                {selectedLineId !== "ALL" ? "Assigned on Line" : "Floor Active"}
+              </p>
             </div>
-            <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#8C7E6E]">Pieces Completed</p>
-              <p className="text-2xl font-black text-[#221912] font-mono mt-1">{kpis24h.totalCompleted.toLocaleString()}</p>
+
+            {/* 2. Finished Garments */}
+            <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs" title={`Finished Garments: ${kpis24h.finishedGarments} completed pieces delivered by the line.`}>
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#9C5B3C]">Finished Garments</p>
+              <p className="text-2xl font-black text-[#221912] font-mono mt-1">
+                {kpis24h.finishedGarments.toLocaleString()} <span className="text-[11px] font-normal text-[#8C7E6E] font-sans">pcs</span>
+              </p>
+              <p className="text-[10px] text-[#9C5B3C] mt-0.5 font-medium">End-Line Completed</p>
             </div>
+
+            {/* 3. Good Pieces */}
             <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#77876F]">Good Pieces</p>
-              <p className="text-2xl font-black text-[#77876F] font-mono mt-1">{kpis24h.totalGood.toLocaleString()}</p>
+              <p className="text-2xl font-black text-[#77876F] font-mono mt-1">
+                {kpis24h.goodFinishedGarments.toLocaleString()} <span className="text-[11px] font-normal text-[#77876F] font-sans">pcs</span>
+              </p>
+              <p className="text-[10px] text-[#77876F] mt-0.5 font-medium">Good Quality Units</p>
             </div>
-            <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
-              <p className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600">Rejects / Rework</p>
-              <p className="text-2xl font-black text-rose-600 font-mono mt-1">{kpis24h.totalReject.toLocaleString()}</p>
+
+            {/* 4. Total Operation Passes */}
+            <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs" title="Total operations performed across all workstation steps combined">
+              <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-700">Operation Passes</p>
+              <p className="text-2xl font-black text-slate-900 font-mono mt-1">
+                {kpis24h.totalOperationCompleted.toLocaleString()} <span className="text-[11px] font-normal text-slate-500 font-sans">ops</span>
+              </p>
+              <p className="text-[10px] text-slate-500 mt-0.5 font-medium">All Station Strokes</p>
             </div>
+
+            {/* 5. Pass Percentage */}
             <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800">Pass Percentage</p>
               <p className="text-2xl font-black text-emerald-700 font-mono mt-1">{kpis24h.qualityRate}%</p>
+              <p className="text-[10px] text-emerald-600 mt-0.5 font-medium">{kpis24h.totalReject} rework</p>
             </div>
+
+            {/* 6. Defect Rate */}
             <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
               <p className="text-[10px] font-extrabold uppercase tracking-wider text-rose-600">Defect Rate (DHU)</p>
               <p className="text-2xl font-black text-rose-600 font-mono mt-1">{kpis24h.defectDhu}%</p>
+              <p className="text-[10px] text-rose-500 mt-0.5 font-medium">Defects / 100 units</p>
             </div>
           </div>
 
@@ -987,8 +1097,8 @@ export function ProductionMonitoringPage() {
                 <thead>
                   {/* Super Header: Shift Windows */}
                   <tr className="border-b border-[#E6DDCE] select-none text-left">
-                    <th colSpan={2} className="p-3 bg-[#F6F1E8] text-[11px] font-extrabold uppercase text-[#221912] sticky left-0 z-20 shadow-[1px_0_0_#E6DDCE]">
-                      Operator & Machine
+                    <th className="p-3 bg-[#F6F1E8] text-[11px] font-extrabold uppercase text-[#221912] sticky left-0 z-20 shadow-[1px_0_0_#E6DDCE]">
+                      Operator
                     </th>
                     {shiftBands.map((band, bIdx) => (
                       <th
@@ -1010,7 +1120,6 @@ export function ProductionMonitoringPage() {
                   {/* Sub Header: Individual Hourly Columns */}
                   <tr className="bg-slate-50 border-b border-slate-200 text-[10.5px] uppercase font-bold tracking-wider text-slate-500 select-none">
                     <th className="p-3 w-56 sticky left-0 z-20 bg-slate-50 shadow-[1px_0_0_#E6DDCE]">Operator Name / Role</th>
-                    <th className="p-3 w-24">Machine</th>
                     {displayedHours.map(h => {
                       const isLive = h === currentLiveHour;
                       return (
@@ -1038,7 +1147,7 @@ export function ProductionMonitoringPage() {
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredTimesheet.length === 0 ? (
                     <tr>
-                      <td colSpan={displayedHours.length + 7} className="p-12 text-center text-slate-400 italic">
+                      <td colSpan={displayedHours.length + 6} className="p-12 text-center text-slate-400 italic">
                         No operator production records found for {selectedDate}.
                       </td>
                     </tr>
@@ -1244,10 +1353,6 @@ export function ProductionMonitoringPage() {
                                 >
                                   {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-[#9C5B3C]" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
                                 </button>
-                                
-                                <div className="w-7 h-7 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 font-bold text-[10px] flex items-center justify-center shadow-2xs shrink-0">
-                                  {row.operatorName?.slice(0, 2).toUpperCase()}
-                                </div>
 
                                 <div className="truncate flex-1">
                                   <div className="font-bold text-slate-900 truncate text-xs group-hover:text-[#9C5B3C] transition-colors" title={row.operatorName}>
@@ -1262,17 +1367,6 @@ export function ProductionMonitoringPage() {
                                   </div>
                                 </div>
                               </div>
-                            </td>
-
-                            {/* Machine Column */}
-                            <td className="p-3 font-mono text-[11px]">
-                              {row.machineCode ? (
-                                <span className="inline-block px-1.5 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200 font-semibold text-[10.5px]">
-                                  {row.machineCode}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400">—</span>
-                              )}
                             </td>
 
                             {/* Rendered Hourly Columns */}
@@ -1325,7 +1419,7 @@ export function ProductionMonitoringPage() {
                           {/* Expanded Drawer for Detailed Batch Runs */}
                           {isExpanded && (
                             <tr className="bg-slate-50/80 border-y border-slate-200">
-                              <td colSpan={displayedHours.length + 7} className="p-4 pl-12">
+                              <td colSpan={displayedHours.length + 6} className="p-4 pl-12">
                                 <div className="space-y-3">
                                   <div className="flex items-center justify-between">
                                     <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
@@ -1409,7 +1503,7 @@ export function ProductionMonitoringPage() {
                 {filteredTimesheet.length > 0 && (
                   <tfoot>
                     <tr className="bg-slate-100/90 border-t-2 border-slate-200 font-bold text-xs text-slate-900">
-                      <td colSpan={2} className="p-3 sticky left-0 z-20 bg-slate-100 shadow-[1px_0_0_#E6DDCE]">
+                      <td className="p-3 sticky left-0 z-20 bg-slate-100 shadow-[1px_0_0_#E6DDCE]">
                         Factory Floor Hourly Totals
                       </td>
 
@@ -1430,10 +1524,10 @@ export function ProductionMonitoringPage() {
                       })}
 
                       <td className="p-3 text-center border-l-2 border-slate-200 font-mono text-[#9C5B3C]">
-                        {kpis24h.totalCompleted}
+                        {kpis24h.totalOperationCompleted}
                       </td>
                       <td className="p-3 text-center font-mono text-emerald-700">
-                        {kpis24h.totalGood}
+                        {kpis24h.totalOperationGood}
                       </td>
                       <td className="p-3 text-center font-mono text-rose-600">
                         {kpis24h.totalReject}
@@ -1495,7 +1589,16 @@ export function ProductionMonitoringPage() {
                 <label className="text-xs font-bold text-[#221912] block">Production Order (PO)</label>
                 <select
                   value={selectedOrderId}
-                  onChange={e => setSelectedOrderId(e.target.value)}
+                  onChange={e => {
+                    const newOrderId = e.target.value;
+                    setSelectedOrderId(newOrderId);
+                    if (newOrderId) {
+                      const matchingPlan = allLinePlans.find(p => String(p.orderId) === String(newOrderId));
+                      if (matchingPlan && matchingPlan.lineId) {
+                        setSelectedLineId(String(matchingPlan.lineId));
+                      }
+                    }
+                  }}
                   className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
                 >
                   <option value="">— Select Production Order —</option>
@@ -1517,7 +1620,16 @@ export function ProductionMonitoringPage() {
                 <label className="text-xs font-bold text-[#221912] block">Physical Sewing Line</label>
                 <select
                   value={selectedLineId}
-                  onChange={e => setSelectedLineId(e.target.value)}
+                  onChange={e => {
+                    const newLineId = e.target.value;
+                    setSelectedLineId(newLineId);
+                    if (newLineId !== "ALL") {
+                      const matchingPlan = allLinePlans.find(p => String(p.lineId) === String(newLineId));
+                      if (matchingPlan && String(matchingPlan.orderId) !== String(selectedOrderId)) {
+                        setSelectedOrderId(String(matchingPlan.orderId));
+                      }
+                    }
+                  }}
                   className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
                 >
                   <option value="ALL">All Lines</option>
@@ -1729,7 +1841,6 @@ export function ProductionMonitoringPage() {
                         <th className="py-3.5 px-4 w-36 text-center whitespace-nowrap">Planned Capacity</th>
                         <th className="py-3.5 px-4 w-32 text-center whitespace-nowrap">Actual Output Today</th>
                         <th className="py-3.5 px-4 w-36 text-center whitespace-nowrap">Measured Cycle Time</th>
-                        <th className="py-3.5 px-4 w-36 text-center whitespace-nowrap">Execution Status</th>
                         <th className="py-3.5 px-4 w-32 text-center whitespace-nowrap">Action</th>
                       </tr>
                     </thead>
@@ -1895,26 +2006,7 @@ export function ProductionMonitoringPage() {
                               )}
                             </td>
 
-                            {/* 9. Execution Status */}
-                            <td className="py-3 px-4 text-center align-middle whitespace-nowrap">
-                              {st.isBottleneck ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 text-[10.5px] font-bold border border-rose-200">
-                                  <AlertTriangle className="w-3 h-3 text-rose-600" />
-                                  <span>Exceeds Takt</span>
-                                </span>
-                              ) : st.totalGood > 0 ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 text-[10.5px] font-bold border border-emerald-200">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                  <span>On Track</span>
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10.5px] font-semibold">
-                                  <span>Pending Logs</span>
-                                </span>
-                              )}
-                            </td>
-
-                            {/* 10. Action */}
+                            {/* Action */}
                             <td className="py-3 px-4 text-center align-middle whitespace-nowrap">
                               <button
                                 type="button"
@@ -1926,10 +2018,10 @@ export function ProductionMonitoringPage() {
                                   setPreselectedMachineCode(st.machineType);
                                   setIsRecordModalOpen(true);
                                 }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#F6F1E8] hover:bg-[#EFE9DF] text-[#9C5B3C] border border-[#E6DDCE] text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#F6F1E8] hover:bg-[#EFE9DF] text-[#9C5B3C] border border-[#E6DDCE] text-xs font-bold transition-colors cursor-pointer shadow-2xs"
                                 title="Log piece run batch for this station"
                               >
-                                <Plus className="w-3 h-3" /> Log Pieces
+                                <Plus className="w-3.5 h-3.5" /> Log Pieces
                               </button>
                             </td>
                           </tr>
@@ -1940,68 +2032,6 @@ export function ProductionMonitoringPage() {
                 </div>
               </DataCard>
 
-              {/* ── 4. Hourly Pitch Output Entry Tracker ──────────────────── */}
-              <DataCard noPad>
-                <DataCardHeader 
-                  title="Shift Hourly Pitch Output Entry & Velocity" 
-                  subtitle={`Enter actual completed line units per hour against the Planned Pitch Target (${hourlyTarget} pcs/hr)`} 
-                />
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50/90 border-b border-slate-200 text-[10.5px] uppercase tracking-wider font-bold text-slate-500">
-                        <th className="p-4 w-28">Shift Hour</th>
-                        <th className="p-4 w-32">Planned Target</th>
-                        <th className="p-4 w-48">Actual Line Output</th>
-                        <th className="p-4 w-32">Hourly Variance</th>
-                        <th className="p-4">Execution Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-xs text-slate-900">
-                      {SHIFT_HOURS.map((hour) => {
-                        const actual = hourlyOutput[hour];
-                        const hasEntry = actual !== undefined;
-                        const hrVariance = hasEntry ? actual - hourlyTarget : 0;
-                        
-                        return (
-                          <tr key={hour} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="p-4 font-mono font-bold">Hour {hour}</td>
-                            <td className="p-4 font-mono text-slate-500">{hourlyTarget} pcs</td>
-                            <td className="p-4">
-                              <input
-                                type="number"
-                                min="0"
-                                className="w-28 h-9 bg-white border border-slate-200 rounded-xl px-3 font-mono font-bold text-slate-900 focus:outline-none focus:border-[#9C5B3C] shadow-2xs"
-                                value={actual ?? ""}
-                                onChange={e => handleOutputChange(hour, e.target.value)}
-                                placeholder="—"
-                              />
-                            </td>
-                            <td className={`p-4 font-mono font-bold ${hasEntry ? (hrVariance < 0 ? 'text-amber-700' : 'text-emerald-700') : 'text-slate-300'}`}>
-                              {hasEntry ? (hrVariance > 0 ? `+${hrVariance}` : hrVariance) : '—'}
-                            </td>
-                            <td className="p-4">
-                              {hasEntry && hrVariance < 0 && (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200">
-                                  <AlertTriangle className="w-3.5 h-3.5" /> Behind Target
-                                </span>
-                              )}
-                              {hasEntry && hrVariance >= 0 && (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-200">
-                                  <CheckCircle className="w-3.5 h-3.5" /> On Track
-                                </span>
-                              )}
-                              {!hasEntry && (
-                                <span className="text-slate-400 text-[11px] italic">Not logged</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </DataCard>
             </>
           )}
         </div>

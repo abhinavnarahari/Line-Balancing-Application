@@ -85,6 +85,10 @@ public class OperatorService {
         return findOrThrow(id);
     }
 
+    public List<Operator> findAllEntities() {
+        return operatorRepository.findByActiveOrderByNameAsc(true);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
     private Operator findOrThrow(Long id) {

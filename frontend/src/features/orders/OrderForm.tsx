@@ -259,13 +259,13 @@ export function OrderForm({ styles, sizes, existingOrders = [], initialData, onS
             placeholder="e.g. PO-2026-001"
             className={isDuplicateOrderNo ? "border-amber-500 ring-1 ring-amber-500/20" : ""}
           />
-          {isDuplicateOrderNo ? (
+            {isDuplicateOrderNo ? (
             <p className="text-[11px] text-amber-600 font-medium mt-1 flex items-center justify-between">
               <span>⚠️ Order number already exists in database.</span>
               <button
                 type="button"
                 onClick={() => setFormData(prev => ({ ...prev, orderNo: autoOrderNo }))}
-                className="text-[#2563EB] font-bold hover:underline cursor-pointer"
+                className="text-[#9C5B3C] font-bold hover:underline cursor-pointer"
               >
                 Use {autoOrderNo}
               </button>
@@ -276,7 +276,7 @@ export function OrderForm({ styles, sizes, existingOrders = [], initialData, onS
               <button
                 type="button"
                 onClick={() => setFormData(prev => ({ ...prev, orderNo: autoOrderNo }))}
-                className="text-[#2563EB] font-medium hover:underline cursor-pointer"
+                className="text-[#9C5B3C] font-medium hover:underline cursor-pointer"
               >
                 Auto-generate
               </button>
@@ -355,14 +355,14 @@ export function OrderForm({ styles, sizes, existingOrders = [], initialData, onS
 
       {/* Dynamic Size-Wise Quantities Section */}
       <div className="border border-[#E2E8F0] rounded-xl bg-white shadow-2xs relative">
-        <div className="bg-[#F8FAFC] px-4 py-3 border-b border-[#E2E8F0] rounded-t-xl flex justify-between items-center flex-wrap gap-2">
+        <div className="bg-[#FAF7F2] px-4 py-3 border-b border-[#E6DDCE] rounded-t-xl flex justify-between items-center flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-[#2563EB]" />
-            <h3 className="text-sm font-bold text-[#0F172A]">Size-Wise Quantities</h3>
+            <Layers className="w-4 h-4 text-[#9C5B3C]" />
+            <h3 className="text-sm font-bold text-[#221912]">Size-Wise Quantities</h3>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-[#64748B] font-medium">Total Quantity:</span>
-            <span className="font-mono font-bold text-xs bg-white px-2.5 py-1 rounded-md border border-[#E2E8F0] text-[#2563EB] shadow-2xs">
+            <span className="font-mono font-bold text-xs bg-white px-2.5 py-1 rounded-md border border-[#E6DDCE] text-[#9C5B3C] shadow-2xs">
               {totalQty.toLocaleString()} pcs
             </span>
           </div>
@@ -382,7 +382,7 @@ export function OrderForm({ styles, sizes, existingOrders = [], initialData, onS
             {sizeRows.map((row, index) => (
               <div
                 key={row.id}
-                className="grid grid-cols-12 gap-3 items-center p-2 rounded-lg bg-[#F8FAFC] hover:bg-[#F8FAFC]/50 border border-[#F1F5F9] transition-colors"
+                className="grid grid-cols-12 gap-3 items-center p-2 rounded-lg bg-[#FAF7F2]/50 hover:bg-[#FAF7F2] border border-[#E6DDCE]/60 transition-colors"
               >
                 {/* Row Index */}
                 <div className="col-span-1 text-center font-mono text-xs font-semibold text-[#64748B]">
@@ -407,7 +407,7 @@ export function OrderForm({ styles, sizes, existingOrders = [], initialData, onS
                     placeholder="Enter qty"
                     value={row.quantity}
                     onChange={(e) => handleRowQtyChange(row.id, e.target.value)}
-                    className="w-full h-10 bg-white border border-[#E2E8F0] rounded-lg px-3 text-xs text-[#0F172A] text-right focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/15 font-mono font-semibold"
+                    className="w-full h-10 bg-white border border-[#E2E8F0] rounded-lg px-3 text-xs text-[#0F172A] text-right focus:outline-none focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 font-mono font-semibold"
                   />
                 </div>
 
@@ -431,7 +431,7 @@ export function OrderForm({ styles, sizes, existingOrders = [], initialData, onS
             <button
               type="button"
               onClick={handleAddRow}
-              className="w-full py-2.5 px-4 rounded-xl border border-dashed border-[#2563EB]/60 hover:border-[#2563EB] bg-[#F8FAFC]/50 hover:bg-[#F8FAFC] text-[#2563EB] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+              className="w-full py-2.5 px-4 rounded-xl border border-dashed border-[#9C5B3C]/60 hover:border-[#9C5B3C] bg-[#FAF7F2]/50 hover:bg-[#FAF7F2] text-[#9C5B3C] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs"
             >
               <Plus className="w-4 h-4" />
               <span>Add New Row</span>

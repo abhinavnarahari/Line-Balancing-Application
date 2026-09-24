@@ -113,9 +113,9 @@ export function ShiftForm({ existingShifts = [], initialData, onSubmit, onCancel
             name="active"
             checked={formData.active}
             onChange={handleChange}
-            className="h-4 w-4 rounded border-[#F1F5F9] bg-[#FFFFFF] text-[#2563EB] focus:ring-[#2563EB] focus:ring-offset-white"
+            className="h-4 w-4 rounded border-[#E6DDCE] bg-[#FFFFFF] text-[#9C5B3C] accent-[#9C5B3C] focus:ring-[#9C5B3C] focus:ring-offset-white"
           />
-          <label htmlFor="active" className="text-sm font-medium text-[#475569]">
+          <label htmlFor="active" className="text-sm font-medium text-[#8C7E6E]">
             Active immediately
           </label>
         </div>

@@ -40,7 +40,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               "placeholder:text-slate-400",
               "transition-all duration-150",
               "outline-none",
-              "focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 focus:bg-white",
+              "focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 focus:bg-white",
               "hover:border-slate-300",
               "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-50",
               error && "border-rose-400 focus:border-rose-500 focus:ring-rose-500/15",

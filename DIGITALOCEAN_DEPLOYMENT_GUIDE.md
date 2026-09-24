@@ -60,9 +60,20 @@ docker compose up -d --build
 
 Once started, open your web browser:
 - **Frontend Web Application:** `http://YOUR_DROPLET_IP` *(or `http://YOUR_DROPLET_IP:3000`)*
-- **Backend API & Probes:** `http://YOUR_DROPLET_IP:8085/actuator/health`
+- **Backend API & Health Probes:** `http://YOUR_DROPLET_IP:8085/actuator/health`
 
-Flyway will automatically run all database migrations on the first launch!
+### 📦 End-to-End Sample Data Included Automatically:
+Flyway automatically executes all database migrations and seeds the complete enterprise dataset on the first launch:
+- **2 Active Production Sewing Lines** (Line 01 - T-Shirt Assembly & Line 02 - Polo Shirt Assembly)
+- **2 Production Orders** (Nike Activewear: 20,000 pcs & Tommy Hilfiger: 9,200 pcs)
+- **2 Published Operation Bulletins** (Crewneck T-Shirt 8-Op Assembly & Polo Shirt 10-Op Assembly)
+- **50 Factory Operators** (EMP-001 to EMP-050 with complete skill profiles, roles, and departments)
+- **900 Calibrated Skill Matrix Assessments** (1 to 5 star ratings across all 18 standard operations)
+- **14 Fleet Machines** (Single Needle Lockstitch, Overlock, Interlock, Flatlock, Bar Tack, etc.)
+- **Active Line Plans & Workstation Assignments** (Line 01: 11 station assignments, Line 02: 10 station assignments)
+- **Live Production Timesheets & Piece Logs** (Flow-balanced 145 pcs finished output, 113.9% floor efficiency dynamically synchronized to `CURRENT_DATE`)
+- **Daily Biometric Attendance** (All 50 operators marked present with on-time check-ins for `CURRENT_DATE`)
+- **Capacity Plans, Takt Pacing Profiles, and Line Designs** (125 pcs/hr & 100 pcs/hr targets)
 
 ---
 

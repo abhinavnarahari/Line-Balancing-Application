@@ -10,6 +10,7 @@ import { OperationRatingModal } from "../../features/operations/OperationRatingM
 import { OperationAffinityModal } from "../../features/operations/OperationAffinityModal";
 import { operationsApi, type Operation, type OperationAffinity } from "../../features/operations/api";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { notifyMasterDataUpdated } from "../../utils/masterDataEvents";
 
 export function OperationsPage() {
   const [operations, setOperations] = useState<Operation[]>([]);
@@ -57,6 +58,7 @@ export function OperationsPage() {
     try {
       if (editingOperation) await operationsApi.updateOperation(editingOperation.id, data);
       else await operationsApi.createOperation(data);
+      notifyMasterDataUpdated("operation");
       await loadOperations();
       setIsFormOpen(false);
       setEditingOperation(null);
@@ -72,12 +74,14 @@ export function OperationsPage() {
 
   const handleToggleActive = async (id: string | number) => {
     await operationsApi.toggleActive(id);
+    notifyMasterDataUpdated("operation");
     await loadOperations();
   };
 
   const handleDelete = async (id: string | number) => {
     try {
       await operationsApi.deleteOperation(id);
+      notifyMasterDataUpdated("operation");
       await loadOperations();
     } catch (err) {
       console.error(err);
@@ -134,13 +138,13 @@ export function OperationsPage() {
         onImport={handleImport}
         eyebrow="Industrial Engineering"
         title="Operation Master & SMV Benchmark"
-        description="Standard sewing work content, machine assignments, and SMV engineering library for operation bulletins."
+
         action={
           !isFormOpen && (
             <Button
               onClick={() => { setEditingOperation(null); setIsFormOpen(true); }}
               size="md"
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20"
+              className="bg-[#9C5B3C] hover:bg-[#854D33] text-white shadow-sm"
             >
               <Plus className="h-4 w-4 mr-1.5" />
               Add Operation
@@ -156,14 +160,14 @@ export function OperationsPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
+          className="rounded-2xl border border-[#E6DDCE] bg-white p-4 shadow-xs flex items-center justify-between"
         >
           <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Operations</p>
-            <p className="text-2xl font-extrabold text-slate-900 font-mono">{kpiStats.total}</p>
-            <p className="text-[11px] font-medium text-slate-500">Standard work catalog</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">Total Operations</p>
+            <p className="text-2xl font-extrabold text-[#221912] font-mono">{kpiStats.total}</p>
+            <p className="text-[11px] font-medium text-[#8C7E6E]">Standard work catalog</p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-[#FAF7F2] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C] shadow-xs">
             <Scissors className="w-5 h-5" />
           </div>
         </motion.div>
@@ -193,14 +197,16 @@ export function OperationsPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, delay: 0.1 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
+          className="rounded-2xl border border-[#E6DDCE] bg-white p-4 shadow-xs flex items-center justify-between"
         >
           <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Average Standard SMV</p>
-            <p className="text-2xl font-extrabold text-indigo-700 font-mono">{kpiStats.avgSmv} min</p>
-            <p className="text-[11px] font-medium text-slate-500">{(parseFloat(kpiStats.avgSmv) * 60).toFixed(0)} sec / cycle average</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">Average Standard SMV</p>
+            <p className="text-2xl font-extrabold text-[#9C5B3C] font-mono">
+              {(parseFloat(kpiStats.avgSmv) * 60).toFixed(0)} <span className="text-base font-semibold text-[#8C7E6E]">sec</span>
+            </p>
+            <p className="text-[11px] font-medium text-[#8C7E6E]">{kpiStats.avgSmv} min benchmark cycle</p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-[#FAF7F2] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C] shadow-xs">
             <Activity className="w-5 h-5" />
           </div>
         </motion.div>
@@ -211,7 +217,7 @@ export function OperationsPage() {
         isOpen={isFormOpen}
         onClose={handleClose}
         title={editingOperation ? "Edit Operation" : "Create New Standard Operation"}
-        subtitle="Define standard SMV (Standard Minute Value) and machinery requirements."
+        subtitle="Define target cycle time in seconds, standard SMV, and machinery requirements."
       >
         <OperationForm
           existingOperations={operations}

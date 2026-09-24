@@ -10,6 +10,7 @@ import { shiftsApi } from "../../features/shifts/api";
 import type { Shift } from "../../features/shifts/types";
 import { shiftAssignmentApi, type ShiftAssignment } from "../../features/shift-assignments/api";
 import { cn } from "../../utils/cn";
+import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 // Utility for status styling
 // Utility for status styling
@@ -89,29 +90,32 @@ export function AttendancePage() {
   ];
 
   // Initial Data Load
+  const fetchBase = async () => {
+    try {
+      const [opData, shiftData, assignData] = await Promise.all([
+        operatorsApi.getOperators(),
+        shiftsApi.getShifts(true),
+        shiftAssignmentApi.getAssignments()
+      ]);
+      setOperators(
+        opData
+          .filter(o => o.active)
+          .sort((a, b) =>
+            (a.employeeId || "").localeCompare(b.employeeId || "", undefined, { numeric: true, sensitivity: "base" })
+          )
+      );
+      setShifts(shiftData);
+      setAssignments(assignData);
+    } catch (err) {
+      console.error("Failed to load base data", err);
+    }
+  };
+
   useEffect(() => {
-    const fetchBase = async () => {
-      try {
-        const [opData, shiftData, assignData] = await Promise.all([
-          operatorsApi.getOperators(),
-          shiftsApi.getShifts(true),
-          shiftAssignmentApi.getAssignments()
-        ]);
-        setOperators(
-          opData
-            .filter(o => o.active)
-            .sort((a, b) =>
-              (a.employeeId || "").localeCompare(b.employeeId || "", undefined, { numeric: true, sensitivity: "base" })
-            )
-        );
-        setShifts(shiftData);
-        setAssignments(assignData);
-      } catch (err) {
-        console.error("Failed to load base data", err);
-      }
-    };
     fetchBase();
   }, []);
+
+  useMasterDataSubscription(["shift", "operator", "attendance", "all"], fetchBase);
 
   // Load roster and attendance whenever date changes
   useEffect(() => {
@@ -206,6 +210,7 @@ export function AttendancePage() {
       setCustomCheckInTimes({});
       const attData = await attendanceApi.getAttendanceForDate(date, "");
       setAttendance(attData);
+      notifyMasterDataUpdated("attendance");
 
       if (lateCount > 0) {
         setNotificationBanner(`✓ Saved. Manager notification dispatched for ${lateCount} late check-in(s).`);
@@ -251,6 +256,7 @@ export function AttendancePage() {
       // Reload data
       const attData = await attendanceApi.getAttendanceForDate(date, "");
       setAttendance(attData);
+      notifyMasterDataUpdated("attendance");
       setNotificationBanner("✓ Biometric punch synced. Late check-ins automatically triggered Manager Alerts.");
       setTimeout(() => setNotificationBanner(null), 6000);
     } catch (err) {
@@ -322,7 +328,7 @@ export function AttendancePage() {
       <PageHeader
         eyebrow="Workforce"
         title="Attendance Dashboard"
-        description="Monitor daily biometric punches and view historical attendance logs."
+
         action={
           activeTab === "TOOL" && (
             <Button onClick={handleSimulateSync} disabled={syncing} size="md">
@@ -340,7 +346,7 @@ export function AttendancePage() {
           className={cn(
             "px-4 py-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors",
             activeTab === "TOOL" 
-              ? "border-[#2563EB] text-[#0F172A]" 
+              ? "border-[#9C5B3C] text-[#221912]" 
               : "border-transparent text-[#64748B] hover:text-[#475569] hover:border-[#E2E8F0]"
           )}
         >
@@ -352,7 +358,7 @@ export function AttendancePage() {
           className={cn(
             "px-4 py-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-colors",
             activeTab === "HISTORY" 
-              ? "border-[#2563EB] text-[#0F172A]" 
+              ? "border-[#9C5B3C] text-[#221912]" 
               : "border-transparent text-[#64748B] hover:text-[#475569] hover:border-[#E2E8F0]"
           )}
         >
@@ -385,9 +391,9 @@ export function AttendancePage() {
               <span className="text-[10px] uppercase font-semibold text-orange-700 tracking-wider mb-1">Half Day</span>
               <span className="text-2xl font-bold text-orange-800">{halfDayCount}</span>
             </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-sm p-4 flex flex-col justify-center items-center shadow-sm">
-              <span className="text-[10px] uppercase font-semibold text-blue-700 tracking-wider mb-1">On Leave</span>
-              <span className="text-2xl font-bold text-blue-800">{leaveCount}</span>
+            <div className="bg-[#FAF7F2] border border-[#E6DDCE] rounded-sm p-4 flex flex-col justify-center items-center shadow-sm">
+              <span className="text-[10px] uppercase font-semibold text-[#8B5E3C] tracking-wider mb-1">On Leave</span>
+              <span className="text-2xl font-bold text-[#6D4327]">{leaveCount}</span>
             </div>
             <div className="bg-[#FFFFFF] border border-[#E2E8F0] rounded-sm p-4 flex flex-col justify-center items-center shadow-sm">
               <span className="text-[10px] uppercase font-semibold text-[#475569] tracking-wider mb-1">Pending</span>
@@ -405,7 +411,7 @@ export function AttendancePage() {
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="h-10 bg-white border border-[#E2E8F0] rounded-sm px-3 text-sm text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/20 w-full"
+                    className="h-10 bg-white border border-[#E2E8F0] rounded-sm px-3 text-sm text-[#0F172A] focus:outline-none focus:border-[#9C5B3C] focus:ring-1 focus:ring-[#9C5B3C]/20 w-full"
                   />
                 </div>
                 
@@ -436,7 +442,7 @@ export function AttendancePage() {
                       placeholder="Name or ID..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full h-10 bg-white border border-[#E2E8F0] rounded-sm pl-9 pr-3 text-sm text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/20"
+                      className="w-full h-10 bg-white border border-[#E2E8F0] rounded-sm pl-9 pr-3 text-sm text-[#0F172A] focus:outline-none focus:border-[#9C5B3C] focus:ring-1 focus:ring-[#9C5B3C]/20"
                     />
                   </div>
                 </div>
@@ -508,7 +514,7 @@ export function AttendancePage() {
                         <tr key={operator.id} className={cn("hover:bg-[#FFFFFF]/50 transition-colors", isUnsaved && "bg-orange-50/30", isLate && "bg-amber-50/20")}>
                           <td className="py-3 px-4">
                             <span className="font-mono text-xs font-medium text-[#475569]">{operator.employeeId}</span>
-                            {isUnsaved && <span className="ml-2 w-2 h-2 inline-block rounded-full bg-[#2563EB] animate-pulse" title="Unsaved Change"></span>}
+                            {isUnsaved && <span className="ml-2 w-2 h-2 inline-block rounded-full bg-[#9C5B3C] animate-pulse" title="Unsaved Change"></span>}
                           </td>
                           <td className="py-3 px-4">
                             <div className="font-medium text-[#0F172A] text-sm">{operator.name}</div>
@@ -528,7 +534,7 @@ export function AttendancePage() {
                               </div>
                             ) : customCheckInTimes[operator.id] && status !== "ABSENT" && status !== "ON_LEAVE" ? (
                               <div className="flex items-center gap-1.5 font-mono text-xs">
-                                <span className="text-blue-700 font-bold">{customCheckInTimes[operator.id].slice(0, 5)}</span>
+                                <span className="text-[#9C5B3C] font-bold">{customCheckInTimes[operator.id].slice(0, 5)}</span>
                                 <span className="text-[10px] text-slate-400 font-sans">(pending)</span>
                               </div>
                             ) : (
@@ -576,7 +582,7 @@ export function AttendancePage() {
                               onClick={() => handleMark(operator.id, "ON_LEAVE")}
                               className={cn(
                                 "px-2.5 py-1 text-[11px] font-semibold rounded-sm border transition-colors",
-                                status === "ON_LEAVE" ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-[#E2E8F0] text-[#475569] hover:bg-blue-50 hover:text-blue-700"
+                                status === "ON_LEAVE" ? "bg-[#8B5E3C] border-[#8B5E3C] text-white" : "bg-white border-[#E2E8F0] text-[#475569] hover:bg-[#FAF7F2] hover:text-[#8B5E3C]"
                               )}
                               title="Mark On Leave"
                             >
@@ -596,7 +602,7 @@ export function AttendancePage() {
                   <select 
                     value={rosterPageSize} 
                     onChange={(e) => { setRosterPageSize(Number(e.target.value)); setRosterPage(1); }}
-                    className="text-xs bg-white border border-[#E2E8F0] rounded-sm h-7 px-2 focus:ring-[#2563EB] focus:border-[#2563EB] text-[#0F172A]"
+                    className="text-xs bg-white border border-[#E2E8F0] rounded-sm h-7 px-2 focus:ring-[#9C5B3C] focus:border-[#9C5B3C] text-[#0F172A]"
                   >
                     <option value={25}>25</option>
                     <option value={50}>50</option>
@@ -630,7 +636,7 @@ export function AttendancePage() {
                   placeholder="Search Name or ID..."
                   value={historySearchQuery}
                   onChange={(e) => setHistorySearchQuery(e.target.value)}
-                  className="w-full h-9 bg-white border border-[#E2E8F0] rounded-sm pl-9 pr-3 text-sm text-[#0F172A] focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB]/20"
+                  className="w-full h-9 bg-white border border-[#E2E8F0] rounded-sm pl-9 pr-3 text-sm text-[#0F172A] focus:outline-none focus:border-[#9C5B3C] focus:ring-1 focus:ring-[#9C5B3C]/20"
                 />
               </div>
               <Button variant="outline" size="sm" onClick={() => setHistoryLoading(true)}>
@@ -640,7 +646,7 @@ export function AttendancePage() {
           </div>
           {historyLoading ? (
              <div className="flex items-center justify-center h-64">
-              <div className="w-8 h-8 border-4 border-[#DBEAFE] border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-4 border-[#E6DDCE] border-t-transparent rounded-full animate-spin" />
             </div>
           ) : history.filter(h => !historySearchQuery || (h.operatorName && h.operatorName.toLowerCase().includes(historySearchQuery.toLowerCase())) || (h.employeeId && h.employeeId.toLowerCase().includes(historySearchQuery.toLowerCase()))).length === 0 ? (
             <EmptyState title="No historical records found" description="Try adjusting your search query." />
@@ -704,7 +710,7 @@ export function AttendancePage() {
                   <select 
                     value={historyPageSize} 
                     onChange={(e) => { setHistoryPageSize(Number(e.target.value)); setHistoryPage(1); }}
-                    className="text-xs bg-white border border-[#E2E8F0] rounded-sm h-7 px-2 focus:ring-[#2563EB] focus:border-[#2563EB] text-[#0F172A]"
+                    className="text-xs bg-white border border-[#E2E8F0] rounded-sm h-7 px-2 focus:ring-[#9C5B3C] focus:border-[#9C5B3C] text-[#0F172A]"
                   >
                     <option value={25}>25</option>
                     <option value={50}>50</option>

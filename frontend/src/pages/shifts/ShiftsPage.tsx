@@ -9,6 +9,7 @@ import { Button } from "../../components/ui/Button";
 import { PageHeader, RecentActivityLog } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { notifyMasterDataUpdated } from "../../utils/masterDataEvents";
 
 function getShiftDurationHours(start: string, end: string): number {
   const [sh = 0, sm = 0] = (start || "").split(":").map(Number);
@@ -62,6 +63,7 @@ export function ShiftsPage() {
 
   const handleToggleActive = async (id: string) => {
     await shiftsApi.toggleActive(id);
+    notifyMasterDataUpdated("shift");
     loadShifts();
   };
 
@@ -78,6 +80,7 @@ export function ShiftsPage() {
   const handleDelete = async (id: string) => {
     try {
       await shiftsApi.deleteShift(id);
+      notifyMasterDataUpdated("shift");
       loadShifts();
     } catch (err) {
       console.error(err);
@@ -88,6 +91,7 @@ export function ShiftsPage() {
   const handleSubmit = async (data: CreateShiftDTO | UpdateShiftDTO) => {
     if (editingShift) await shiftsApi.updateShift(editingShift.id, data as UpdateShiftDTO);
     else await shiftsApi.createShift(data as CreateShiftDTO);
+    notifyMasterDataUpdated("shift");
     handleClose();
     loadShifts();
   };
@@ -116,6 +120,7 @@ export function ShiftsPage() {
           active: row["Status"] === "Active"
         });
       }
+      notifyMasterDataUpdated("shift");
       await loadShifts();
       alert("Shifts imported successfully!");
     } catch (err) {
@@ -133,13 +138,13 @@ export function ShiftsPage() {
         onImport={handleImport}
         eyebrow="Plant Operations"
         title="Shift Master & Timings"
-        description="Configure plant working shifts, overnight timing allowances, and daily factory operating capacity."
+
         action={
           !isFormOpen && (
             <Button
               onClick={() => { setEditingShift(null); setIsFormOpen(true); }}
               size="md"
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20"
+              className="bg-[#9C5B3C] hover:bg-[#854D33] text-white shadow-sm"
             >
               <Plus className="h-4 w-4 mr-1.5" />
               Add Shift
@@ -155,14 +160,14 @@ export function ShiftsPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
+          className="rounded-2xl border border-[#E6DDCE] bg-white p-4 shadow-xs flex items-center justify-between"
         >
           <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Shifts</p>
-            <p className="text-2xl font-extrabold text-slate-900 font-mono">{kpiStats.total}</p>
-            <p className="text-[11px] font-medium text-slate-500">Configured plant shifts</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">Total Shifts</p>
+            <p className="text-2xl font-extrabold text-[#221912] font-mono">{kpiStats.total}</p>
+            <p className="text-[11px] font-medium text-[#8C7E6E]">Configured plant shifts</p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-[#FAF7F2] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C] shadow-xs">
             <Clock className="w-5 h-5" />
           </div>
         </motion.div>
@@ -192,14 +197,14 @@ export function ShiftsPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, delay: 0.1 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
+          className="rounded-2xl border border-[#E6DDCE] bg-white p-4 shadow-xs flex items-center justify-between"
         >
           <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Daily Operating Time</p>
-            <p className="text-2xl font-extrabold text-indigo-700 font-mono">{kpiStats.totalActiveHours} hrs</p>
-            <p className="text-[11px] font-medium text-slate-500">Total active capacity</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">Daily Operating Time</p>
+            <p className="text-2xl font-extrabold text-[#9C5B3C] font-mono">{kpiStats.totalActiveHours} hrs</p>
+            <p className="text-[11px] font-medium text-[#8C7E6E]">Total active capacity</p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-[#FAF7F2] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C] shadow-xs">
             <Activity className="w-5 h-5" />
           </div>
         </motion.div>
@@ -209,14 +214,14 @@ export function ShiftsPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2, delay: 0.15 }}
-          className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs flex items-center justify-between"
+          className="rounded-2xl border border-[#E6DDCE] bg-white p-4 shadow-xs flex items-center justify-between"
         >
           <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Night Shifts</p>
-            <p className="text-2xl font-extrabold text-purple-700 font-mono">{kpiStats.overnightCount}</p>
-            <p className="text-[11px] font-medium text-slate-500">Overnight 24h coverage</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">Night Shifts</p>
+            <p className="text-2xl font-extrabold text-[#221912] font-mono">{kpiStats.overnightCount}</p>
+            <p className="text-[11px] font-medium text-[#8C7E6E]">Overnight 24h coverage</p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-[#FAF7F2] border border-[#E6DDCE] flex items-center justify-center text-[#8C7E6E] shadow-xs">
             <Moon className="w-5 h-5" />
           </div>
         </motion.div>

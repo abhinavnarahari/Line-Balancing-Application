@@ -1,5 +1,5 @@
 import React from "react";
-import { Zap, Target, Users, TrendingUp, Sparkles, ChevronRight } from "lucide-react";
+import { Target, Users, Sparkles, ChevronRight, Database, Layers } from "lucide-react";
 import type { ChatContext } from "./types";
 
 interface SuggestedQuestionsProps {
@@ -23,35 +23,43 @@ export const SuggestedQuestions: React.FC<SuggestedQuestionsProps> = ({ context,
 
   const categories: PromptCategory[] = [
     {
-      title: isLineOrBalancing ? "★ Active Line & Bottlenecks" : "Line Balancing & Bottlenecks",
-      icon: <Target className="h-3.5 w-3.5 text-[#9C5B3C]" />,
+      title: "🏛️ Master Data & Factory Inventory",
+      icon: <Database className="h-3.5 w-3.5 text-[#9C5B3C]" />,
       prompts: [
-        "Which operation is the bottleneck on Line 01?",
-        "What is the Line Balancing Efficiency of Line 01?",
+        "Show Master Data Overview",
+        "List all 8 garment styles and buyers",
+        "Show machine inventory & maintenance status",
+        "What are the working shifts & break hours?",
       ],
     },
     {
-      title: isBulletinOrStyle ? "★ Active Style & SMVs" : "SMV & Work Content",
-      icon: <Zap className="h-3.5 w-3.5 text-amber-600" />,
-      prompts: [
-        "What is the SMV of Bottom Hem?",
-        "What is the SMV of Shoulder Join?",
-      ],
-    },
-    {
-      title: isOperatorOrSkill ? "★ Operators & Skill Matrix" : "Manpower & Skill Matrix",
+      title: isOperatorOrSkill ? "★ Operators & Skill Matrix" : "👥 Workforce & Skill Matrix",
       icon: <Users className="h-3.5 w-3.5 text-blue-600" />,
       prompts: [
-        "How many operators are assigned to Line 01?",
-        "Who is qualified for Shoulder Join?",
+        "Who are the floater operators?",
+        "Who is the highest rated operator for OP-001?",
+        "Show certified operators for Bottom Hem",
+        "Show profile and skill matrix for EMP-001",
       ],
     },
     {
-      title: "Live Production & Floor Status",
-      icon: <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />,
+      title: isBulletinOrStyle ? "★ Bulletins & SMVs" : "📋 Operation Bulletins & SMVs",
+      icon: <Layers className="h-3.5 w-3.5 text-indigo-600" />,
       prompts: [
-        "What is today's production for Line 01?",
-        "Why is Line 01 below target?",
+        "Show details of OB-POLO-800",
+        "List all 5 Operation Bulletins and SMVs",
+        "What are the WIP buffer thresholds for Polo?",
+        "List all 18 sewing operations",
+      ],
+    },
+    {
+      title: isLineOrBalancing ? "★ Line Balancing & Bottlenecks" : "⚡ IE Balancing & Takt Times",
+      icon: <Target className="h-3.5 w-3.5 text-emerald-600" />,
+      prompts: [
+        "Calculate line balancing for 10 operators",
+        "Which operations exceed pitch time?",
+        "What is the takt time for 120 pcs/hr?",
+        "Show hourly production output & variance",
       ],
     },
   ];
@@ -61,7 +69,7 @@ export const SuggestedQuestions: React.FC<SuggestedQuestionsProps> = ({ context,
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-1.5 text-xs font-bold text-[#8C7E6E] uppercase tracking-wider">
           <Sparkles className="h-3.5 w-3.5 text-[#9C5B3C]" />
-          <span>Quick Industrial Inquiries</span>
+          <span>Quick Manufacturing Inquiries</span>
         </div>
         <span className="text-[10px] text-[#A6998A] font-medium">Click to ask instantly</span>
       </div>

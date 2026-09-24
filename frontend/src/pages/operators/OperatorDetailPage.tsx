@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ChevronRight, Paperclip, FileText, Plus, X, PlusCircle, FileSpreadsheet, Clock, CheckCircle2, Send, Trash2, RotateCcw, Download } from "lucide-react";
+import { ChevronRight, Paperclip, FileText, Plus, X, PlusCircle, FileSpreadsheet, Clock, CheckCircle2, Send, Trash2, RotateCcw, Download, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { operationsApi, type Operation } from "../../features/operations/api";
 import { operatorsApi, type Operator } from "../../features/operators/api";
@@ -293,8 +293,8 @@ export function OperatorDetailPage() {
         {/* Left Sidebar */}
         <aside className="w-64 shrink-0 bg-[#F8FAFC] border-r border-[#F1F5F9] overflow-y-auto p-5 space-y-6">
           <div className="flex flex-col items-center text-center space-y-3">
-            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-[#DBEAFE] to-[#4F46E5]/80 shadow-inner flex items-center justify-center text-3xl font-bold text-white border border-[#E2E8F0]">
-              {operator.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
+            <div className="w-20 h-20 rounded-2xl bg-[#FAF7F2] flex items-center justify-center border border-[#E6DDCE] shadow-2xs">
+              <User className="w-10 h-10 text-[#9C5B3C]" />
             </div>
             <div>
               <h2 className="font-bold text-[#0F172A] text-sm">{operator.name}</h2>
@@ -494,26 +494,26 @@ export function OperatorDetailPage() {
                     <button
                       type="button"
                       onClick={() => setIsRecordTestModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-[#0F172A] text-xs font-bold rounded-lg border border-[#E2E8F0] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all shadow-2xs cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-[#221912] text-xs font-bold rounded-lg border border-[#E6DDCE] hover:border-[#9C5B3C] hover:text-[#9C5B3C] hover:bg-[#FAF7F2] transition-all shadow-2xs cursor-pointer"
                     >
-                      <PlusCircle className="w-3.5 h-3.5 text-[#2563EB]" /> Record Tests
+                      <PlusCircle className="w-3.5 h-3.5 text-[#9C5B3C]" /> Record Tests
                     </button>
                     
                     <button
                       type="button"
                       onClick={() => setIsUploadExcelModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-[#0F172A] text-xs font-bold rounded-lg border border-[#E2E8F0] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all shadow-2xs cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-[#221912] text-xs font-bold rounded-lg border border-[#E6DDCE] hover:border-[#9C5B3C] hover:text-[#9C5B3C] hover:bg-[#FAF7F2] transition-all shadow-2xs cursor-pointer"
                     >
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-[#2563EB]" /> Upload Excel
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-[#9C5B3C]" /> Upload Excel
                     </button>
 
                     <button
                       type="button"
                       onClick={handleExportSkillMatrix}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-[#0F172A] hover:text-[#2563EB] text-xs font-bold rounded-lg border border-[#E2E8F0] hover:border-[#2563EB] hover:bg-[#F8FAFC] transition-all shadow-2xs cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white text-[#221912] hover:text-[#9C5B3C] text-xs font-bold rounded-lg border border-[#E6DDCE] hover:border-[#9C5B3C] hover:bg-[#FAF7F2] transition-all shadow-2xs cursor-pointer"
                       title="Export this operator's skill matrix to Excel"
                     >
-                      <Download className="w-3.5 h-3.5 text-[#2563EB]" /> Export Excel
+                      <Download className="w-3.5 h-3.5 text-[#9C5B3C]" /> Export Excel
                     </button>
 
                     {/* Update Skill Matrix Button - Submits drafts and reflects certified ratings */}
@@ -521,7 +521,7 @@ export function OperatorDetailPage() {
                       type="button"
                       onClick={handleUpdateSkillMatrix}
                       disabled={updatingMatrix}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-50"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#9C5B3C] hover:bg-[#854D33] text-white text-xs font-bold rounded-lg shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-50"
                       title="Submit all draft tests and update skill matrix ratings"
                     >
                       <CheckCircle2 className={`w-3.5 h-3.5 ${updatingMatrix ? "animate-spin" : ""}`} />
@@ -549,42 +549,42 @@ export function OperatorDetailPage() {
 
                   return (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
-                        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Qualification Coverage</div>
-                        <div className="text-base font-bold text-slate-900 mt-1 font-mono">
-                          {ratedCount} <span className="text-xs text-slate-400 font-sans">/ {totalOps} operations</span>
+                      <div className="p-3.5 bg-white rounded-xl border border-[#E6DDCE] shadow-2xs">
+                        <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Qualification Coverage</div>
+                        <div className="text-base font-bold text-[#221912] mt-1 font-mono">
+                          {ratedCount} <span className="text-xs text-[#8C7E6E] font-sans">/ {totalOps} operations</span>
                         </div>
-                        <div className="text-[10px] text-emerald-600 font-medium mt-0.5">
+                        <div className="text-[10px] text-[#77876F] font-bold mt-0.5">
                           {totalOps > 0 ? Math.round((ratedCount / totalOps) * 100) : 0}% certified
                         </div>
                       </div>
 
-                      <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
-                        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Average Proficiency</div>
-                        <div className="text-base font-bold text-blue-600 mt-1 font-mono">
+                      <div className="p-3.5 bg-white rounded-xl border border-[#E6DDCE] shadow-2xs">
+                        <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Average Proficiency</div>
+                        <div className="text-base font-bold text-[#9C5B3C] mt-1 font-mono">
                           {avgRating !== "—" ? `Grade ${avgRating}` : "Not Rated"}
                         </div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">
+                        <div className="text-[10px] text-[#8C7E6E] mt-0.5">
                           Across all qualified ops
                         </div>
                       </div>
 
-                      <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
-                        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Highest Skill Tier</div>
-                        <div className="text-base font-bold text-slate-900 mt-1">
+                      <div className="p-3.5 bg-white rounded-xl border border-[#E6DDCE] shadow-2xs">
+                        <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Highest Skill Tier</div>
+                        <div className="text-base font-bold text-[#221912] mt-1">
                           {highestRating > 0 ? `Grade ${highestRating}` : "—"}
                         </div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">
+                        <div className="text-[10px] text-[#8C7E6E] mt-0.5">
                           {highestRating === 5 ? "Expert" : highestRating === 4 ? "Skilled" : highestRating === 3 ? "Intermediate" : highestRating === 2 ? "Basic" : highestRating === 1 ? "Beginner" : "No ratings recorded"}
                         </div>
                       </div>
 
-                      <div className="p-3.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
-                        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Verified Timing Runs</div>
-                        <div className="text-base font-bold text-slate-900 mt-1 font-mono">
-                          {totalSubmittedRuns} <span className="text-xs text-slate-400 font-sans">runs</span>
+                      <div className="p-3.5 bg-white rounded-xl border border-[#E6DDCE] shadow-2xs">
+                        <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Verified Timing Runs</div>
+                        <div className="text-base font-bold text-[#221912] mt-1 font-mono">
+                          {totalSubmittedRuns} <span className="text-xs text-[#8C7E6E] font-sans">runs</span>
                         </div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">
+                        <div className="text-[10px] text-[#8C7E6E] mt-0.5">
                           IE work-study records
                         </div>
                       </div>
@@ -593,11 +593,11 @@ export function OperatorDetailPage() {
                 })()}
                 
                 {/* ── Single-Column Master Operation Skills Table ───────────── */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                <div className="border border-[#E6DDCE] rounded-xl overflow-hidden bg-white shadow-2xs">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse min-w-[860px]">
                       <thead>
-                        <tr className="bg-slate-50 border-b border-slate-200 text-[10.5px] font-bold uppercase tracking-wider text-slate-500">
+                        <tr className="bg-[#FAF7F2] border-b border-[#E6DDCE] text-[10.5px] font-bold uppercase tracking-wider text-[#8C7E6E]">
                           <th className="py-3 px-4 w-16 text-center">Seq</th>
                           <th className="py-3 px-4 w-28">Code</th>
                           <th className="py-3 px-4 min-w-[200px]">Operation & Specification</th>
@@ -607,7 +607,7 @@ export function OperatorDetailPage() {
                           <th className="py-3 px-4 w-28 text-right pr-4">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100 text-xs font-semibold">
+                      <tbody className="divide-y divide-[#F0EAE0] text-xs font-semibold">
                         {operations.map((op, index) => {
                           const currentSkill = skills[String(op.id)] || 0;
                           const benchmark = getBenchmarkForOperation(op.name);
@@ -635,17 +635,17 @@ export function OperatorDetailPage() {
                             : null;
 
                           return (
-                            <tr key={op.id} className="hover:bg-slate-50/70 transition-colors">
+                            <tr key={op.id} className="hover:bg-[#FAF7F2]/60 transition-colors">
                               {/* Seq */}
                               <td className="py-3.5 px-4 text-center align-middle">
-                                <span className="font-mono text-xs text-slate-500 font-bold">
+                                <span className="font-mono text-xs text-[#8C7E6E] font-bold">
                                   #{op.sequence || index + 1}
                                 </span>
                               </td>
 
                               {/* Code */}
                               <td className="py-3.5 px-4 align-middle whitespace-nowrap">
-                                <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                                <span className="font-mono text-xs font-bold text-[#9C5B3C] bg-[#FAF7F2] px-2 py-0.5 rounded-md border border-[#E6DDCE]">
                                   {op.operationCode}
                                 </span>
                               </td>
@@ -655,13 +655,13 @@ export function OperatorDetailPage() {
                                 <button
                                   type="button"
                                   onClick={() => setSelectedHistoryOperation(op)}
-                                  className="font-bold text-xs text-slate-900 hover:text-blue-600 hover:underline cursor-pointer text-left transition-colors block"
+                                  className="font-bold text-xs text-[#221912] hover:text-[#9C5B3C] hover:underline cursor-pointer text-left transition-colors block"
                                   title={`Click to view performance test history for ${op.name}`}
                                 >
                                   {op.name}
                                 </button>
                                 {op.description && (
-                                  <span className="text-[11px] text-slate-500 font-normal block line-clamp-1">
+                                  <span className="text-[11px] text-[#8C7E6E] font-normal block line-clamp-1">
                                     {op.description}
                                   </span>
                                 )}
@@ -670,10 +670,10 @@ export function OperatorDetailPage() {
                               {/* Standard SMV */}
                               <td className="py-3.5 px-4 text-center align-middle whitespace-nowrap">
                                 <div className="flex flex-col items-center">
-                                  <span className="font-mono font-bold text-xs text-slate-900">
-                                    {smv.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">SAM</span>
+                                  <span className="font-mono font-bold text-xs text-[#221912]">
+                                    {smv.toFixed(2)} <span className="text-[10px] text-[#8C7E6E] font-normal">SAM</span>
                                   </span>
-                                  <span className="text-[10px] text-slate-500 font-mono font-normal">
+                                  <span className="text-[10px] text-[#8C7E6E] font-mono font-normal">
                                     ({smvSec.toFixed(0)}s target)
                                   </span>
                                 </div>
@@ -685,30 +685,30 @@ export function OperatorDetailPage() {
                                   <div className="flex items-center gap-2.5">
                                     <span
                                       className={`inline-flex items-center justify-center w-7 h-7 rounded-lg font-mono font-bold text-xs text-white shadow-2xs shrink-0 ${
-                                        currentSkill === 5 ? "bg-emerald-600" :
-                                        currentSkill === 4 ? "bg-sky-600" :
-                                        currentSkill === 3 ? "bg-amber-600" :
-                                        currentSkill === 2 ? "bg-orange-600" :
+                                        currentSkill === 5 ? "bg-[#77876F]" :
+                                        currentSkill === 4 ? "bg-[#9C5B3C]" :
+                                        currentSkill === 3 ? "bg-[#B48259]" :
+                                        currentSkill === 2 ? "bg-[#C0462B]" :
                                         "bg-rose-600"
                                       }`}
                                     >
                                       {currentSkill}
                                     </span>
                                     <div>
-                                      <span className="font-bold text-xs text-slate-900 block">
+                                      <span className="font-bold text-xs text-[#221912] block">
                                         {currentSkill === 5 ? "Grade 5 · Expert" :
                                          currentSkill === 4 ? "Grade 4 · Skilled" :
                                          currentSkill === 3 ? "Grade 3 · Intermediate" :
                                          currentSkill === 2 ? "Grade 2 · Basic" :
                                          "Grade 1 · Beginner"}
                                       </span>
-                                      <span className="text-[10px] text-slate-500 font-mono">
+                                      <span className="text-[10px] text-[#8C7E6E] font-mono">
                                         {qualifiedRange ? `Target: ${qualifiedRange}` : "Standard SMV"}
                                       </span>
                                     </div>
                                   </div>
                                 ) : (
-                                  <span className="inline-flex items-center text-[11px] font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                                  <span className="inline-flex items-center text-[11px] font-medium text-[#8C7E6E] bg-[#FAF7F2] px-2 py-0.5 rounded-md border border-[#E6DDCE]">
                                     Not Evaluated
                                   </span>
                                 )}
@@ -718,15 +718,15 @@ export function OperatorDetailPage() {
                               <td className="py-3.5 px-4 text-center align-middle whitespace-nowrap">
                                 {avgTime !== null ? (
                                   <div>
-                                    <span className="font-mono font-bold text-xs text-slate-900">
+                                    <span className="font-mono font-bold text-xs text-[#221912]">
                                       {avgTime.toFixed(1)}s
                                     </span>
-                                    <span className="text-[10px] text-slate-500 block font-normal">
+                                    <span className="text-[10px] text-[#8C7E6E] block font-normal">
                                       {opLogs.length} {opLogs.length === 1 ? "run" : "runs"}
                                     </span>
                                   </div>
                                 ) : (
-                                  <span className="text-slate-400 font-mono text-xs">—</span>
+                                  <span className="text-[#8C7E6E] font-mono text-xs">—</span>
                                 )}
                               </td>
 
@@ -735,10 +735,10 @@ export function OperatorDetailPage() {
                                 <button
                                   type="button"
                                   onClick={() => setSelectedHistoryOperation(op)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-700 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 transition-colors cursor-pointer shadow-2xs"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-[#8C7E6E] hover:text-[#9C5B3C] bg-[#FAF7F2] hover:bg-[#F6F1E8] border border-[#E6DDCE] hover:border-[#9C5B3C] transition-colors cursor-pointer shadow-2xs"
                                   title="View Test History"
                                 >
-                                  <Clock className="w-3 h-3 text-slate-400" />
+                                  <Clock className="w-3 h-3 text-[#8C7E6E]" />
                                   <span>History</span>
                                 </button>
                               </td>
@@ -850,9 +850,9 @@ export function OperatorDetailPage() {
                       <>
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-[#2563EB]" />
-                            <h4 className="font-bold text-sm text-[#0F172A]">Daily Performance Tests & Document Status</h4>
-                            <span className="text-xs text-[#64748B] font-medium">
+                            <Clock className="w-4 h-4 text-[#9C5B3C]" />
+                            <h4 className="font-bold text-sm text-[#221912]">Daily Performance Tests & Document Status</h4>
+                            <span className="text-xs text-[#8C7E6E] font-medium">
                               ({performanceLogs.length} test run{performanceLogs.length === 1 ? "" : "s"})
                             </span>
                           </div>
@@ -861,24 +861,24 @@ export function OperatorDetailPage() {
                             <button
                               type="button"
                               onClick={handleSubmitAllDrafts}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0F172A] text-white text-xs font-bold rounded-lg hover:bg-[#3A2E24] transition-all shadow-xs cursor-pointer"
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#221912] text-white text-xs font-bold rounded-lg hover:bg-[#3A2E24] transition-all shadow-xs cursor-pointer"
                             >
-                              <Send className="w-3.5 h-3.5 text-[#2563EB]" /> Submit All ({allDraftIds.length}) Drafts & Update Matrix
+                              <Send className="w-3.5 h-3.5 text-white" /> Submit All ({allDraftIds.length}) Drafts & Update Matrix
                             </button>
                           )}
                         </div>
 
                         {testGroups.length === 0 ? (
-                          <div className="p-6 bg-[#F8FAFC] rounded-xl border border-dashed border-[#E2E8F0] text-center">
-                            <p className="text-xs text-[#64748B]">
+                          <div className="p-6 bg-[#FAF7F2] rounded-xl border border-dashed border-[#E6DDCE] text-center">
+                            <p className="text-xs text-[#8C7E6E]">
                               No timed performance tests recorded yet. Click <strong>Record Tests</strong> or <strong>Upload Excel</strong> to log test cycle times.
                             </p>
                           </div>
                         ) : (
-                          <div className="border border-[#F1F5F9] rounded-xl overflow-hidden bg-white shadow-2xs">
+                          <div className="border border-[#E6DDCE] rounded-xl overflow-hidden bg-white shadow-2xs">
                             <table className="w-full text-left border-collapse text-xs">
                               <thead>
-                                <tr className="bg-[#F8FAFC] border-b border-[#F1F5F9] text-[11px] font-bold text-[#64748B] uppercase">
+                                <tr className="bg-[#FAF7F2] border-b border-[#E6DDCE] text-[11px] font-bold text-[#8C7E6E] uppercase">
                                   <th className="py-3 px-4">Date</th>
                                   <th className="py-3 px-4">Operation</th>
                                   <th className="py-3 px-4">Test Runs</th>
@@ -888,49 +888,49 @@ export function OperatorDetailPage() {
                                   <th className="py-3 px-4 text-right">Actions</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-[#F1F5F9]">
+                              <tbody className="divide-y divide-[#E6DDCE]/60">
                                 {testGroups.map((group) => {
                                   const isDraft = group.status === "DRAFT";
                                   return (
-                                    <tr key={group.key} className="hover:bg-[#F8FAFC]/40 transition-colors">
-                                      <td className="py-3 px-4 font-medium text-[#64748B]">{group.date}</td>
-                                      <td className="py-3 px-4 font-bold text-[#0F172A]">
+                                    <tr key={group.key} className="hover:bg-[#FAF7F2]/40 transition-colors">
+                                      <td className="py-3 px-4 font-medium text-[#8C7E6E]">{group.date}</td>
+                                      <td className="py-3 px-4 font-bold text-[#221912]">
                                         <button
                                           type="button"
                                           onClick={() => {
                                             const op = operations.find((o) => String(o.id) === String(group.operationId));
                                             if (op) setSelectedHistoryOperation(op);
                                           }}
-                                          className="font-bold text-xs text-[#0F172A] hover:text-[#2563EB] hover:underline cursor-pointer text-left transition-colors flex items-center gap-1.5 group"
+                                          className="font-bold text-xs text-[#221912] hover:text-[#9C5B3C] hover:underline cursor-pointer text-left transition-colors flex items-center gap-1.5 group"
                                           title={`Click to view past test history for ${group.opName}`}
                                         >
                                           <span>{group.opName}</span>
-                                          {group.opCode && <span className="font-mono text-[10px] text-[#2563EB]">({group.opCode})</span>}
+                                          {group.opCode && <span className="font-mono text-[10px] text-[#9C5B3C]">({group.opCode})</span>}
                                         </button>
                                       </td>
                                       <td className="py-3 px-4">
                                         <div className="flex items-center gap-1.5 flex-wrap">
                                           {group.times.map((t, i) => (
-                                            <span key={i} className="px-2 py-0.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-[11px] font-mono font-semibold text-[#0F172A]">
+                                            <span key={i} className="px-2 py-0.5 bg-[#FAF7F2] border border-[#E6DDCE] rounded text-[11px] font-mono font-semibold text-[#221912]">
                                               {t}s
                                             </span>
                                           ))}
                                         </div>
                                       </td>
-                                      <td className="py-3 px-2 text-center font-bold text-[#0F172A]">{group.count}</td>
-                                      <td className="py-3 px-3 text-center font-mono font-bold text-[#2563EB]">{group.avgTime}s</td>
+                                      <td className="py-3 px-2 text-center font-bold text-[#221912]">{group.count}</td>
+                                      <td className="py-3 px-3 text-center font-mono font-bold text-[#9C5B3C]">{group.avgTime}s</td>
                                       <td className="py-3 px-4 text-center">
                                         {isDraft ? (
                                           <div className="inline-flex flex-col items-center">
                                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-md font-bold text-[10px]">
                                               Draft (Rating {group.rating} Pending)
                                             </span>
-                                            <span className="text-[9px] text-[#64748B] mt-0.5">Not in matrix until submitted</span>
+                                            <span className="text-[9px] text-[#8C7E6E] mt-0.5">Not in matrix until submitted</span>
                                           </div>
                                         ) : (
                                           <div className="inline-flex flex-col items-center">
-                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#0F172A] text-white font-bold rounded-md text-[11px] shadow-2xs">
-                                              <CheckCircle2 className="w-3 h-3 text-[#2563EB]" /> Rating {group.rating} · Submitted
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#221912] text-white font-bold rounded-md text-[11px] shadow-2xs">
+                                              <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Rating {group.rating} · Submitted
                                             </span>
                                           </div>
                                         )}
@@ -941,10 +941,10 @@ export function OperatorDetailPage() {
                                             <button
                                               type="button"
                                               onClick={() => handleSubmitGroup(group)}
-                                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#0F172A] text-white text-[11px] font-bold rounded-md hover:bg-[#3A2E24] shadow-2xs cursor-pointer"
+                                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#221912] text-white text-[11px] font-bold rounded-md hover:bg-[#3A2E24] shadow-2xs cursor-pointer"
                                               title="Submit this test to update Skill Matrix rating"
                                             >
-                                              <Send className="w-3 h-3 text-[#2563EB]" /> Submit
+                                              <Send className="w-3 h-3 text-white" /> Submit
                                             </button>
                                           )}
                                           <button
@@ -975,32 +975,32 @@ export function OperatorDetailPage() {
               <div className="space-y-10 animate-in fade-in duration-300">
                 {/* Connections Section */}
                 <div>
-                  <h3 className="font-sans text-[18px] font-bold text-[#0F172A] mb-6">
+                  <h3 className="font-sans text-[18px] font-bold text-[#221912] mb-6">
                     Connections
                   </h3>
                   <div className="grid grid-cols-3 gap-x-8 gap-y-6">
                     <div className="space-y-3">
-                      <h4 className="text-[10px] font-bold tracking-widest text-[#64748B] uppercase">Workforce</h4>
+                      <h4 className="text-[10px] font-bold tracking-widest text-[#8C7E6E] uppercase">Workforce</h4>
                       <div>
-                        <Link to={`/attendance?employeeId=${operator.employeeId}`} className="inline-block px-3.5 py-2 bg-white border border-[#E2E8F0] hover:border-[#2563EB] rounded-md text-xs font-semibold text-[#0F172A] hover:text-[#2563EB] shadow-2xs transition-all">
+                        <Link to={`/attendance?employeeId=${operator.employeeId}`} className="inline-block px-3.5 py-2 bg-white border border-[#E6DDCE] hover:border-[#9C5B3C] rounded-md text-xs font-semibold text-[#221912] hover:text-[#9C5B3C] shadow-2xs transition-all">
                           Attendance Records
                         </Link>
                       </div>
 
                       <div className="pt-1">
-                        <Link to={`/shift-assignment?employeeId=${operator.employeeId}`} className="inline-block px-3.5 py-2 bg-white border border-[#E2E8F0] hover:border-[#2563EB] rounded-md text-xs font-semibold text-[#0F172A] hover:text-[#2563EB] shadow-2xs transition-all">
+                        <Link to={`/shift-assignment?employeeId=${operator.employeeId}`} className="inline-block px-3.5 py-2 bg-white border border-[#E6DDCE] hover:border-[#9C5B3C] rounded-md text-xs font-semibold text-[#221912] hover:text-[#9C5B3C] shadow-2xs transition-all">
                           Shift Assignment
                         </Link>
                       </div>
                     </div>
                     
                     <div className="space-y-3">
-                      <h4 className="text-[10px] font-bold tracking-widest text-[#64748B] uppercase">Performance</h4>
+                      <h4 className="text-[10px] font-bold tracking-widest text-[#8C7E6E] uppercase">Performance</h4>
                       <div>
                         <button
                           type="button"
                           onClick={() => setActiveTab("Skill Matrix")}
-                          className="px-3.5 py-2 bg-white border border-[#E2E8F0] hover:border-[#2563EB] rounded-md text-xs font-semibold text-[#0F172A] hover:text-[#2563EB] shadow-2xs transition-all cursor-pointer"
+                          className="px-3.5 py-2 bg-white border border-[#E6DDCE] hover:border-[#9C5B3C] rounded-md text-xs font-semibold text-[#221912] hover:text-[#9C5B3C] shadow-2xs transition-all cursor-pointer"
                         >
                           Skill Ratings
                         </button>
@@ -1008,11 +1008,11 @@ export function OperatorDetailPage() {
                     </div>
 
                     <div className="space-y-3">
-                      <h4 className="text-[10px] font-bold tracking-widest text-[#64748B] uppercase">Production</h4>
+                      <h4 className="text-[10px] font-bold tracking-widest text-[#8C7E6E] uppercase">Production</h4>
                       <div>
                         <Link
                           to="/line-balance"
-                          className="inline-block px-3.5 py-2 bg-white border border-[#E2E8F0] hover:border-[#2563EB] rounded-md text-xs font-semibold text-[#0F172A] hover:text-[#2563EB] shadow-2xs transition-all"
+                          className="inline-block px-3.5 py-2 bg-white border border-[#E6DDCE] hover:border-[#9C5B3C] rounded-md text-xs font-semibold text-[#221912] hover:text-[#9C5B3C] shadow-2xs transition-all"
                         >
                           Line Balance Placement
                         </Link>

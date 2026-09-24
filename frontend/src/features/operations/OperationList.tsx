@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Search, Edit2, Trash2, X, Cpu, CheckCircle2, AlertCircle, Network } from "lucide-react";
+import { Search, Edit2, Trash2, X, Cpu, Network } from "lucide-react";
 import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { DataCard, SkeletonTable, EmptyState, StatusBadge } from "../../components/ui/PremiumUI";
-import { machinesApi, type Machine } from "../machines/api";
 import type { Operation, OperationAffinity } from "./api";
 
 interface OperationListProps {
@@ -22,13 +21,6 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
   const [selectedMachineType, setSelectedMachineType] = useState<string>("all");
-  const [machines, setMachines] = useState<Machine[]>([]);
-
-  useEffect(() => {
-    machinesApi.getMachines()
-      .then((res) => setMachines(res || []))
-      .catch(console.error);
-  }, []);
 
   const uniqueMachineTypes = Array.from(
     new Set(operations.map((o) => o.machineType).filter(Boolean))
@@ -58,7 +50,7 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-bold text-slate-900">Standard Operation Library</h3>
-            <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-blue-100 text-blue-700 border border-blue-200">
+            <span className="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-[#FAF7F2] text-[#9C5B3C] border border-[#E6DDCE]">
               {filtered.length}
             </span>
           </div>
@@ -73,7 +65,7 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
             <select
               value={selectedMachineType}
               onChange={(e) => setSelectedMachineType(e.target.value)}
-              className="h-8 bg-white border border-slate-200 rounded-xl px-2.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-blue-500 shadow-2xs cursor-pointer"
+              className="h-8 bg-white border border-slate-200 rounded-xl px-2.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
             >
               <option value="all">All Machinery Types</option>
               {uniqueMachineTypes.map((m) => (
@@ -93,7 +85,7 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1 text-xs font-bold rounded-lg transition-colors cursor-pointer capitalize ${
                   filter === f
-                    ? "bg-blue-600 text-white shadow-2xs"
+                    ? "bg-[#9C5B3C] text-white shadow-2xs"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                 }`}
               >
@@ -110,7 +102,7 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search operation, machine, code…"
-              className="w-full pl-8 pr-8 py-1.5 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 shadow-2xs"
+              className="w-full pl-8 pr-8 py-1.5 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#9C5B3C] shadow-2xs"
             />
             {search && (
               <button
@@ -139,7 +131,7 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
                 <TableHead className="w-28 text-slate-500 font-bold whitespace-nowrap">Code</TableHead>
                 <TableHead className="text-slate-500 font-bold whitespace-nowrap">Operation Name & Specification</TableHead>
                 <TableHead className="w-56 text-slate-500 font-bold whitespace-nowrap">Attached Machinery</TableHead>
-                <TableHead className="w-36 text-center text-slate-500 font-bold whitespace-nowrap">Standard SMV</TableHead>
+                <TableHead className="w-36 text-center text-slate-500 font-bold whitespace-nowrap">Standard SMV (Sec)</TableHead>
                 <TableHead className="w-40 text-center text-slate-500 font-bold whitespace-nowrap">Skill Affinities</TableHead>
                 <TableHead className="w-28 text-center text-slate-500 font-bold whitespace-nowrap">Status</TableHead>
                 <TableHead className="text-right w-32 text-slate-500 font-bold whitespace-nowrap pr-4">Actions</TableHead>
@@ -150,12 +142,6 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
                 const smv = Number(op.standardSmv || 0.5);
                 const smvSec = Math.round(smv * 60);
                 const mType = op.machineType || "Single Needle Lockstitch";
-                const matchingMachines = machines.filter(
-                  (m) => m.machineType.toLowerCase() === mType.toLowerCase()
-                );
-                const availUnits = matchingMachines.filter(
-                  (m) => m.status === "AVAILABLE" && m.active
-                ).length;
 
                 return (
                   <motion.tr
@@ -175,7 +161,7 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
 
                     {/* Code */}
                     <TableCell className="align-middle whitespace-nowrap" onClick={(e) => { e.stopPropagation(); onViewRating(op); }}>
-                      <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+                      <span className="font-mono text-xs font-bold text-[#9C5B3C] bg-[#FAF7F2] px-2.5 py-1 rounded-lg border border-[#E6DDCE]">
                         {op.operationCode}
                       </span>
                     </TableCell>
@@ -183,7 +169,7 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
                     {/* Name & Description */}
                     <TableCell className="align-middle" onClick={(e) => { e.stopPropagation(); onViewRating(op); }}>
                       <div className="space-y-0.5">
-                        <span className="font-bold text-sm text-slate-900 group-hover:text-blue-600 transition-colors block">
+                        <span className="font-bold text-sm text-slate-900 group-hover:text-[#9C5B3C] transition-colors block">
                           {op.name}
                         </span>
                         {op.description && (
@@ -196,49 +182,20 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
 
                     {/* Attached Machinery */}
                     <TableCell className="align-middle whitespace-nowrap" onClick={(e) => { e.stopPropagation(); onViewRating(op); }}>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 font-semibold text-xs text-slate-800">
-                          <Cpu className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                          <span>{mType}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {matchingMachines.length > 0 ? (
-                            <span
-                              className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.2 rounded border ${
-                                availUnits > 0
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold"
-                                  : "bg-amber-50 text-amber-700 border-amber-200"
-                              }`}
-                            >
-                              {availUnits > 0 ? (
-                                <>
-                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                                  <span>{availUnits} ready</span>
-                                </>
-                              ) : (
-                                <>
-                                  <AlertCircle className="w-2.5 h-2.5 text-amber-600" />
-                                  <span>0 ready ({matchingMachines.length} busy)</span>
-                                </>
-                              )}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              Specialized workstation
-                            </span>
-                          )}
-                        </div>
+                      <div className="flex items-center gap-1.5 font-semibold text-xs text-slate-800">
+                        <Cpu className="w-3.5 h-3.5 text-[#9C5B3C] shrink-0" />
+                        <span>{mType}</span>
                       </div>
                     </TableCell>
 
-                    {/* SMV */}
+                    {/* Standard SMV (in Seconds & Minutes) */}
                     <TableCell className="text-center align-middle whitespace-nowrap" onClick={(e) => { e.stopPropagation(); onViewRating(op); }}>
                       <div className="flex flex-col items-center">
-                        <span className="font-mono font-bold text-xs sm:text-sm text-slate-900">
-                          {smv.toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">min</span>
+                        <span className="font-mono font-extrabold text-sm text-slate-900">
+                          {smvSec} <span className="text-xs text-slate-500 font-semibold">sec</span>
                         </span>
-                        <span className="text-[10px] text-blue-600 font-mono font-medium">
-                          ({smvSec}s cycle)
+                        <span className="text-[10.5px] text-[#8C7E6E] font-mono font-medium">
+                          ({smv.toFixed(2)} min)
                         </span>
                       </div>
                     </TableCell>

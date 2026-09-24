@@ -99,13 +99,17 @@ export function OperatorPlacementPage() {
       let affinityCoverage: { sourceOpName: string; transferPct: number } | null = null;
       let directRating: number | null = null;
       if (assignment.operatorId) {
-        const direct = skills.find(s => String(s.operatorId) === String(assignment.operatorId) && String(s.operationId) === String(assignment.operationId));
+        const direct = skills.find(s =>
+          String(s.operatorId) === String(assignment.operatorId) &&
+          (String(s.operationId) === String(assignment.operationId) ||
+           (op && (s.operationCode === op.operationCode || String(s.operationId) === String(op.id))))
+        );
         if (direct) {
           directRating = direct.rating;
         } else {
           const opAffs = affinities.filter(a =>
             String(a.primaryOperationId) === String(assignment.operationId) ||
-            (op && a.primaryOperationCode === op.operationCode)
+            (op && (a.primaryOperationCode === op.operationCode || String(a.primaryOperationId) === String(op.id)))
           );
           for (const aff of opAffs) {
             const alt = skills.find(s =>
@@ -153,7 +157,7 @@ export function OperatorPlacementPage() {
       <PageHeader
         eyebrow="Line Balancing"
         title="Operator Placement"
-        description="Visual floor plan of operator assignments for active orders."
+
       />
 
       <DataCard noPad className="border border-[#E6DDCE] shadow-[0_1px_3px_rgba(34,25,18,0.05)] rounded-2xl overflow-hidden bg-white">

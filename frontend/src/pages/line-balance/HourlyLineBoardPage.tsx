@@ -19,6 +19,7 @@ import {
   type HourCell,
   type HourlyEntryRequest,
 } from "../../features/hourly-board/api";
+import { useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 // ─── Status colour helpers ────────────────────────────────────────────────────
 function cellBg(status: string) {
@@ -118,7 +119,7 @@ function CellEntryModal({ row, cell, linePlanId, logDate, onClose, onSaved }: Ce
   const liveEff = cell.targetQty > 0 ? Math.round((actualNum * 100.0 / cell.targetQty) * 10.0) / 10.0 : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
@@ -193,7 +194,7 @@ function CellEntryModal({ row, cell, linePlanId, logDate, onClose, onSaved }: Ce
               />
             </div>
             <div>
-              <label className="text-[11px] font-bold text-rose-700 block mb-1">Rejects / Rework</label>
+              <label className="text-[11px] font-bold text-rose-700 block mb-1">Rework Qty</label>
               <input
                 type="number"
                 min="0"
@@ -266,33 +267,45 @@ export function HourlyLineBoardPage() {
   }, []);
 
   // Load masters on mount
-  useEffect(() => {
-    const fetchMasters = async () => {
-      try {
-        const [ords, shfts, oprs, lns] = await Promise.all([
-          ordersApi.getOrders(),
-          shiftsApi.getShifts(),
-          operatorsApi.getOperators(),
-          linesApi.getLines(true).catch(() => []),
-        ]);
-        setOrders(ords);
-        setOperators(oprs.filter(o => o.active));
-        setLines(lns || []);
+  const fetchMasters = useCallback(async () => {
+    try {
+      const [ords, shfts, oprs, lns] = await Promise.all([
+        ordersApi.getOrders(),
+        shiftsApi.getShifts(),
+        operatorsApi.getOperators(),
+        linesApi.getLines(true).catch(() => []),
+      ]);
+      setOrders(ords);
+      setOperators(oprs.filter(o => o.active));
+      setLines(lns || []);
 
-        const activeShifts = shfts.filter(s => s.active);
-        setShifts(activeShifts);
+      const activeShifts = shfts.filter(s => s.active);
+      setShifts(activeShifts);
 
-        if (ords.length > 0) setSelectedOrderId(String(ords[0].id));
-        if (activeShifts.length > 0) setSelectedShiftId(String(activeShifts[0].id));
-        if (lns && lns.length > 0) setSelectedLineId(String(lns[0].id));
-      } catch (err) {
-        console.error("Failed to load initial masters:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMasters();
+      setSelectedOrderId(prev => {
+        if (prev && ords.some(o => String(o.id) === String(prev))) return prev;
+        return ords.length > 0 ? String(ords[0].id) : "";
+      });
+      setSelectedShiftId(prev => {
+        if (prev && activeShifts.some(s => String(s.id) === String(prev))) return prev;
+        return activeShifts.length > 0 ? String(activeShifts[0].id) : "";
+      });
+      setSelectedLineId(prev => {
+        if (prev && lns && lns.some(l => String(l.id) === String(prev))) return prev;
+        return lns && lns.length > 0 ? String(lns[0].id) : "";
+      });
+    } catch (err) {
+      console.error("Failed to load initial masters:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchMasters();
+  }, [fetchMasters]);
+
+  useMasterDataSubscription(["shift", "line", "operator", "order", "all"], fetchMasters);
 
   // Fetch hourly board whenever order, shift or date changes
   const loadBoard = useCallback(async (orderId: string, shiftId: string, date: string) => {
@@ -482,6 +495,11 @@ export function HourlyLineBoardPage() {
     };
   }, [currentTime, activeShiftObj, grossShiftMins, netWorkingMins, dailyNetWorkingSecs]);
 
+  const totalGoodPieces = useMemo(() => {
+    if (!board) return 0;
+    return board.rows.reduce((sum, r) => sum + r.totalGood, 0);
+  }, [board]);
+
   const remainingShiftBalance = useMemo(() => {
     if (!board) return 0;
     return Math.max(0, board.totalTargetOutput - totalGoodPieces);
@@ -497,11 +515,6 @@ export function HourlyLineBoardPage() {
     const eff = board && board.lineEfficiencyPercent > 0 ? board.lineEfficiencyPercent / 100 : 0.8;
     return Math.round((dynamicLiveTaktSecs * eff) * 100) / 100;
   }, [dynamicLiveTaktSecs, board]);
-
-  const totalGoodPieces = useMemo(() => {
-    if (!board) return 0;
-    return board.rows.reduce((sum, r) => sum + r.totalGood, 0);
-  }, [board]);
 
   const lineDhu = useMemo(() => {
     if (!board || board.totalActualOutput === 0) return 0;
@@ -526,7 +539,7 @@ export function HourlyLineBoardPage() {
       "Target Qty (pcs)": r.totalTarget,
       "Actual Qty (pcs)": r.totalActual,
       "Good Qty (pcs)": r.totalGood,
-      "Reject Qty (pcs)": r.totalReject,
+      "Rework Qty (pcs)": r.totalReject,
       "Earned Minutes": (r.totalGood * (r.samMinutes || 0)).toFixed(1),
       "Realized Efficiency %": `${r.efficiencyPercent}%`,
     }));

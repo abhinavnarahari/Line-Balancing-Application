@@ -230,12 +230,6 @@ export function RecordPieceModal({
       setErrorMsg("Completed quantity must be greater than 0");
       return;
     }
-    if (precedenceInfo && !precedenceInfo.isFirstStation && numGood > precedenceInfo.maxAllowedGood) {
-      setErrorMsg(
-        `Precedence Limit Exceeded: Station #${precedenceInfo.stationNum} (${precedenceInfo.operationName}) cannot output more than predecessor Station #${precedenceInfo.predecessorStationNum} (${precedenceInfo.predecessorOperationName}) completed output of ${precedenceInfo.predecessorCompleted} pieces. Maximum allowed good quantity for this entry is ${precedenceInfo.maxAllowedGood} pcs (prevents negative WIP).`
-      );
-      return;
-    }
     const [sh = 0, sm = 0] = startTime.split(":").map(Number);
     const [eh = 0, em = 0] = endTime.split(":").map(Number);
     const diffMins = (eh * 60 + em) - (sh * 60 + sm);
@@ -592,7 +586,7 @@ export function RecordPieceModal({
                   </button>
                 )}
                 <span className="text-[10px] text-[#8C7E6E] font-medium">
-                  Completed = Good + Rejects
+                  Completed = Good + Rework
                 </span>
               </div>
             </div>
@@ -640,7 +634,7 @@ export function RecordPieceModal({
 
               <div>
                 <label className="block text-[10px] font-bold uppercase text-rose-600 mb-1">
-                  Reject Qty
+                  Rework Qty
                 </label>
                 <input
                   type="number"

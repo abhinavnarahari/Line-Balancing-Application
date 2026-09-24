@@ -188,7 +188,7 @@ export function SkillMatrixPage() {
       <PageHeader
         eyebrow="Workforce"
         title="Sewing Skill Matrix"
-        description="Live view of operator skill ratings. To update a rating, open the employee's profile page."
+
         action={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="md" onClick={handleExportFullMatrix} className="border-[#E6DDCE] text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8]">
@@ -336,19 +336,14 @@ export function SkillMatrixPage() {
                   return (
                     <tr key={operator.id} className="border-b border-[#F0EAE0] hover:bg-[#FEFCF9] transition-colors group">
                       <td className="sticky left-0 z-10 bg-white group-hover:bg-[#FEFCF9] border-r-2 border-[#E6DDCE] p-3 shadow-[2px_0_4px_rgba(34,25,18,0.03)] transition-colors">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-[#F6F1E8] border border-[#E6DDCE] flex items-center justify-center text-xs font-bold text-[#9C5B3C] shrink-0 shadow-2xs">
-                            {operator.name.slice(0, 2).toUpperCase()}
-                          </div>
-                          <div>
-                            <Link to={`/settings/operators/${operator.employeeId}`} className="font-bold text-xs text-[#221912] hover:text-[#9C5B3C] flex items-center gap-1 transition-colors">
-                              {operator.name}
-                              <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                            </Link>
-                            <span className="text-[10px] font-mono text-[#8C7E6E] block">
-                              {operator.employeeId} · {ratedCount}/{operations.length} rated
-                            </span>
-                          </div>
+                        <div>
+                          <Link to={`/settings/operators/${operator.employeeId}`} className="font-bold text-xs text-[#221912] hover:text-[#9C5B3C] inline-flex items-center gap-1 transition-colors">
+                            <span>{operator.name}</span>
+                            <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </Link>
+                          <span className="text-[10px] font-mono text-[#8C7E6E] block mt-0.5">
+                            {operator.employeeId} · {ratedCount}/{operations.length} rated
+                          </span>
                         </div>
                       </td>
                       {operations.map((op: any) => (

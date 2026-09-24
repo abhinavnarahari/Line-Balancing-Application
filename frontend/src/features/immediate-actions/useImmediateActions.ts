@@ -186,14 +186,44 @@ export function useImmediateActions({
         lateMinutes = elapsedMinutes;
       }
 
-      // Qualified operations for this missing/late operator
-      const opSkills = skillMatrix.filter(s => String(s.operatorId) === String(op.id) && s.rating >= 3);
-      const qualifiedOps = opSkills
-        .map(s => operations.find(o => String(o.id) === String(s.operationId)))
-        .filter(Boolean) as Operation[];
-      const targetOpIds = qualifiedOps.map(o => String(o.id));
+      // 1. Identify specific operation(s) ASSIGNED to this operator in active line plans
+      const assignedOpIds = new Set<string>();
+      linePlans.forEach(plan => {
+        (plan.assignments || []).forEach(a => {
+          if (
+            a.operatorId != null &&
+            (String(a.operatorId) === String(op.id) || String(a.operatorId) === String(op.employeeId))
+          ) {
+            if (a.operationId) {
+              assignedOpIds.add(String(a.operationId));
+            }
+          }
+        });
+      });
 
-      // Match free present replacement candidates
+      let assignedOps: Operation[] = [];
+      if (assignedOpIds.size > 0) {
+        assignedOps = operations.filter(
+          o => assignedOpIds.has(String(o.id)) || (o.operationCode && assignedOpIds.has(o.operationCode))
+        );
+      }
+
+      // If operator is not assigned to a specific line plan station, fallback to their #1 primary certified operation
+      if (assignedOps.length === 0) {
+        const topSkill = skillMatrix
+          .filter(s => String(s.operatorId) === String(op.id) && s.rating >= 3)
+          .sort((a, b) => b.rating - a.rating)[0];
+        if (topSkill) {
+          const matchedOp = operations.find(o => String(o.id) === String(topSkill.operationId));
+          if (matchedOp) {
+            assignedOps = [matchedOp];
+          }
+        }
+      }
+
+      const targetOpIds = assignedOps.map(o => String(o.id));
+
+      // Match free present replacement candidates who are certified (rating >= 3) for the assigned operations
       const replacementCandidates: ReplacementCandidate[] = [];
 
       unallocatedPresentOperators.forEach(unalloc => {
@@ -262,7 +292,7 @@ export function useImmediateActions({
         statusType,
         lateMinutes,
         checkInTime,
-        assignedOperations: qualifiedOps,
+        assignedOperations: assignedOps,
         replacementCandidates,
       });
     });
@@ -274,7 +304,7 @@ export function useImmediateActions({
       }
       return (b.lateMinutes || b.elapsedMinutes) - (a.lateMinutes || a.elapsedMinutes);
     });
-  }, [operators, shifts, assignments, attendanceRecords, currentTime, skillMatrix, operations, todayStr, unallocatedPresentOperators]);
+  }, [operators, shifts, assignments, attendanceRecords, currentTime, skillMatrix, operations, linePlans, todayStr, unallocatedPresentOperators]);
 
   // Action Handlers
   const handleMarkPresent = async (item: ImmediateActionItem) => {

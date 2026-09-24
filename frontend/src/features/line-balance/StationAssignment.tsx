@@ -33,7 +33,7 @@ export function StationAssignment({
 
           return (
             <div key={assignment.id} className="p-4 flex items-center gap-6 hover:bg-[#F8FAFC]/50 transition-colors">
-              <div className="flex-shrink-0 w-12 h-12 bg-[#F8FAFC] border border-[#F1F5F9] flex items-center justify-center font-mono text-lg text-[#2563EB]">
+              <div className="flex-shrink-0 w-12 h-12 bg-[#FAF7F2] border border-[#E6DDCE] flex items-center justify-center font-mono text-lg text-[#9C5B3C]">
                 {assignment.stationNumber}
               </div>
               
@@ -50,7 +50,7 @@ export function StationAssignment({
                 <select
                   value={assignment.operatorId || ""}
                   onChange={(e) => onAssignOperator(assignment.id, e.target.value)}
-                  className="w-full bg-transparent border-b border-[#F1F5F9] py-1 text-sm text-[#0F172A] focus:border-[#2563EB] focus:outline-none focus:ring-0"
+                  className="w-full bg-transparent border-b border-[#E6DDCE] py-1 text-sm text-[#0F172A] focus:border-[#9C5B3C] focus:outline-none focus:ring-0"
                 >
                   <option value="">Unassigned</option>
                   {operators.map(op => (

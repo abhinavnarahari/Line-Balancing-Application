@@ -5,9 +5,12 @@ import { Sidebar } from "./Sidebar";
 import { NotificationBell } from "./NotificationBell";
 import { TodayImmediateActionsNavButton } from "../../features/immediate-actions/TodayImmediateActionsNavButton";
 import { ChatbotDrawer, ChatbotFloatingButton } from "../../features/chatbot";
+import { UserMenu } from "./UserMenu";
+import { useAuth } from "../../features/auth/AuthContext";
 
 const routeLabels: Record<string, string> = {
-  "/":                   "Factory Executive Cockpit",
+  "/":                   "Factory Overview Dashboard",
+  "/overall-dashboard":  "Factory Overview Dashboard",
   "/plant-dashboard":    "Plant Management Dashboard",
   "/line-dashboard":     "Line Operations Dashboard",
   "/shift-assignment":   "Shift Assignment",
@@ -20,6 +23,8 @@ const routeLabels: Record<string, string> = {
   "/line-design":        "Line Design & Workstation Architecture",
   "/line-balance":       "Planned Lines & Balancing",
   "/operator-placement": "Operator Placement",
+  "/operator-allocation": "Multi-Line Operator Optimizer",
+  "/multi-line-optimizer": "Multi-Line Operator Optimizer",
   "/monitoring":         "Production Monitoring",
   "/production-monitoring": "Production Monitoring",
   "/hourly-board":       "Production Monitoring",
@@ -35,6 +40,7 @@ const routeLabels: Record<string, string> = {
 
 export function Layout() {
   const location = useLocation();
+  const { user } = useAuth();
   const pageLabel = routeLabels[location.pathname] || "Line Balancing Suite";
   const [isChatOpen, setIsChatOpen] = useState(false);
 
@@ -62,55 +68,65 @@ export function Layout() {
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F6F1E8]">
         {/* Top Header Bar */}
-        <header className="h-16 shrink-0 border-b border-[#E6DDCE] bg-white/95 backdrop-blur-md flex items-center justify-between px-7 z-40 sticky top-0 shadow-[0_1px_2px_rgba(34,25,18,0.03)]">
-          <div className="flex items-center gap-3.5">
-            <span className="h-3 w-3 rounded-full bg-[#9C5B3C] shadow-sm shadow-[#9C5B3C]/50" />
-            <span className="text-sm font-extrabold tracking-wider text-[#221912] uppercase">
+        <header className="h-16 shrink-0 border-b border-[#E6DDCE] bg-white/95 backdrop-blur-md flex items-center justify-between px-6 sm:px-8 z-20 sticky top-0 shadow-[0_1px_2px_rgba(34,25,18,0.03)]">
+          {/* Page Title / Breadcrumb */}
+          <div className="flex items-center gap-3 min-w-0 pr-4">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#9C5B3C] shadow-xs shadow-[#9C5B3C]/50 shrink-0" />
+            <h1 className="text-sm font-black text-[#221912] tracking-tight truncate">
               {pageLabel}
-            </span>
+            </h1>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* SewNexa AI Header Button */}
-            <button
-              onClick={() => setIsChatOpen((prev) => !prev)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#FAF7F2] hover:bg-[#F3EFE9] border border-[#E8E2D9] hover:border-[#9C5B3C] rounded-full text-xs font-bold text-[#9C5B3C] transition-all shadow-2xs cursor-pointer group"
-              title="Open SewNexa AI"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-[#9C5B3C] group-hover:rotate-12 transition-transform" />
-              <span>SewNexa AI</span>
-            </button>
+          {/* Right Action Tools & Profile */}
+          <div className="flex items-center gap-3 shrink-0">
+            {/* Quick Actions Group */}
+            <div className="flex items-center gap-2">
+              {/* SewNexa AI Header Button */}
+              <button
+                onClick={() => setIsChatOpen((prev) => !prev)}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-[#FAF7F2] hover:bg-[#F3EFE9] border border-[#E8E2D9] hover:border-[#9C5B3C] rounded-xl text-xs font-bold text-[#9C5B3C] transition-all shadow-2xs cursor-pointer group"
+                title="Open SewNexa AI"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-[#9C5B3C] group-hover:rotate-12 transition-transform" />
+                <span className="whitespace-nowrap">SewNexa AI</span>
+              </button>
 
-            <div className="h-5 w-px bg-[#E6DDCE]" />
+              {/* Today's Immediate Actions (Hidden for Production Manager & Plant Manager) */}
+              {user?.role !== "PRODUCTION_MANAGER" && user?.role !== "PLANT_MANAGER" && (
+                <TodayImmediateActionsNavButton />
+              )}
 
-            {/* Today's Immediate Actions Floor Governance Button */}
-            <TodayImmediateActionsNavButton />
-
-            {/* Live Manager Alerts Bell */}
-            <NotificationBell />
-
-            <div className="h-5 w-px bg-[#E6DDCE]" />
-
-            {/* Live indicator badge */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#F3F5F2] border border-[#d4decb] rounded-full text-xs text-[#77876F] font-bold shadow-2xs">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#77876F] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#77876F]"></span>
-              </span>
-              <span>Shopfloor Live</span>
+              {/* Live Alerts Bell */}
+              <NotificationBell />
             </div>
 
             <div className="h-5 w-px bg-[#E6DDCE]" />
 
-            <div className="text-sm font-mono font-bold text-[#8C7E6E]">
-              {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+            {/* Shopfloor Status & Date */}
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2 h-9 px-3 bg-[#F3F5F2] border border-[#d4decb] rounded-xl text-xs text-[#77876F] font-bold shadow-2xs shrink-0">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#77876F] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#77876F]"></span>
+                </span>
+                <span className="whitespace-nowrap">Shopfloor Live</span>
+              </div>
+
+              <div className="text-xs font-mono font-bold text-[#8C7E6E] whitespace-nowrap hidden lg:block">
+                {new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+              </div>
             </div>
+
+            <div className="h-5 w-px bg-[#E6DDCE]" />
+
+            {/* User Profile & Role Switcher */}
+            <UserMenu />
           </div>
         </header>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto relative bg-[#F6F1E8] custom-scrollbar">
-          <div className="relative z-10 min-h-full">
+        <main className="flex-1 overflow-y-auto bg-[#F6F1E8] custom-scrollbar">
+          <div className="min-h-full">
             <Outlet />
           </div>
         </main>
@@ -128,3 +144,4 @@ export function Layout() {
     </div>
   );
 }
+

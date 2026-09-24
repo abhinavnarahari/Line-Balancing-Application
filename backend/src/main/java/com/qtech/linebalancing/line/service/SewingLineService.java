@@ -66,19 +66,34 @@ public class SewingLineService {
             throw new BusinessRuleException("Sewing Line with code '" + lineCode + "' already exists");
         }
 
+        int opCount = request.getOperatorCount() != null ? request.getOperatorCount() : 20;
+        int wsCount = request.getWorkstationCount() != null ? request.getWorkstationCount() : Math.max(opCount + 2, 24);
+        int helpCount = request.getHelperCount() != null ? request.getHelperCount() : 2;
+        int mcCount = request.getMachineCount() != null ? request.getMachineCount() : Math.max(opCount + 2, 22);
+
         SewingLine line = SewingLine.builder()
                 .lineCode(lineCode)
                 .lineName(request.getLineName().trim())
+                .lineType(request.getLineType() != null && !request.getLineType().trim().isEmpty() ? request.getLineType().trim() : "PBS")
                 .floor(request.getFloor())
+                .department(request.getDepartment() != null && !request.getDepartment().trim().isEmpty() ? request.getDepartment().trim() : "Sewing Floor")
                 .supervisorName(request.getSupervisorName())
-                .operatorCount(request.getOperatorCount() != null ? request.getOperatorCount() : 20)
-                .machineCount(request.getMachineCount() != null ? request.getMachineCount() : 22)
+                .ieInCharge(request.getIeInCharge())
+                .qcInspector(request.getQcInspector())
+                .workstationCount(wsCount)
+                .operatorCount(opCount)
+                .helperCount(helpCount)
+                .machineCount(mcCount)
                 .workingHours(request.getWorkingHours() != null ? request.getWorkingHours() : new BigDecimal("8.00"))
                 .capacityPerDay(request.getCapacityPerDay() != null ? request.getCapacityPerDay() : 1000)
                 .targetEfficiencyPercent(request.getTargetEfficiencyPercent() != null 
                         ? request.getTargetEfficiencyPercent() 
                         : new BigDecimal("85.00"))
+                .operationalStatus(request.getOperationalStatus() != null ? request.getOperationalStatus() : "ACTIVE")
+                .currentStyle(request.getCurrentStyle())
+                .currentBulletin(request.getCurrentBulletin())
                 .active(request.getActive() == null || request.getActive())
+                .notes(request.getNotes())
                 .build();
 
         return SewingLineResponse.fromEntity(sewingLineRepository.save(line));
@@ -98,10 +113,25 @@ public class SewingLineService {
 
         line.setLineCode(lineCode);
         line.setLineName(request.getLineName().trim());
+        if (request.getLineType() != null) {
+            line.setLineType(request.getLineType().trim());
+        }
         line.setFloor(request.getFloor());
+        if (request.getDepartment() != null) {
+            line.setDepartment(request.getDepartment().trim());
+        }
         line.setSupervisorName(request.getSupervisorName());
+        line.setIeInCharge(request.getIeInCharge());
+        line.setQcInspector(request.getQcInspector());
+        
+        if (request.getWorkstationCount() != null) {
+            line.setWorkstationCount(request.getWorkstationCount());
+        }
         if (request.getOperatorCount() != null) {
             line.setOperatorCount(request.getOperatorCount());
+        }
+        if (request.getHelperCount() != null) {
+            line.setHelperCount(request.getHelperCount());
         }
         if (request.getMachineCount() != null) {
             line.setMachineCount(request.getMachineCount());
@@ -115,8 +145,20 @@ public class SewingLineService {
         if (request.getTargetEfficiencyPercent() != null) {
             line.setTargetEfficiencyPercent(request.getTargetEfficiencyPercent());
         }
+        if (request.getOperationalStatus() != null) {
+            line.setOperationalStatus(request.getOperationalStatus());
+        }
+        if (request.getCurrentStyle() != null) {
+            line.setCurrentStyle(request.getCurrentStyle());
+        }
+        if (request.getCurrentBulletin() != null) {
+            line.setCurrentBulletin(request.getCurrentBulletin());
+        }
         if (request.getActive() != null) {
             line.setActive(request.getActive());
+        }
+        if (request.getNotes() != null) {
+            line.setNotes(request.getNotes());
         }
 
         return SewingLineResponse.fromEntity(sewingLineRepository.save(line));
@@ -126,6 +168,11 @@ public class SewingLineService {
     public SewingLineResponse toggleStatus(Long id) {
         SewingLine line = findEntityById(id);
         line.setActive(!line.isActive());
+        if (!line.isActive()) {
+            line.setOperationalStatus("IDLE");
+        } else {
+            line.setOperationalStatus("ACTIVE");
+        }
         return SewingLineResponse.fromEntity(sewingLineRepository.save(line));
     }
 

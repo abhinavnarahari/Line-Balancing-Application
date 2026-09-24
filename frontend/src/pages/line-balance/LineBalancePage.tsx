@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Link, useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,7 +14,7 @@ import { operatorsApi, type Operator } from "../../features/operators/api";
 import { shiftsApi } from "../../features/shifts/api";
 import { ordersApi, type Order } from "../../features/orders/api";
 import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/api";
-import { skillApi, type SkillAssessment } from "../../features/skill-matrix/api";
+import { skillApi, cycleTimeToRating, type SkillAssessment } from "../../features/skill-matrix/api";
 import { linePlanApi, type LinePlan } from "../../features/line-balance/api";
 import { linesApi, type SewingLine } from "../../features/lines/api";
 import { attendanceApi, type AttendanceRecord } from "../../features/attendance/api";
@@ -31,6 +31,7 @@ import {
   SCENARIO_APPLIED_EVENT 
 } from "../../features/bulletins/bulletinScenarioStore";
 import { runGlobalPoolOptimization, RATING_EFFICIENCY_MULTIPLIERS } from "../../features/line-balance/globalPoolOptimizer";
+import { useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 
 // ─── Station Row Interface ───────────────────────────────────────────────────
@@ -546,6 +547,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   const [customShiftTarget, setCustomShiftTarget] = useState<number | null>(null);
   const [plannedEfficiency, setPlannedEfficiency] = useState<number>(80); // Expected Line Efficiency % (IE standard 80.0%)
   const [activeLineDesign, setActiveLineDesign] = useState<LineDesign | null>(null);
+  const [allLineDesigns, setAllLineDesigns] = useState<LineDesign[]>([]);
 
   // Takt Time Calculation Strategy
   const [taktMode, setTaktMode] = useState<"DELIVERY" | "SHIFT_TARGET">(() => {
@@ -566,14 +568,29 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
           if (design.lineId) setSelectedLineId(String(design.lineId));
           if (design.shiftId) setSelectedShiftId(String(design.shiftId));
           if (design.bulletinId) setSelectedBulletinId(String(design.bulletinId));
-          if (design.plannedEfficiency) setPlannedEfficiency(Number(design.plannedEfficiency));
+          const eff = Number(design.plannedEfficiency || design.lineBalanceEfficiency || 80);
+          setPlannedEfficiency(eff);
           if (design.targetHourlyOutput) {
             setCustomShiftTarget(Math.round(design.targetHourlyOutput * 8));
           }
         }
       }).catch(err => console.warn("Failed to load line design:", err));
+    } else if (selectedOrderId && allLineDesigns.length > 0) {
+      const match = allLineDesigns.find(d => 
+        String(d.orderId) === String(selectedOrderId) && 
+        (!selectedLineId || String(d.lineId) === String(selectedLineId))
+      ) || allLineDesigns.find(d => String(d.orderId) === String(selectedOrderId));
+
+      if (match) {
+        setActiveLineDesign(match);
+        const eff = Number(match.plannedEfficiency || match.lineBalanceEfficiency || 80);
+        setPlannedEfficiency(eff);
+        if (match.targetHourlyOutput) {
+          setCustomShiftTarget(Math.round(match.targetHourlyOutput * 8));
+        }
+      }
     }
-  }, [paramLineDesignId]);
+  }, [paramLineDesignId, selectedOrderId, selectedLineId, allLineDesigns]);
 
   useEffect(() => {
     if (fixedMode) {
@@ -614,61 +631,72 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   // Station Rows
   const [stations, setStations] = useState<StationRow[]>([]);
 
-  useEffect(() => {
-    const fetchAll = async () => {
-      setLoading(true);
-      try {
-        const today = new Date().toISOString().split("T")[0];
-        const [ops, oprs, shfts, ords, bulls, skills, lns, atts, ts, logs, plans, affs] = await Promise.all([
-          operationsApi.getOperations().catch(() => []),
-          operatorsApi.getOperators().catch(() => []),
-          shiftsApi.getShifts().catch(() => []),
-          ordersApi.getOrders().catch(() => []),
-          bulletinsApi.getBulletins().catch(() => []),
-          skillApi.getCurrentMatrix().catch(() => []),
-          linesApi.getLines(true).catch(() => []),
-          attendanceApi.getAttendanceByDate(today).catch(() => []),
-          pieceProductionApi.get24hTimesheet(today).catch(() => []),
-          pieceProductionApi.getLogs().catch(() => []),
-          linePlanApi.getAllPlans().catch(() => []),
-          operationsApi.getAllAffinities().catch(() => []),
-        ]);
-        setOperations(ops || []);
-        setOperators((oprs || []).filter(o => o && o.active));
-        setSkillAssessments(skills || []);
-        setAffinities(affs || []);
-        setLines(lns || []);
-        setAttendanceRecords(atts || []);
-        setTimesheetData(ts || []);
-        setAllPieceLogs(logs || []);
-        setAllLinePlans(plans || []);
+  const fetchAll = useCallback(async () => {
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const [ops, oprs, shfts, ords, bulls, skills, lns, atts, ts, logs, plans, affs, designs] = await Promise.all([
+        operationsApi.getOperations().catch(() => []),
+        operatorsApi.getOperators().catch(() => []),
+        shiftsApi.getShifts().catch(() => []),
+        ordersApi.getOrders().catch(() => []),
+        bulletinsApi.getBulletins().catch(() => []),
+        skillApi.getCurrentMatrix().catch(() => []),
+        linesApi.getLines(true).catch(() => []),
+        attendanceApi.getAttendanceByDate(today).catch(() => []),
+        pieceProductionApi.get24hTimesheet(today).catch(() => []),
+        pieceProductionApi.getLogs().catch(() => []),
+        linePlanApi.getAllPlans().catch(() => []),
+        operationsApi.getAllAffinities().catch(() => []),
+        lineDesignApi.getDesigns().catch(() => []),
+      ]);
+      setOperations(ops || []);
+      setOperators((oprs || []).filter(o => o && o.active));
+      setSkillAssessments(skills || []);
+      setAffinities(affs || []);
+      setLines(lns || []);
+      setAttendanceRecords(atts || []);
+      setTimesheetData(ts || []);
+      setAllPieceLogs(logs || []);
+      setAllLinePlans(plans || []);
+      setAllLineDesigns(designs || []);
 
-        if (lns && lns.length > 0) {
+      if (lns && lns.length > 0) {
+        setSelectedLineId(prev => {
+          if (prev && lns.some(l => String(l.id) === String(prev))) return prev;
           const matchLine = paramLineId ? lns.find(l => String(l.id) === String(paramLineId)) : null;
-          setSelectedLineId(String((matchLine || lns[0]).id));
-        }
+          return String((matchLine || lns[0]).id);
+        });
+      }
 
-        const activeShifts = shfts.filter(s => s.active);
-        setShifts(activeShifts);
-        if (activeShifts.length > 0) {
+      const activeShifts = (shfts || []).filter(s => s.active);
+      setShifts(activeShifts);
+      if (activeShifts.length > 0) {
+        setSelectedShiftId(prev => {
+          if (prev && activeShifts.some(s => String(s.id) === String(prev))) return prev;
           const matchShift = paramShiftId ? activeShifts.find(s => String(s.id) === String(paramShiftId)) : null;
-          setSelectedShiftId(String((matchShift || activeShifts[0]).id));
-        }
+          return String((matchShift || activeShifts[0]).id);
+        });
+      }
 
-        setOrders(ords);
-        setBulletins(bulls);
+      setOrders(ords || []);
+      setBulletins(bulls || []);
 
-        if (ords.length > 0) {
+      if (ords && ords.length > 0) {
+        setSelectedOrderId(prev => {
+          if (prev && ords.some(o => String(o.id) === String(prev))) return prev;
           const match = paramOrderId ? ords.find(o => String(o.id) === String(paramOrderId)) : null;
           const initialOrder = match || ords[0];
-          setSelectedOrderId(String(initialOrder.id));
-        }
-      } catch (err) {
-        console.error("Failed to fetch line balance dependencies:", err);
-      } finally {
-        setLoading(false);
+          return String(initialOrder.id);
+        });
       }
-    };
+    } catch (err) {
+      console.error("Failed to fetch line balance dependencies:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [paramOrderId, paramLineId, paramShiftId]);
+
+  useEffect(() => {
     fetchAll();
 
     // ── Live Background Polling (Every 8s) to stream floor piece completions & timesheet logs in real-time ──
@@ -689,7 +717,10 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     }, 8000);
 
     return () => clearInterval(pollTimer);
-  }, [paramOrderId, paramLineId, paramShiftId, paramBulletinId]);
+  }, [fetchAll]);
+
+  // App-wide Master Data sync
+  useMasterDataSubscription(["shift", "operation", "operator", "line", "bulletin", "order", "attendance", "all"], fetchAll);
 
   const selectedOrder = useMemo(() => orders.find(o => String(o.id) === String(selectedOrderId)), [orders, selectedOrderId]);
   const selectedShift = useMemo(() => shifts.find(s => String(s.id) === String(selectedShiftId)), [shifts, selectedShiftId]);
@@ -785,7 +816,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       const isPlanForThisLine = existingPlan && (!existingPlan.lineId || String(existingPlan.lineId) === String(selectedLineId));
 
       if (isPlanForThisLine && existingPlan) {
-        if (existingPlan.plannedEfficiency !== undefined && existingPlan.plannedEfficiency !== null && existingPlan.plannedEfficiency > 0) {
+        if (!activeLineDesign && existingPlan.plannedEfficiency !== undefined && existingPlan.plannedEfficiency !== null && existingPlan.plannedEfficiency > 0) {
           setPlannedEfficiency(Number(existingPlan.plannedEfficiency));
         }
         if (existingPlan.shiftId) {
@@ -820,8 +851,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
         const rows: StationRow[] = selectedBulletin.lines
           .sort((a, b) => a.sequence - b.sequence)
           .map(line => {
-            const op = operations.find(o => String(o.id) === String(line.operationId));
-            const smvVal = Number(line.smv || 0.5);
+            const op = operations.find(o => String(o.id) === String(line.operationId) || (line.operationCode && o.operationCode === line.operationCode));
+            const smvVal = Number(op?.standardSmv !== undefined && op?.standardSmv !== null ? op.standardSmv : (line.smv || 0.5));
 
             // Multi-index resolution for stationAllocations:
             // Prioritize activeLineDesign, then currentApplied
@@ -880,7 +911,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
               smvSeconds: Math.round(smvVal * 60 * 10) / 10,
               operatorIds,
               isQcCheckpoint: isQc,
-              requiredSkillRating: line.skillRatingRequired ? String(line.skillRatingRequired) : (op?.skillLevelRequired || op?.skillLevel ? String(op.skillLevelRequired || op.skillLevel) : undefined),
+              requiredSkillRating: line.skillRatingRequired ? String(line.skillRatingRequired) : (op?.skillLevelRequired || op?.skillLevel || op?.defaultSkillRating ? String(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) : "3"),
               wipThreshold: line.wipThreshold ?? 20,
             };
           });
@@ -909,7 +940,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 smvSeconds: Math.round(smvVal * 60 * 10) / 10,
                 operatorIds: assignedOps.length > 0 ? assignedOps : [null],
                 isQcCheckpoint: a.isQcCheckpoint ?? false,
-                requiredSkillRating: (op?.skillLevelRequired || op?.skillLevel) ? String(op.skillLevelRequired || op.skillLevel) : undefined,
+                requiredSkillRating: (op?.skillLevelRequired || op?.skillLevel || op?.defaultSkillRating) ? String(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) : "3",
                 wipThreshold: 20,
               });
             }
@@ -940,7 +971,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
               smvSeconds: Math.round(smvVal * 60 * 10) / 10,
               operatorIds,
               isQcCheckpoint: existingQcByOp.get(String(op.id)) || false,
-              requiredSkillRating: (op?.skillLevelRequired || op?.skillLevel) ? String(op.skillLevelRequired || op.skillLevel) : undefined,
+              requiredSkillRating: (op?.skillLevelRequired || op?.skillLevel || op?.defaultSkillRating) ? String(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) : "3",
             };
           });
         setStations(rows);
@@ -1011,7 +1042,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                   smvSeconds: Math.round(smvVal * 60 * 10) / 10,
                   operatorIds,
                   isQcCheckpoint: prevStation?.isQcCheckpoint || false,
-                  requiredSkillRating: line.skillRatingRequired ? String(line.skillRatingRequired) : (op?.skillLevelRequired || op?.skillLevel ? String(op.skillLevelRequired || op.skillLevel) : undefined),
+                  requiredSkillRating: line.skillRatingRequired ? String(line.skillRatingRequired) : (op?.skillLevelRequired || op?.skillLevel || op?.defaultSkillRating ? String(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) : "3"),
                   wipThreshold: line.wipThreshold ?? 20,
                 };
               });
@@ -1454,13 +1485,33 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   }, [selectedOrderId, activeLineDesign]);
 
   // ─── Operator Skill Lookup Helper ────────────────────────────────────────────
-  const getOperatorSkill = (operatorId: string | number | null, operationId: string | number): number | null => {
-    if (!operatorId) return null;
-    const assessment = skillAssessments.find(
-      a => String(a.operatorId) === String(operatorId) && String(a.operationId) === String(operationId)
-    );
-    return assessment?.rating || null;
-  };
+  const getOperatorSkill = useCallback((operatorId: string | number | null, operationId: string | number): number | null => {
+    if (!operatorId || !operationId) return null;
+    const opIdStr = String(operatorId);
+    const targetOpIdStr = String(operationId);
+    const targetOp = operations.find(o => String(o.id) === targetOpIdStr || o.operationCode === targetOpIdStr);
+    const targetOpCode = targetOp?.operationCode || targetOpIdStr;
+    const targetOpName = targetOp?.name?.toLowerCase().trim();
+
+    const assessment = skillAssessments.find(a => {
+      const matchOp = String(a.operatorId) === opIdStr;
+      if (!matchOp) return false;
+      return (
+        String(a.operationId) === targetOpIdStr ||
+        (targetOp && String(a.operationId) === String(targetOp.id)) ||
+        (a.operationCode && (a.operationCode === targetOpCode || a.operationCode === targetOpIdStr)) ||
+        (targetOpName && a.operationName && a.operationName.toLowerCase().trim() === targetOpName)
+      );
+    });
+
+    if (assessment) {
+      if (assessment.cycleTimeSeconds && assessment.cycleTimeSeconds > 0) {
+        return cycleTimeToRating(assessment.cycleTimeSeconds, targetOp?.name || assessment.operationName, targetOp?.standardSmv);
+      }
+      return assessment.rating || null;
+    }
+    return null;
+  }, [skillAssessments, operations]);
 
   // Helper to filter operators based on required skill rating
   const getEligibleOpsForSkill = (operationId: string | number, reqRating?: number | string) => {
@@ -1573,9 +1624,9 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       const op = operations.find(o => String(o.id) === String(s.operationId));
       const bLine = selectedBulletin?.lines?.find(l => String(l.id) === String(s.bulletinLineId))
         || selectedBulletin?.lines?.find(l => String(l.operationId) === String(s.operationId));
-      const smvMin = bLine?.smv !== undefined && bLine.smv !== null
-        ? Number(bLine.smv)
-        : (s.smvSeconds > 0 ? s.smvSeconds / 60 : (op?.standardSmv !== undefined ? Number(op.standardSmv) : 0.5));
+      const smvMin = op?.standardSmv !== undefined && op?.standardSmv !== null
+        ? Number(op.standardSmv)
+        : (bLine?.smv !== undefined && bLine.smv !== null ? Number(bLine.smv) : (s.smvSeconds > 0 ? s.smvSeconds / 60 : 0.5));
       const smvSeconds = Math.round(smvMin * 60 * 10) / 10;
 
       const allocatedOps = Math.max(1, s.operatorIds.length);
@@ -1751,24 +1802,21 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     stations,
     operations,
     selectedBulletin,
-    taktTimeSecs,
-    designedPitchTimeSecs,
-    requiredHourlyTarget,
-    requiredDesignCapacity,
-    plannedEfficiencyFraction,
+    affinities,
+    getOperatorSkill,
     shiftHours,
-    operators,
-    skillAssessments,
     stationActuals,
     todayStationActuals,
-    endLineOutput,
     taktMode,
     totalOrderQuantity,
-    deliveryScheduleMetrics,
-    dailyAvailableTimeSecs,
     liveAvailableProductionSecs,
-    shiftScheduleMetrics,
+    plannedEfficiencyFraction,
+    designedPitchTimeSecs,
     activeShiftTarget,
+    shiftScheduleMetrics,
+    requiredDesignCapacity,
+    operators,
+    endLineOutput,
   ]);
 
   // ─── Line Metrics in Seconds ─────────────────────────────────────────────────
@@ -1788,7 +1836,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   // ── Bottleneck Manager Notification Dispatch ──────────────────────────────
   const lastDispatchedKeyRef = useRef<string>("");
 
-  const handleDispatchBottleneckNotification = async () => {
+  const handleDispatchBottleneckNotification = useCallback(async () => {
     if (bottleneckCount === 0 || !selectedOrder) return;
     const summary = bottleneckStations
       .map(b => {
@@ -1815,7 +1863,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     } catch (e) {
       console.error("Failed to dispatch bottleneck notification:", e);
     }
-  };
+  }, [bottleneckCount, selectedOrder, bottleneckStations, taktTimeSecs, selectedLine]);
 
   useEffect(() => {
     if (bottleneckCount > 0 && selectedOrder?.id && stations.length > 0) {
@@ -1834,7 +1882,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     } else if (bottleneckCount === 0) {
       lastDispatchedKeyRef.current = "";
     }
-  }, [bottleneckCount, selectedOrder?.id, selectedLineId, stations.length, stationMetrics]);
+  }, [bottleneckCount, selectedOrder?.id, selectedLineId, stations.length, bottleneckStations, handleDispatchBottleneckNotification]);
 
   // ─── Interactive Actions ─────────────────────────────────────────────────────
   const handleAddOperator = (index: number) => {
@@ -1990,9 +2038,14 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   };
 
   // ─── Global Pool Optimization & Affinitized Coverage ───
-  const handleAutoAssignOperators = (fillOnlyEmpty = false) => {
+  const handleAutoAssignOperators = (forceFullReassign = false) => {
     if (stations.length === 0) return;
     setAutoAssigning(true);
+
+    // If stations have some assigned operators and some empty slots, default to filling empty slots seamlessly
+    const hasAssigned = stations.some(s => s.operatorIds.some(Boolean));
+    const hasUnassigned = stations.some(s => s.operatorIds.some(id => !id));
+    const fillOnlyEmpty = !forceFullReassign && hasAssigned && hasUnassigned;
 
     const externalAssignedIds = new Set<string>(Array.from(operatorsAssignedInOtherPlans.keys()));
 
@@ -2019,7 +2072,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
     const m = result.metrics;
     setSuccessMessage(
-      `Full-Pool Allocation Optimized: Achieved ${m.realPoolAchievableEfficiency}% Floor LBE (${m.realizationRatio}% Realization of Designed OB). Staffed ${m.directSkillMatchCount} direct skills, ${m.affinityMatchCount} via operational affinities${m.unfulfilledSlotCount > 0 ? ` (${m.unfulfilledSlotCount} unfilled)` : ""}.`
+      `Auto-Assignment Completed: Achieved ${m.realPoolAchievableEfficiency}% Line Efficiency (${m.realizationRatio}% Realization of Designed OB). Assigned ${m.directSkillMatchCount} direct skills, ${m.affinityMatchCount} via affinities${m.unfulfilledSlotCount > 0 ? ` (${m.unfulfilledSlotCount} unfilled)` : ""}.`
     );
     setTimeout(() => setSuccessMessage(""), 6000);
   };
@@ -2141,8 +2194,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
         const rows: StationRow[] = selectedBulletin.lines
           .sort((a, b) => a.sequence - b.sequence)
           .map(line => {
-            const op = operations.find(o => String(o.id) === String(line.operationId));
-            const smvVal = Number(line.smv || 0.5);
+            const op = operations.find(o => String(o.id) === String(line.operationId) || (line.operationCode && o.operationCode === line.operationCode));
+            const smvVal = Number(op?.standardSmv !== undefined && op?.standardSmv !== null ? op.standardSmv : (line.smv || 0.5));
 
             return {
               stationNum: line.sequence,
@@ -2154,6 +2207,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
               smvSeconds: Math.round(smvVal * 60 * 10) / 10,
               wipThreshold: line.wipThreshold ?? 20,
               operatorIds: [null],
+              requiredSkillRating: line.skillRatingRequired ? String(line.skillRatingRequired) : (op?.skillLevelRequired || op?.skillLevel || op?.defaultSkillRating ? String(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) : "3"),
             };
           });
         setStations(rows);
@@ -2172,6 +2226,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
               machineType: "Single Needle",
               smvSeconds: Math.round(smvVal * 60 * 10) / 10,
               operatorIds: [null],
+              requiredSkillRating: (op?.skillLevelRequired || op?.skillLevel || op?.defaultSkillRating) ? String(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) : "3",
             };
           });
         setStations(rows);
@@ -2198,11 +2253,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5 mb-1">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-md ${
-              taktMode === "SHIFT_TARGET"
-                ? "bg-gradient-to-br from-[#9C5B3C] to-[#7A452D] shadow-[#9C5B3C]/20"
-                : "bg-gradient-to-br from-blue-600 to-indigo-700 shadow-blue-500/20"
-            }`}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-md bg-gradient-to-br from-[#9C5B3C] to-[#7A452D] shadow-[#9C5B3C]/20">
               {taktMode === "SHIFT_TARGET" ? (
                 <Gauge className="w-5 h-5" />
               ) : (
@@ -2213,11 +2264,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
               <h1 className="text-xl font-bold tracking-tight text-slate-900">
                 {taktMode === "SHIFT_TARGET" ? "Fixed Shift Target Balancing" : "Planned Lines & Balancing"}
               </h1>
-              <p className="text-xs text-slate-500">
-                {taktMode === "SHIFT_TARGET"
-                  ? "Pace workstations against daily shift target quotas and monitor end-line throughput"
-                  : "Calculate dynamic Takt Time from delivery horizon, allocate multi-operator capacity, and eliminate bottlenecks"}
-              </p>
             </div>
           </div>
         </div>
@@ -2261,9 +2307,10 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
             loading={saving}
             size="md"
             className="bg-[#9C5B3C] hover:bg-[#854B30] text-white shadow-sm shadow-[#9C5B3C]/25 cursor-pointer font-bold text-xs px-4"
+            title="Approve & Release balanced line configuration to the sewing shopfloor"
           >
             <CheckCircle2 className="w-4 h-4 mr-1.5 text-amber-200" />
-            Save Line Plan
+            Approve &amp; Release Plan
           </Button>
 
           <Link
@@ -2340,13 +2387,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
         <div className="space-y-3.5 pb-1 border-b border-[#F0EAE0]">
           <div className="flex items-center gap-2">
             <h2 className="text-base font-black text-[#221912]">Line Target & Floor Configuration</h2>
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border font-mono ${
-              taktMode === "SHIFT_TARGET"
-                ? "bg-amber-50 text-amber-800 border-amber-200"
-                : "bg-blue-50 text-blue-700 border-blue-200"
-            }`}>
-              {taktMode === "SHIFT_TARGET" ? "Shift Target Paced IE Engine" : "Delivery Horizon Paced IE Engine"}
-            </span>
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -2407,8 +2447,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
           </div>
         </div>
 
-
-
         {/* Floor Configuration Grid: Render customized panels for Planned Pace vs Fixed Shift Target */}
         {taktMode === "DELIVERY" ? (
           /* ── Mode A: Planned Pace (Master Delivery Plan) ──────────────── */
@@ -2452,7 +2490,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
               </select>
               {selectedOrder ? (
                 <span className="text-[11px] text-[#77876F] font-bold block truncate">
-                  Demand: {totalOrderQuantity.toLocaleString()} pcs ({selectedOrder.color || "Standard"}) · Planned: {deliveryScheduleMetrics.plannedCompletionFormatted}
+                  Demand: {totalOrderQuantity.toLocaleString()} pcs ({selectedOrder.color || "Standard"})
                 </span>
               ) : (
                 <span className="text-[11px] text-amber-700 block truncate">
@@ -2487,9 +2525,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                   {deliveryScheduleMetrics.plannedCompletionFormatted}
                 </span>
               </div>
-              <span className="text-[11px] text-[#8C7E6E] block truncate font-mono">
-                Planned: <strong className="text-[#221912] font-semibold">{deliveryScheduleMetrics.plannedCompletionFormatted}</strong> · Due: <strong>{deliveryScheduleMetrics.deliveryFormatted}</strong>
-              </span>
             </div>
 
             {/* 4. Production Shift */}
@@ -2506,9 +2541,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                   </option>
                 ))}
               </select>
-              <span className="text-[11px] text-[#8C7E6E] block font-mono">
-                Net: {netWorkingMins}m ({shiftHours.toFixed(1)}h) · Break: {breakDurationMins}m
-              </span>
             </div>
 
             {/* 5. Required Daily Target */}
@@ -2523,13 +2555,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                   {requiredHourlyTarget.toFixed(1)} pcs/hr
                 </span>
               </div>
-              <span className="text-[11px] text-[#8C7E6E] block font-mono truncate">
-                {endLineOutput > 0 ? (
-                  <>Bal: <strong className="text-[#221912] font-semibold">{remainingOrderBalance.toLocaleString()} pcs</strong> ({totalOrderQuantity.toLocaleString()} - {endLineOutput} done) ÷ {deliveryScheduleMetrics.workingDaysRemaining}d</>
-                ) : (
-                  <>Avail: <strong className="text-[#221912] font-semibold">{(dailyAvailableTimeSecs / 60).toFixed(0)}m/shift</strong> (Target: {deliveryScheduleMetrics.plannedCompletionFormatted})</>
-                )}
-              </span>
             </div>
           </div>
         ) : (
@@ -2597,9 +2622,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                   </option>
                 ))}
               </select>
-              <span className="text-[11px] text-[#8C7E6E] block font-mono">
-                Net: {netWorkingMins}m · Left: <strong className="text-[#221912] font-semibold">{shiftScheduleMetrics.countdownFormatted}</strong>
-              </span>
             </div>
 
             {/* 4. Shift Target Output Input */}
@@ -2630,9 +2652,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 }}
                 className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-mono font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs"
               />
-              <span className="text-[11px] text-[#8C7E6E] block font-mono truncate">
-                Shift Live: <strong className="text-[#221912] font-semibold">{(shiftScheduleMetrics.liveShiftAvailableSecs / 60).toFixed(0)}m avail</strong>
-              </span>
             </div>
 
             {/* 5. End-Line Output & Remaining Shift Balance */}
@@ -2654,9 +2673,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                   Bal: {remainingShiftBalance} pcs
                 </span>
               </div>
-              <span className="text-[11px] text-[#8C7E6E] block font-mono truncate">
-                Quota: {activeShiftTarget} - Done: {endLineOutput} = <strong>{remainingShiftBalance} pcs left</strong>
-              </span>
             </div>
           </div>
         )}
@@ -2988,40 +3004,27 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       {/* ── 4. Main Operations Balancing Table ────────────────────── */}
       <DataCard noPad className="border border-[#E6DDCE] shadow-[0_1px_3px_rgba(34,25,18,0.05)] rounded-2xl overflow-hidden bg-white">
         {/* Table Header with Benchmark Context Ribbon */}
-        <div className="p-4 sm:p-5 border-b border-[#F0EAE0] bg-[#FDFBF7] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-slate-900">
-                Operation Manpower Allocation & Capacity Table
-              </h3>
-              <span className="text-xs px-2 py-0.5 rounded-full font-mono font-bold bg-blue-100 text-blue-700 border border-blue-200">
-                {stations.length} Operations
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Live engineering matrix: allocate multi-operator manpower to maintain station cycle times below Takt Time ({taktTimeSecs.toFixed(1)}s).
-            </p>
+        <div className="p-4 sm:p-5 border-b border-[#F0EAE0] bg-[#FDFBF7] flex flex-col 2xl:flex-row items-start 2xl:items-center justify-between gap-3 sm:gap-4">
+          <div className="shrink-0">
+            <h3 className="text-sm font-bold text-slate-900 whitespace-nowrap">
+              Operation Manpower Allocation & Capacity Table
+            </h3>
           </div>
 
-          {/* Benchmark Context Pills */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-blue-600" />
+          {/* Benchmark Context Pills - strictly side-by-side single row */}
+          <div className="flex items-center gap-2 text-xs flex-nowrap overflow-x-auto max-w-full pb-0.5 custom-scrollbar">
+            <div className="px-2.5 py-1 bg-white border border-[#E6DDCE] rounded-lg shadow-2xs flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+              <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" />
               <span className="text-slate-500">Takt Pace:</span>
               <strong className="text-slate-900 font-mono">{taktTimeSecs.toFixed(1)}s / pc</strong>
             </div>
-            <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-amber-600" />
-              <span className="text-slate-500">Hourly Target:</span>
-              <strong className="text-slate-900 font-mono">{requiredHourlyTarget.toFixed(0)} pcs/hr</strong>
-            </div>
-            <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex items-center gap-1.5">
+            <div className="px-2.5 py-1 bg-white border border-[#E6DDCE] rounded-lg shadow-2xs flex items-center gap-1.5 shrink-0 whitespace-nowrap">
               <CalendarClock className="w-3.5 h-3.5 text-emerald-600" />
               <span className="text-slate-500">Daily Target:</span>
               <strong className="text-slate-900 font-mono">{requiredDailyTarget} pcs/day</strong>
             </div>
-            <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl shadow-2xs flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-indigo-600" />
+            <div className="px-2.5 py-1 bg-white border border-[#E6DDCE] rounded-lg shadow-2xs flex items-center gap-1.5 shrink-0 whitespace-nowrap">
+              <Users className="w-3.5 h-3.5 text-[#9C5B3C]" />
               <span className="text-slate-500">Total Manpower:</span>
               <strong className="text-slate-900 font-mono">{totalAllocatedOps} ops</strong>
             </div>
@@ -3040,14 +3043,14 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                   Required Ops (Dynamic)
                 </th>
                 <th className="py-3.5 px-4 w-44 text-center whitespace-nowrap">Required Skill Rating</th>
-                <th className="py-3.5 px-5 w-80 bg-blue-50/30 whitespace-nowrap">
+                <th className="py-3.5 px-5 w-80 bg-[#FAF8F5] whitespace-nowrap">
                   <div className="flex items-center justify-between gap-2">
                     <span>Manpower Allocation</span>
                     <button
                       type="button"
                       onClick={() => handleAutoAssignOperators(false)}
                       disabled={stations.length === 0 || autoAssigning}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-[10.5px] font-bold shadow-2xs transition-all cursor-pointer disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#9C5B3C] hover:bg-[#854B2F] active:scale-95 text-white text-[10.5px] font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
                       title="Auto-assign available operators based on required skill rating and availability"
                     >
                       <Sparkles className="w-3 h-3 text-amber-300" />
@@ -3056,7 +3059,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                   </div>
                 </th>
                 {taktMode === "DELIVERY" && (
-                  <th className="py-3.5 px-4 w-40 text-center whitespace-nowrap bg-blue-50/20">Actual Output Till Date</th>
+                  <th className="py-3.5 px-4 w-40 text-center whitespace-nowrap bg-[#FAF8F5]">Actual Output Till Date</th>
                 )}
                 {taktMode === "SHIFT_TARGET" && (
                   <th className="py-3.5 px-4 w-36 text-center whitespace-nowrap">Actual Output (Today)</th>
@@ -3101,7 +3104,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                           <span className="font-bold text-slate-900 text-sm">
                             {row.operationName}
                           </span>
-                          <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200 font-mono font-bold">
+                          <span className="text-[10px] text-[#9C5B3C] bg-[#FAF8F5] px-1.5 py-0.2 rounded border border-[#E6DDCE] font-mono font-bold">
                             {row.operationCode}
                           </span>
                         </div>
@@ -3118,7 +3121,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                         <span className="font-mono font-bold text-slate-900 text-sm">
                           {(row.smvSeconds / 60).toFixed(2)} <span className="text-[10px] text-slate-400 font-normal">min</span>
                         </span>
-                        <span className="text-[10px] text-blue-600 font-mono font-medium">
+                        <span className="text-[10px] text-[#8C7E6E] font-mono font-medium">
                           ({row.smvSeconds.toFixed(1)} sec)
                         </span>
                       </div>
@@ -3142,8 +3145,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                             }`}>
                               {row.requiredOps} {row.requiredOps > 1 ? "Ops" : "Op"}
                             </span>
-                            <span className="text-[9.5px] text-slate-500 mt-0.5 font-mono" title="⌈Work Content (Sec) ÷ Dynamic Takt (Sec)⌉">
-                              ⌈{row.smvSeconds.toFixed(1)}s ÷ {(row.dynamicTaktSecs > 0 ? row.dynamicTaktSecs : taktTimeSecs).toFixed(1)}s⌉
+                            <span className="text-[9.5px] text-slate-500 mt-0.5 font-mono" title="⌈Work Content (Sec) ÷ Dynamic Pitch (Sec) @ Planned Efficiency⌉">
+                              ⌈{row.smvSeconds.toFixed(1)}s ÷ {(row.dynamicPitchSecs > 0 ? row.dynamicPitchSecs : (designedPitchTimeSecs > 0 ? designedPitchTimeSecs : taktTimeSecs)).toFixed(1)}s⌉
                             </span>
                           </>
                         )}
@@ -3198,7 +3201,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                     </td>
 
                     {/* Column 6: Allocated Operators (Multi-Operator Stepper + Filtered Selectors) */}
-                    <td className="py-3 px-5 align-middle bg-blue-50/20">
+                    <td className="py-3 px-5 align-middle bg-[#FAF8F5]/60">
                       <div className="space-y-2">
                         {/* Stepper + Mode Pill */}
                         <div className="flex items-center justify-between gap-2">
@@ -3218,7 +3221,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                             <button
                               type="button"
                               onClick={() => handleAddOperator(idx)}
-                              className="w-7 h-7 flex items-center justify-center text-blue-600 hover:text-blue-800 hover:bg-blue-50 cursor-pointer transition-colors"
+                              className="w-7 h-7 flex items-center justify-center text-[#9C5B3C] hover:text-[#854B2F] hover:bg-[#F6F1E8] cursor-pointer transition-colors"
                               title="Add another operator to this station"
                             >
                               <Plus className="w-3 h-3" />
@@ -3282,8 +3285,15 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                           {row.operatorIds.map((opId, slotIdx) => {
                             const currentOp = opId ? operators.find(o => String(o.id) === String(opId)) : null;
 
+                            const basePool = filterPresentOnly
+                              ? operators.filter(o => {
+                                  const st = getOperatorAttendance(o.id);
+                                  return st === "PRESENT" || st === "LATE";
+                                })
+                              : operators;
+
                             // Filter out any operator who has already been assigned to another station or another line
-                            const availableForSlot = qualifiedOps.filter(op =>
+                            const availableForSlot = basePool.filter(op =>
                               !isOperatorAssignedToAnother(op.id, idx, slotIdx, opId)
                             );
 
@@ -3349,7 +3359,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
                     {/* Column: Actual Output Till Date (in Planned Pace / Delivery Horizon Mode) */}
                     {taktMode === "DELIVERY" && (
-                      <td className="py-3 px-4 text-center align-middle whitespace-nowrap bg-blue-50/10">
+                      <td className="py-3 px-4 text-center align-middle whitespace-nowrap bg-[#FAF8F5]/50">
                         <div className="flex flex-col items-center">
                           <span className="font-mono font-black text-sm text-slate-900">
                             {(row.actualOutputTillDate || 0).toLocaleString()} <span className="text-[10px] text-slate-400 font-normal">pcs</span>
@@ -3358,7 +3368,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                                 <div
-                                  className="h-full bg-blue-600 rounded-full"
+                                  className="h-full bg-[#9C5B3C] rounded-full"
                                   style={{
                                     width: `${Math.min(100, Math.round(((row.actualOutputTillDate || 0) / Math.max(1, totalOrderQuantity || 1)) * 100))}%`
                                   }}
@@ -3454,7 +3464,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                         </div>
 
                         {row.allocatedOps > 1 && (
-                          <span className="text-[9.5px] text-blue-600 font-mono block">
+                          <span className="text-[9.5px] text-[#8C7E6E] font-mono block">
                             ({row.smvSeconds.toFixed(1)}s ÷ {row.allocatedOps} ops)
                           </span>
                         )}
@@ -3467,7 +3477,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                                 row.isBottleneck
                                   ? "bg-rose-500 animate-pulse"
                                   : loadPct > 85
-                                  ? "bg-blue-600"
+                                  ? "bg-[#9C5B3C]"
                                   : "bg-emerald-500"
                               }`}
                               style={{ width: `${Math.min(100, loadPct)}%` }}
@@ -3530,8 +3540,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                           </button>
                         </div>
                       ) : row.capacityPerHour >= requiredHourlyTarget * 1.4 ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200 shadow-2xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#F6F1E8] text-[#9C5B3C] text-[10px] font-bold border border-[#E6DDCE] shadow-2xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#9C5B3C]" />
                           Buffer ({row.capacityPerHour}/hr)
                         </span>
                       ) : (

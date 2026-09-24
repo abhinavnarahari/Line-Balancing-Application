@@ -11,6 +11,7 @@ import { AssignmentForm } from "../../features/shift-assignments/AssignmentForm"
 import { operatorsApi, type Operator } from "../../features/operators/api";
 import { shiftsApi } from "../../features/shifts/api";
 import type { Shift } from "../../features/shifts/types";
+import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 export function ShiftAssignmentPage() {
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
@@ -47,11 +48,14 @@ export function ShiftAssignmentPage() {
 
   useEffect(() => { loadData(); }, []);
 
+  useMasterDataSubscription(["shift", "operator", "attendance", "all"], loadData);
+
   const handleSubmit = async (assignments: Omit<ShiftAssignment, "id" | "status" | "createdAt">[]) => {
     setError(null);
     try {
       await Promise.all(assignments.map(data => shiftAssignmentApi.assignShift(data)));
       setIsFormOpen(false);
+      notifyMasterDataUpdated("attendance");
       loadData();
     } catch (err: any) {
       setError(err.message || "Failed to assign shifts");
@@ -61,6 +65,7 @@ export function ShiftAssignmentPage() {
   const handleEndAssignment = async (id: string | number, date: string) => {
     try {
       await shiftAssignmentApi.endAssignment(id, date);
+      notifyMasterDataUpdated("attendance");
       loadData();
     } catch (err) {
       console.error("Failed to end assignment", err);
@@ -70,6 +75,7 @@ export function ShiftAssignmentPage() {
   const handleUpdateAssignment = async (id: string | number, data: any) => {
     try {
       await shiftAssignmentApi.updateAssignment(id, data);
+      notifyMasterDataUpdated("attendance");
       loadData();
     } catch (err) {
       console.error("Failed to update assignment", err);
@@ -82,7 +88,7 @@ export function ShiftAssignmentPage() {
       <PageHeader
         eyebrow="Workforce"
         title="Shift Assignment"
-        description="Assign operators to production shifts. Assignments are tracked over time to maintain historical records."
+
         action={
           <Button onClick={() => { setError(null); setIsFormOpen(true); }} size="md">
             <Plus className="h-4 w-4 mr-1.5" />

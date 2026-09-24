@@ -11,5 +11,6 @@ import java.util.Optional;
 public interface CapacityPlanRepository extends JpaRepository<CapacityPlan, Long> {
     Optional<CapacityPlan> findByPlanCode(String planCode);
     List<CapacityPlan> findByOrderId(Long orderId);
+    List<CapacityPlan> findByBulletinId(Long bulletinId);
     List<CapacityPlan> findByStatus(String status);
 }

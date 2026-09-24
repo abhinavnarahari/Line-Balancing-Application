@@ -21,23 +21,23 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           "relative inline-flex items-center justify-center font-semibold tracking-normal cursor-pointer",
           "transition-all duration-150 focus-visible:outline-none",
-          "focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
+          "focus-visible:ring-2 focus-visible:ring-[#9C5B3C] focus-visible:ring-offset-2",
           "disabled:pointer-events-none disabled:opacity-45 select-none",
           {
             // Primary
-            "bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20 active:bg-blue-800":
+            "bg-[#9C5B3C] hover:bg-[#854D33] text-white shadow-xs shadow-[#9C5B3C]/20 active:bg-[#6E3F2A] font-bold":
               variant === "primary",
             // Secondary
-            "bg-white text-slate-700 border border-slate-200/90 hover:bg-slate-50 hover:border-slate-300 shadow-2xs active:bg-slate-100":
+            "bg-white text-[#221912] border border-[#E6DDCE] hover:bg-[#FAF8F5] hover:border-[#C5B9A8] shadow-2xs font-bold active:bg-[#F6F1E8]":
               variant === "secondary",
             // Outline
-            "border border-slate-200 text-slate-700 hover:bg-slate-50 bg-transparent":
+            "border border-[#E6DDCE] text-[#8C7E6E] hover:text-[#221912] hover:bg-[#FAF8F5] bg-white shadow-2xs font-bold":
               variant === "outline",
             // Danger
-            "bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-500/20 active:bg-rose-800":
+            "bg-rose-600 hover:bg-rose-700 text-white shadow-xs shadow-rose-500/20 active:bg-rose-800 font-bold":
               variant === "danger",
             // Ghost
-            "text-slate-600 hover:text-slate-900 hover:bg-slate-100":
+            "text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] font-bold":
               variant === "ghost",
 
             // Sizes
