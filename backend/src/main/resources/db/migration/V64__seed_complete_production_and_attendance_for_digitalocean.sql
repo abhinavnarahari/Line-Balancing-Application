@@ -87,34 +87,34 @@ WHERE id = 2;
 DELETE FROM line_plan_assignments WHERE line_plan_id IN (1, 2);
 
 -- Line 01 Assignments (8 stations + 3 support floaters)
-INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id, station_id)
-SELECT 1, bl.id, bl.operation_id, op.id, bl.sequence
+INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id)
+SELECT 1, bl.id, bl.operation_id, op.id
 FROM bulletin_lines bl
 JOIN operators op ON op.employee_id = 'EMP-' || LPAD(bl.sequence::text, 3, '0')
 WHERE bl.bulletin_id = 1;
 
 -- Extra 3 support operators assigned to Line 01
-INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id, station_id)
-SELECT 1, bl.id, bl.operation_id, op.id, 9
+INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id)
+SELECT 1, bl.id, bl.operation_id, op.id
 FROM bulletin_lines bl
 JOIN operators op ON op.employee_id = 'EMP-009'
 WHERE bl.bulletin_id = 1 AND bl.sequence = 2;
 
-INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id, station_id)
-SELECT 1, bl.id, bl.operation_id, op.id, 10
+INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id)
+SELECT 1, bl.id, bl.operation_id, op.id
 FROM bulletin_lines bl
 JOIN operators op ON op.employee_id = 'EMP-010'
 WHERE bl.bulletin_id = 1 AND bl.sequence = 4;
 
-INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id, station_id)
-SELECT 1, bl.id, bl.operation_id, op.id, 11
+INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id)
+SELECT 1, bl.id, bl.operation_id, op.id
 FROM bulletin_lines bl
 JOIN operators op ON op.employee_id = 'EMP-011'
 WHERE bl.bulletin_id = 1 AND bl.sequence = 6;
 
 -- Line 02 Assignments (10 stations)
-INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id, station_id)
-SELECT 2, bl.id, bl.operation_id, op.id, bl.sequence
+INSERT INTO line_plan_assignments (line_plan_id, bulletin_line_id, operation_id, operator_id)
+SELECT 2, bl.id, bl.operation_id, op.id
 FROM bulletin_lines bl
 JOIN operators op ON op.employee_id = 'EMP-' || LPAD((bl.sequence + 11)::text, 3, '0')
 WHERE bl.bulletin_id = 2;
