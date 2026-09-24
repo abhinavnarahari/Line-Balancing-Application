@@ -229,28 +229,28 @@ INSERT INTO bulletin_styles (bulletin_id, style_id) VALUES (1, 1), (2, 2);
 -- Bulletin 1 Lines (Crewneck T-Shirt - 8 Operations)
 INSERT INTO bulletin_lines (bulletin_id, sequence, operation_id, smv, machine_type, skill_rating_required, section, is_parallelizable, notes)
 VALUES
-    (1, 1, 1, 0.45, '4-Thread Overlock',        3, 'BODY_ASSEMBLY', 'Shoulder join with clear mobilon tape'),
-    (1, 2, 2, 0.50, '4-Thread Overlock',        3, 'COLLAR_SET',    'Neck rib knit attach in circular loop'),
-    (1, 3, 3, 0.35, 'Single Needle Lockstitch', 3, 'COLLAR_SET',    'Neckline top stitch and label sandwich'),
-    (1, 4, 4, 0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    'Attach left sleeve to body armhole'),
-    (1, 5, 5, 0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    'Attach right sleeve to body armhole'),
-    (1, 6, 6, 0.55, '4-Thread Overlock',        4, 'BODY_ASSEMBLY', 'Close side seams in one continuous pass'),
-    (1, 7, 7, 0.50, 'Flatlock / Interlock',     3, 'BODY_HEM',      'Bottom hem fold and coverstitch finish'),
-    (1, 8, 8, 0.45, 'Flatlock / Interlock',     3, 'CUFF_HEM',      'Sleeve cuff fold and coverstitch hem');
+    (1, 1, 1, 0.45, '4-Thread Overlock',        3, 'BODY_ASSEMBLY', TRUE, 'Shoulder join with clear mobilon tape'),
+    (1, 2, 2, 0.50, '4-Thread Overlock',        3, 'COLLAR_SET',    TRUE, 'Neck rib knit attach in circular loop'),
+    (1, 3, 3, 0.35, 'Single Needle Lockstitch', 3, 'COLLAR_SET',    TRUE, 'Neckline top stitch and label sandwich'),
+    (1, 4, 4, 0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach left sleeve to body armhole'),
+    (1, 5, 5, 0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach right sleeve to body armhole'),
+    (1, 6, 6, 0.55, '4-Thread Overlock',        4, 'BODY_ASSEMBLY', TRUE, 'Close side seams in one continuous pass'),
+    (1, 7, 7, 0.50, 'Flatlock / Interlock',     3, 'BODY_HEM',      TRUE, 'Bottom hem fold and coverstitch finish'),
+    (1, 8, 8, 0.45, 'Flatlock / Interlock',     3, 'CUFF_HEM',      TRUE, 'Sleeve cuff fold and coverstitch hem');
 
 -- Bulletin 2 Lines (Polo Shirt - 10 Operations)
 INSERT INTO bulletin_lines (bulletin_id, sequence, operation_id, smv, machine_type, skill_rating_required, section, is_parallelizable, notes)
 VALUES
-    (2, 1,  1,  0.45, '4-Thread Overlock',        3, 'BODY_ASSEMBLY', 'Shoulder seam join with reinforcement tape'),
-    (2, 2,  9,  0.65, 'Single Needle Lockstitch', 4, 'FRONT_PREP',    'Form and attach polo front placket with box stitch'),
-    (2, 3,  10, 0.60, 'Single Needle Lockstitch', 4, 'COLLAR_SET',    'Attach ribbed knit collar to neck placket'),
-    (2, 4,  11, 0.35, 'Single Needle Lockstitch', 3, 'COLLAR_SET',    'Collar band top stitch edge finish'),
-    (2, 5,  4,  0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    'Attach left sleeve to armhole curvature'),
-    (2, 6,  5,  0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    'Attach right sleeve to armhole curvature'),
-    (2, 7,  8,  0.45, 'Flatlock / Interlock',     3, 'CUFF_HEM',      'Sleeve cuff hem with 2-needle interlock'),
-    (2, 8,  6,  0.55, '4-Thread Overlock',        4, 'BODY_ASSEMBLY', 'Close side seams from sleeve to bottom slit'),
-    (2, 9,  7,  0.50, 'Flatlock / Interlock',     3, 'BODY_HEM',      'Bottom body fold and coverstitch hem'),
-    (2, 10, 18, 0.40, 'Single Needle Lockstitch', 2, 'FINISHING',     'Buttonhole punch and button tack attach');
+    (2, 1,  1,  0.45, '4-Thread Overlock',        3, 'BODY_ASSEMBLY', TRUE, 'Shoulder seam join with reinforcement tape'),
+    (2, 2,  9,  0.65, 'Single Needle Lockstitch', 4, 'FRONT_PREP',    TRUE, 'Form and attach polo front placket with box stitch'),
+    (2, 3,  10, 0.60, 'Single Needle Lockstitch', 4, 'COLLAR_SET',    TRUE, 'Attach ribbed knit collar to neck placket'),
+    (2, 4,  11, 0.35, 'Single Needle Lockstitch', 3, 'COLLAR_SET',    TRUE, 'Collar band top stitch edge finish'),
+    (2, 5,  4,  0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach left sleeve to armhole curvature'),
+    (2, 6,  5,  0.45, '4-Thread Overlock',        3, 'SLEEVE_SET',    TRUE, 'Attach right sleeve to armhole curvature'),
+    (2, 7,  8,  0.45, 'Flatlock / Interlock',     3, 'CUFF_HEM',      TRUE, 'Sleeve cuff hem with 2-needle interlock'),
+    (2, 8,  6,  0.55, '4-Thread Overlock',        4, 'BODY_ASSEMBLY', TRUE, 'Close side seams from sleeve to bottom slit'),
+    (2, 9,  7,  0.50, 'Flatlock / Interlock',     3, 'BODY_HEM',      TRUE, 'Bottom body fold and coverstitch hem'),
+    (2, 10, 18, 0.40, 'Single Needle Lockstitch', 2, 'FINISHING',     TRUE, 'Buttonhole punch and button tack attach');
 
 -- ==============================================================================
 -- 7. SEED SEWING LINES
