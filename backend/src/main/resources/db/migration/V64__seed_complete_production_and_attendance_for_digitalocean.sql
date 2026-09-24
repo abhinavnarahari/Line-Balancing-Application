@@ -123,13 +123,13 @@ WHERE bl.bulletin_id = 2;
 DELETE FROM piece_production_logs WHERE log_date = CURRENT_DATE;
 
 INSERT INTO piece_production_logs (
-    operator_id, operation_id, order_id, target_qty, completed_qty, good_qty, reject_qty,
-    start_time, end_time, actual_time_minutes, sam_minutes, machine_code, log_date, hour_slot,
-    earned_minutes, efficiency_percent, defect_rate_percent, created_at
+    operator_id, operation_id, operation_name, order_id, target_qty, completed_qty, good_qty, reject_qty,
+    start_time, end_time, actual_time_minutes, sam_minutes, machine_code, log_date, hour_slot, created_at
 )
 SELECT 
     op.id,
     t.op_id,
+    t.op_name,
     1,
     t.t_qty,
     t.c_qty,
@@ -142,20 +142,17 @@ SELECT
     t.m_type,
     CURRENT_DATE,
     10,
-    ROUND((t.g_qty * t.sam)::NUMERIC, 2),
-    ROUND(((t.g_qty * t.sam / 60.0) * 100.0)::NUMERIC, 1),
-    0.0,
     NOW()
 FROM (VALUES
-    ('EMP-001', 1, 150, 150, 150, 0, 0.45, '4-Thread Overlock'),
-    ('EMP-002', 2, 150, 150, 150, 0, 0.50, '4-Thread Overlock'),
-    ('EMP-003', 3, 148, 148, 148, 0, 0.35, 'Single Needle Lockstitch'),
-    ('EMP-004', 4, 148, 148, 148, 0, 0.45, '4-Thread Overlock'),
-    ('EMP-005', 5, 148, 148, 148, 0, 0.45, '4-Thread Overlock'),
-    ('EMP-006', 6, 148, 148, 148, 0, 0.55, '4-Thread Overlock'),
-    ('EMP-007', 8, 145, 145, 145, 0, 0.45, 'Flatlock / Interlock'),
-    ('EMP-008', 7, 145, 145, 145, 0, 0.50, 'Flatlock / Interlock')
-) AS t(emp_code, op_id, t_qty, c_qty, g_qty, r_qty, sam, m_type)
+    ('EMP-001', 1, 'Shoulder Join',          150, 150, 150, 0, 0.45, '4-Thread Overlock'),
+    ('EMP-002', 2, 'Neck Rib Attach',        150, 150, 150, 0, 0.50, '4-Thread Overlock'),
+    ('EMP-003', 3, 'Neck Top Stitch',        148, 148, 148, 0, 0.35, 'Single Needle Lockstitch'),
+    ('EMP-004', 4, 'Sleeve Attach Left',     148, 148, 148, 0, 0.45, '4-Thread Overlock'),
+    ('EMP-005', 5, 'Sleeve Attach Right',    148, 148, 148, 0, 0.45, '4-Thread Overlock'),
+    ('EMP-006', 6, 'Side Seam Close',        148, 148, 148, 0, 0.55, '4-Thread Overlock'),
+    ('EMP-007', 8, 'Sleeve Hem',             145, 145, 145, 0, 0.45, 'Flatlock / Interlock'),
+    ('EMP-008', 7, 'Bottom Hem',             145, 145, 145, 0, 0.50, 'Flatlock / Interlock')
+) AS t(emp_code, op_id, op_name, t_qty, c_qty, g_qty, r_qty, sam, m_type)
 JOIN operators op ON op.employee_id = t.emp_code;
 
 -- 5. SEED ATTENDANCE RECORDS FOR ALL 50 OPERATORS FOR CURRENT_DATE
