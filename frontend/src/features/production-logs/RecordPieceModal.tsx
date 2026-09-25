@@ -374,7 +374,7 @@ export function RecordPieceModal({
                 <option value="">— Select Operation —</option>
                 {operations.map(op => (
                   <option key={op.id} value={op.id}>
-                    {op.operationCode || (op as any).code || `OP-${op.id}`} — {op.name} (SMV: {op.standardSmv || "0.5"}m)
+                    {op.operationCode || (op as any).code || `OP-${op.id}`} — {op.name}
                   </option>
                 ))}
               </select>
@@ -648,9 +648,9 @@ export function RecordPieceModal({
             </div>
           </div>
 
-          {/* Row 4: Time Tracking & Standard SMV */}
+          {/* Row 4: Time Tracking */}
           <div className="space-y-2.5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[11px] font-bold tracking-wider uppercase text-[#8C7E6E] mb-1.5 flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" /> Start Time
@@ -674,21 +674,6 @@ export function RecordPieceModal({
                   onChange={e => setEndTime(e.target.value)}
                   required
                   className="w-full h-10 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold tracking-wider uppercase text-[#8C7E6E] mb-1.5">
-                  Standard SMV (min)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={samMinutes}
-                  onChange={e => setSamMinutes(Number(e.target.value))}
-                  required
-                  className="w-full h-10 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-bold text-[#9C5B3C] text-center focus:outline-none focus:border-[#9C5B3C]"
                 />
               </div>
             </div>
