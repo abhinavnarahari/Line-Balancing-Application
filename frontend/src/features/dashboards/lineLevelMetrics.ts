@@ -171,11 +171,26 @@ export function computeLineLevelOperationsData(
     ? `${activeShift.shiftName} (${activeShift.startTime.slice(0, 5)}–${activeShift.endTime.slice(0, 5)})`
     : "Shift A (08:00–16:30)";
 
-  // Pre-index helpers
+  // Pre-index helpers (prioritize active plans, then latest id)
   const planByLineId = new Map<string, LinePlan>();
+  const setBetterPlan = (key: string, p: LinePlan) => {
+    const existing = planByLineId.get(key);
+    if (!existing) {
+      planByLineId.set(key, p);
+      return;
+    }
+    const isPActive = String(p.status).toLowerCase() === "active";
+    const isExistingActive = String(existing.status).toLowerCase() === "active";
+    if (isPActive && !isExistingActive) {
+      planByLineId.set(key, p);
+    } else if (isPActive === isExistingActive && Number(p.id) > Number(existing.id)) {
+      planByLineId.set(key, p);
+    }
+  };
+
   linePlans.forEach((p) => {
-    if (p.lineId != null) planByLineId.set(String(p.lineId), p);
-    if (p.lineCode) planByLineId.set(p.lineCode, p);
+    if (p.lineId != null) setBetterPlan(String(p.lineId), p);
+    if (p.lineCode) setBetterPlan(p.lineCode, p);
   });
 
   const orderById = new Map<string, Order>();

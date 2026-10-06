@@ -182,6 +182,12 @@ export function UploadPerformanceExcelModal({
           return;
         }
 
+        const isNonMachine = matchedOp.role === "QUALITY_CHECKER" || matchedOp.role === "LINE_SUPERVISOR" || matchedOp.role === "HELPER";
+        if (isNonMachine) {
+          errors.push(`Row ${rowNum}: Employee ${matchedOp.name} (${matchedOp.employeeId}) is in a non-machine role (${matchedOp.role}). Skill ratings cannot be recorded for non-machine workforce.`);
+          return;
+        }
+
         // Match Operation
         const matchedOperation = allOperations.find(
           (op) =>

@@ -5,7 +5,6 @@ import * as XLSX from "xlsx";
 import {
   Layers,
   Users,
-  TrendingUp,
   AlertTriangle,
   Zap,
   Filter,
@@ -15,14 +14,12 @@ import {
   UserPlus,
   CheckCircle2,
   Clock,
-  ArrowUpRight,
-  ArrowDownRight,
   Target,
   Gauge,
   Activity,
   AlertCircle,
-  PackageCheck,
 } from "lucide-react";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 import type { SewingLine } from "../lines/api";
 import type { Order } from "../orders/api";
 import type { OperationBulletin } from "../bulletins/api";
@@ -129,11 +126,15 @@ export function LineLevelDashboard({
     return set;
   }, [calculatedLines]);
 
-  // Unallocated / buffer operators pool for station assignment
+  // Unallocated / buffer machine operators pool for station assignment (excludes non-machine workforce)
   const unallocatedOperators = useMemo(() => {
-    return operators.filter(
-      (o) => o.active !== false && !assignedOperatorIds.has(o.employeeId) && !assignedOperatorIds.has(String(o.id))
-    );
+    return operators.filter((o) => {
+      if (o.active === false) return false;
+      const roleUpper = String(o.role || "").toUpperCase();
+      const isNonMachine = ["HELPER", "QC", "QUALITY_CONTROLLER", "SUPERVISOR", "LINE_SUPERVISOR"].includes(roleUpper);
+      if (isNonMachine) return false;
+      return !assignedOperatorIds.has(o.employeeId) && !assignedOperatorIds.has(String(o.id));
+    });
   }, [operators, assignedOperatorIds]);
 
   // 4. Quick Assign Operator Handler
@@ -143,9 +144,12 @@ export function LineLevelDashboard({
 
     try {
       const { line, station } = assigningStation;
-      const existingPlan = linePlans.find(
+      const linePlansForLine = linePlans.filter(
         (p) => String(p.lineId) === String(line.lineId) || p.lineCode === line.lineCode
       );
+      const existingPlan = linePlansForLine.find((p) => String(p.status).toLowerCase() === "active")
+        || [...linePlansForLine].sort((a, b) => Number(b.id) - Number(a.id))[0]
+        || null;
 
       if (existingPlan) {
         // Update plan assignments
@@ -268,60 +272,57 @@ export function LineLevelDashboard({
   return (
     <div className="space-y-6 w-full max-w-[1600px] mx-auto">
       {/* ── 1. Dashboard Header & Governance Control Strip ─────────────── */}
-      <div className="bg-white rounded-2xl border border-[#E6DDCE] p-5 sm:p-6 shadow-[0_1px_3px_rgba(34,25,18,0.05)] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-[#E6DDCE] px-6 py-5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="space-y-1.5 min-w-0">
           <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="text-[11px] font-black uppercase tracking-wider text-[#9C5B3C] shrink-0">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#9C5B3C]">
               Shopfloor Line Monitoring
             </span>
             <span className="text-[#E6DDCE] hidden sm:inline">/</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
               Live Floor Synchronized
             </span>
             <span className="text-[#E6DDCE] hidden sm:inline">·</span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#FAF8F5] text-[#221912] border border-[#E6DDCE] shrink-0">
-              <Clock className="w-3 h-3 text-[#9C5B3C]" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#FAF8F5] text-[#221912] border border-[#E6DDCE]">
+              <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" />
               {aggregates.activeShiftTiming}
             </span>
             <span className="text-[#E6DDCE] hidden sm:inline">·</span>
-            <span className="text-[11px] font-mono text-[#8C7E6E] shrink-0">
+            <span className="text-xs font-semibold text-[#8C7E6E]">
               {calculatedLines.length} Sewing Lines Active
             </span>
           </div>
 
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-[#221912] tracking-tight">
-              Line-Level Operations &amp; Efficiency Review
-            </h1>
-          </div>
+          <h1 className="text-2xl font-black text-[#221912] tracking-tight">
+            Line Operations &amp; Efficiency Review
+          </h1>
         </div>
 
         {/* Global Toolbar Actions */}
         <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
           {/* Quick Line Selector Dropdown */}
-          <div className="flex items-center gap-1.5 bg-[#F6F1E8] h-9 px-3 rounded-xl border border-[#E6DDCE] text-xs shrink-0">
-            <Filter className="w-3.5 h-3.5 text-[#9C5B3C]" />
-            <span className="text-[11px] font-bold text-[#8C7E6E] whitespace-nowrap">Line:</span>
-            <select
+          <div className="w-56 shrink-0">
+            <CustomSelect
               value={selectedLineFilter}
-              onChange={(e) => setSelectedLineFilter(e.target.value)}
-              className="bg-transparent font-bold text-[#221912] text-xs focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">All Sewing Lines ({calculatedLines.length})</option>
-              {calculatedLines.map((l) => (
-                <option key={l.lineId} value={String(l.lineId)}>
-                  {l.lineCode}: {l.lineName}
-                </option>
-              ))}
-            </select>
+              onChange={val => setSelectedLineFilter(val)}
+              options={[
+                { value: "ALL", label: `All Sewing Lines (${calculatedLines.length})` },
+                ...calculatedLines.map(l => ({
+                  value: String(l.lineId),
+                  label: `${l.lineCode}: ${l.lineName}`
+                }))
+              ]}
+              size="sm"
+              icon={<Filter className="w-3.5 h-3.5" />}
+            />
           </div>
 
           {/* Export to Excel */}
           <button
             type="button"
             onClick={handleExportExcel}
-            className="h-9 px-3.5 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#221912] border border-[#E6DDCE] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+            className="h-8 px-3 rounded-lg bg-white hover:bg-[#FAF8F5] text-[#221912] border border-[#E6DDCE] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
             title="Download full operational audit in Excel format"
           >
             <Download className="w-3.5 h-3.5 text-[#9C5B3C]" />
@@ -331,7 +332,7 @@ export function LineLevelDashboard({
           {/* Rebalance Engine Navigation */}
           <Link
             to="/line-balance"
-            className="h-9 px-3.5 rounded-xl bg-[#9C5B3C] hover:bg-[#854B2F] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
+            className="h-8 px-3.5 rounded-lg bg-[#9C5B3C] hover:bg-[#854B2F] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
           >
             <Zap className="w-3.5 h-3.5 text-[#FFE5BF]" />
             <span className="whitespace-nowrap">Balance Lines Engine</span>
@@ -342,7 +343,7 @@ export function LineLevelDashboard({
             <button
               type="button"
               onClick={onRefresh}
-              className="h-9 w-9 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] border border-[#E6DDCE] shadow-2xs flex items-center justify-center transition-colors cursor-pointer shrink-0"
+              className="h-8 w-8 rounded-lg bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] border border-[#E6DDCE] shadow-2xs flex items-center justify-center transition-colors cursor-pointer shrink-0"
               title="Refresh Line Operations Data"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#9C5B3C]" : ""}`} />
@@ -376,47 +377,42 @@ export function LineLevelDashboard({
       </AnimatePresence>
 
       {/* ── 2. Top Executive KPI Ribbon: Plant-Wide Line Aggregates ──── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Daily Target vs Actual Output */}
-        <div className="rounded-3xl border border-[#E6DDCE] bg-white p-5 shadow-2xs flex flex-col justify-between space-y-3 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-28 h-28 bg-[#9C5B3C]/5 rounded-full -mr-8 -mt-8 pointer-events-none" />
+        <div className="rounded-2xl border border-[#E6DDCE] bg-white p-5 shadow-2xs hover:border-[#B48259]/60 hover:shadow-sm transition-all flex flex-col justify-between space-y-3.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1.5">
-              <Target className="w-3.5 h-3.5 text-[#9C5B3C]" />
+            <span className="text-xs font-extrabold uppercase tracking-wider text-[#8C7E6E]">
               Daily Target vs. Actual
             </span>
-            <div className="w-8 h-8 rounded-xl bg-[#FAF8F5] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C]">
-              <Activity className="w-4 h-4" />
-            </div>
           </div>
 
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight">
+              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight leading-none">
                 {aggregates.totalActualGoodOutput.toLocaleString()}
               </span>
-              <span className="text-xs font-bold text-[#8C7E6E] font-mono">
-                / {aggregates.totalPlannedOutput.toLocaleString()} Daily Target
+              <span className="text-xs font-bold text-[#8C7E6E]">
+                / {aggregates.totalPlannedOutput.toLocaleString()} pcs planned
               </span>
             </div>
 
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <div className="flex items-center gap-2 mt-2.5 flex-wrap text-xs">
               <span
-                className={`inline-flex items-center gap-0.5 text-[11px] font-black px-2 py-0.5 rounded-full ${
+                className={`inline-flex items-center font-bold px-2.5 py-0.5 rounded-md border ${
                   aggregates.totalActualGoodOutput >= aggregates.totalPlannedOutput
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-amber-100 text-amber-800"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    : "bg-amber-50 text-amber-800 border-amber-200"
                 }`}
               >
                 {aggregates.overallAttainmentPercent}% Attainment
               </span>
-              <span className="text-[11px] text-[#8C7E6E] font-semibold">
+              <span className="text-[#8C7E6E] font-medium text-xs">
                 {aggregates.totalActualRejectOutput > 0 ? `${aggregates.totalActualRejectOutput} Rejects (${aggregates.overallDefectRate}%)` : "0 Rejects"}
               </span>
             </div>
           </div>
 
-          <div className="w-full bg-[#FAF8F5] h-2 rounded-full overflow-hidden border border-[#E6DDCE]">
+          <div className="w-full bg-[#F6F1E8] h-2 rounded-full overflow-hidden border border-[#E6DDCE]/60">
             <div
               className={`h-full rounded-full transition-all duration-700 ${
                 aggregates.overallAttainmentPercent >= 90
@@ -431,39 +427,34 @@ export function LineLevelDashboard({
         </div>
 
         {/* Card 2: Overall Production Quantity vs Completed Till Now */}
-        <div className="rounded-3xl border border-[#E6DDCE] bg-white p-5 shadow-2xs flex flex-col justify-between space-y-3 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-28 h-28 bg-emerald-500/5 rounded-full -mr-8 -mt-8 pointer-events-none" />
+        <div className="rounded-2xl border border-[#E6DDCE] bg-white p-5 shadow-2xs hover:border-[#B48259]/60 hover:shadow-sm transition-all flex flex-col justify-between space-y-3.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1.5">
-              <PackageCheck className="w-3.5 h-3.5 text-emerald-700" />
+            <span className="text-xs font-extrabold uppercase tracking-wider text-[#8C7E6E]">
               Overall Order Quantity
             </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-              <TrendingUp className="w-4 h-4" />
-            </div>
           </div>
 
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight">
+              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight leading-none">
                 {aggregates.totalCompletedTillNow.toLocaleString()}
               </span>
-              <span className="text-xs font-bold text-[#8C7E6E] font-mono">
-                / {aggregates.totalOrderQuantity.toLocaleString()} Total Order Qty
+              <span className="text-xs font-bold text-[#8C7E6E]">
+                / {aggregates.totalOrderQuantity.toLocaleString()} pcs total
               </span>
             </div>
 
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span className="inline-flex items-center text-[11px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+            <div className="flex items-center gap-2 mt-2.5 flex-wrap text-xs">
+              <span className="inline-flex items-center font-bold px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
                 {aggregates.overallOrderCompletionPercent}% Completed
               </span>
-              <span className="text-[11px] text-[#8C7E6E] font-semibold">
+              <span className="text-[#8C7E6E] font-medium text-xs">
                 {(aggregates.totalOrderQuantity - aggregates.totalCompletedTillNow).toLocaleString()} Pcs Remaining
               </span>
             </div>
           </div>
 
-          <div className="w-full bg-[#FAF8F5] h-2 rounded-full overflow-hidden border border-[#E6DDCE]">
+          <div className="w-full bg-[#F6F1E8] h-2 rounded-full overflow-hidden border border-[#E6DDCE]/60">
             <div
               className="h-full rounded-full bg-emerald-600 transition-all duration-700"
               style={{ width: `${Math.min(100, Math.max(1, aggregates.overallOrderCompletionPercent))}%` }}
@@ -472,55 +463,45 @@ export function LineLevelDashboard({
         </div>
 
         {/* Card 3: Planned Design vs Actual Operating Efficiency Review */}
-        <div className="rounded-3xl border border-[#E6DDCE] bg-white p-5 shadow-2xs flex flex-col justify-between space-y-3 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-28 h-28 bg-emerald-500/5 rounded-full -mr-8 -mt-8 pointer-events-none" />
+        <div className="rounded-2xl border border-[#E6DDCE] bg-white p-5 shadow-2xs hover:border-[#B48259]/60 hover:shadow-sm transition-all flex flex-col justify-between space-y-3.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1.5">
-              <Gauge className="w-3.5 h-3.5 text-[#9C5B3C]" />
+            <span className="text-xs font-extrabold uppercase tracking-wider text-[#8C7E6E]">
               Design vs. Actual Efficiency
             </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-              <TrendingUp className="w-4 h-4" />
-            </div>
           </div>
 
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight">
+              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight leading-none">
                 {aggregates.avgActualEfficiency}%
               </span>
-              <span className="text-xs font-bold text-[#8C7E6E] font-mono">
-                / {aggregates.avgDesignEfficiency}% Design
+              <span className="text-xs font-bold text-[#8C7E6E]">
+                / {aggregates.avgDesignEfficiency}% Design Target
               </span>
             </div>
 
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <div className="flex items-center gap-2 mt-2.5 flex-wrap text-xs">
               <span
-                className={`inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full ${
+                className={`inline-flex items-center font-bold px-2.5 py-0.5 rounded-md border ${
                   aggregates.overallEfficiencyGap >= 0
-                    ? "bg-emerald-100 text-emerald-800"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
                     : aggregates.overallEfficiencyGap >= -5
-                      ? "bg-amber-100 text-amber-800"
-                      : "bg-rose-100 text-rose-800"
+                      ? "bg-amber-50 text-amber-800 border-amber-200"
+                      : "bg-rose-50 text-rose-800 border-rose-200"
                 }`}
               >
-                {aggregates.overallEfficiencyGap >= 0 ? (
-                  <ArrowUpRight className="w-3 h-3" />
-                ) : (
-                  <ArrowDownRight className="w-3 h-3" />
-                )}
                 {aggregates.overallEfficiencyGap >= 0 ? `+${aggregates.overallEfficiencyGap}%` : `${aggregates.overallEfficiencyGap}%`} Gap
               </span>
-              <span className="text-[11px] text-[#8C7E6E] font-semibold">
-                Theoretical OB Target
+              <span className="text-[#8C7E6E] font-medium text-xs">
+                Theoretical OB Benchmark
               </span>
             </div>
           </div>
 
-          <div className="w-full bg-[#FAF8F5] h-2 rounded-full overflow-hidden border border-[#E6DDCE] relative">
+          <div className="w-full bg-[#F6F1E8] h-2 rounded-full overflow-hidden border border-[#E6DDCE]/60 relative">
             {/* Benchmark Pin Indicator */}
             <div
-              className="absolute top-0 bottom-0 w-1 bg-[#221912] z-10"
+              className="absolute top-0 bottom-0 w-1 bg-[#221912] z-10 rounded-full"
               style={{ left: `${Math.min(100, aggregates.avgDesignEfficiency)}%` }}
               title={`Design Benchmark: ${aggregates.avgDesignEfficiency}%`}
             />
@@ -531,90 +512,36 @@ export function LineLevelDashboard({
           </div>
         </div>
 
-        {/* Card 4: Manning & Headcount Fulfillment */}
-        <div className="rounded-3xl border border-[#E6DDCE] bg-white p-5 shadow-2xs flex flex-col justify-between space-y-3 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-28 h-28 bg-sky-500/5 rounded-full -mr-8 -mt-8 pointer-events-none" />
+        {/* Card 4: Floor Operational Status & Lines Health */}
+        <div className="rounded-2xl border border-[#E6DDCE] bg-white p-5 shadow-2xs hover:border-[#B48259]/60 hover:shadow-sm transition-all flex flex-col justify-between space-y-3.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-sky-700" />
-              Manning Fulfillment
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-sky-50 border border-sky-200 flex items-center justify-center text-sky-700">
-              <Users className="w-4 h-4" />
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight">
-                {aggregates.totalOperatorsDeployed}
-              </span>
-              <span className="text-xs font-bold text-[#8C7E6E] font-mono">
-                / {aggregates.totalOperatorsRequired} Required
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span
-                className={`inline-flex items-center text-[11px] font-black px-2 py-0.5 rounded-full ${
-                  aggregates.totalVacantStations === 0
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-rose-100 text-rose-800"
-                }`}
-              >
-                {aggregates.totalVacantStations === 0 ? "Fully Manned" : `${aggregates.totalVacantStations} Vacancies`}
-              </span>
-              <span className="text-[11px] text-[#8C7E6E] font-semibold">
-                {aggregates.overallManningPercent}% Fulfilled
-              </span>
-            </div>
-          </div>
-
-          <div className="w-full bg-[#FAF8F5] h-2 rounded-full overflow-hidden border border-[#E6DDCE]">
-            <div
-              className={`h-full rounded-full transition-all duration-700 ${
-                aggregates.overallManningPercent >= 95 ? "bg-emerald-600" : "bg-amber-500"
-              }`}
-              style={{ width: `${Math.min(100, aggregates.overallManningPercent)}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Card 5: Floor Operational Status & Lines Health */}
-        <div className="rounded-3xl border border-[#E6DDCE] bg-white p-5 shadow-2xs flex flex-col justify-between space-y-3 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-28 h-28 bg-amber-500/5 rounded-full -mr-8 -mt-8 pointer-events-none" />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-[#9C5B3C]" />
+            <span className="text-xs font-extrabold uppercase tracking-wider text-[#8C7E6E]">
               Line Health &amp; Running Status
             </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
-              <AlertCircle className="w-4 h-4" />
-            </div>
           </div>
 
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight">
+              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight leading-none">
                 {aggregates.runningLinesCount}
               </span>
-              <span className="text-xs font-bold text-[#8C7E6E] font-mono">
+              <span className="text-xs font-bold text-[#8C7E6E]">
                 / {aggregates.activeLinesCount} Lines Running
               </span>
             </div>
 
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              <span className="inline-flex items-center gap-1 text-[11px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+            <div className="flex items-center gap-2 mt-2.5 flex-wrap text-xs">
+              <span className="inline-flex items-center gap-1.5 font-bold px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
                 Active Production
               </span>
-              <span className="text-[11px] text-[#8C7E6E] font-semibold">
+              <span className="text-[#8C7E6E] font-medium text-xs">
                 {aggregates.totalVacantStations > 0 ? `${aggregates.totalVacantStations} Unmanned Stations` : "0 Blockers"}
               </span>
             </div>
           </div>
 
-          <div className="w-full bg-[#FAF8F5] h-2 rounded-full overflow-hidden border border-[#E6DDCE]">
+          <div className="w-full bg-[#F6F1E8] h-2 rounded-full overflow-hidden border border-[#E6DDCE]/60">
             <div
               className="h-full rounded-full bg-[#9C5B3C] transition-all duration-700"
               style={{ width: `${(aggregates.runningLinesCount / Math.max(1, aggregates.activeLinesCount)) * 100}%` }}

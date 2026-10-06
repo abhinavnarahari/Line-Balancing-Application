@@ -6,8 +6,9 @@ import { operatorsApi, type Operator } from "../../features/operators/api";
 import { ordersApi, type Order } from "../../features/orders/api";
 import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/api";
 import { linePlanApi, type LinePlan } from "../../features/line-balance/api";
-import { skillApi, type SkillAssessment } from "../../features/skill-matrix/api";
+import { skillApi, cycleTimeToRating, type SkillAssessment, type PerformanceLog } from "../../features/skill-matrix/api";
 import { PageHeader, DataCard, EmptyState } from "../../components/ui/PremiumUI";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 
 export function OperatorPlacementPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -15,6 +16,7 @@ export function OperatorPlacementPage() {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [bulletins, setBulletins] = useState<OperationBulletin[]>([]);
   const [skills, setSkills] = useState<SkillAssessment[]>([]);
+  const [performanceLogs, setPerformanceLogs] = useState<PerformanceLog[]>([]);
   const [affinities, setAffinities] = useState<OperationAffinity[]>([]);
   
   const [loading, setLoading] = useState(true);
@@ -25,20 +27,23 @@ export function OperatorPlacementPage() {
     const fetchAll = async () => {
       setLoading(true);
       try {
-        const [ops, oprs, ords, bulls, sks, affs] = await Promise.all([
+        const [ops, oprs, ords, bulls, sks, affs, logs] = await Promise.all([
           operationsApi.getOperations(),
           operatorsApi.getOperators(),
           ordersApi.getOrders(),
           bulletinsApi.getBulletins(),
           skillApi.getCurrentMatrix().catch(() => []),
           operationsApi.getAllAffinities().catch(() => []),
+          skillApi.getPerformanceLogs().catch(() => []),
         ]);
         setOperations(ops);
-        setOperators(oprs.filter(o => o.active));
+        // Only machine operators (dedicated sewers and floaters) can be placed on sewing workstations
+        setOperators(oprs.filter(o => o.active && (o.role === "OPERATOR" || o.role === "FLOATER" || !o.role)));
         setOrders(ords);
         setBulletins(bulls);
         setSkills(sks || []);
         setAffinities(affs || []);
+        setPerformanceLogs(logs || []);
         
         if (ords.length > 0) {
           setSelectedOrderId(String(ords[0].id));
@@ -99,24 +104,42 @@ export function OperatorPlacementPage() {
       let affinityCoverage: { sourceOpName: string; transferPct: number } | null = null;
       let directRating: number | null = null;
       if (assignment.operatorId) {
-        const direct = skills.find(s =>
-          String(s.operatorId) === String(assignment.operatorId) &&
-          (String(s.operationId) === String(assignment.operationId) ||
-           (op && (s.operationCode === op.operationCode || String(s.operationId) === String(op.id))))
-        );
-        if (direct) {
-          directRating = direct.rating;
-        } else {
+        const getOpRating = (operatorId: string | number, operationId: string | number, opObj?: Operation) => {
+          const opIdStr = String(operatorId);
+          const operIdStr = String(operationId);
+          const submittedLogs = performanceLogs.filter(
+            l => String(l.operatorId) === opIdStr &&
+                 (String(l.operationId) === operIdStr || (opObj && String(l.operationId) === String(opObj.id)) ||
+                  (opObj && l.operationCode === opObj.operationCode)) &&
+                 (l.status === "SUBMITTED" || !l.status)
+          );
+          if (submittedLogs.length > 0) {
+            const avg = submittedLogs.reduce((a, b) => a + b.actualCycleTimeSeconds, 0) / submittedLogs.length;
+            return cycleTimeToRating(avg, opObj?.name, opObj?.standardSmv);
+          }
+          const s = skills.find(sk =>
+            String(sk.operatorId) === opIdStr &&
+            (String(sk.operationId) === operIdStr || (opObj && (sk.operationCode === opObj.operationCode || String(sk.operationId) === String(opObj.id))))
+          );
+          if (s) {
+            if (s.cycleTimeSeconds && s.cycleTimeSeconds > 0) {
+              return cycleTimeToRating(s.cycleTimeSeconds, opObj?.name, opObj?.standardSmv);
+            }
+            return s.rating || null;
+          }
+          return null;
+        };
+
+        directRating = getOpRating(assignment.operatorId, assignment.operationId, op);
+        if (!directRating) {
           const opAffs = affinities.filter(a =>
             String(a.primaryOperationId) === String(assignment.operationId) ||
             (op && (a.primaryOperationCode === op.operationCode || String(a.primaryOperationId) === String(op.id)))
           );
           for (const aff of opAffs) {
-            const alt = skills.find(s =>
-              String(s.operatorId) === String(assignment.operatorId) &&
-              (String(s.operationId) === String(aff.alternativeOperationId) || (s as any).operationCode === aff.alternativeOperationCode)
-            );
-            if (alt) {
+            const altOp = operations.find(o => String(o.id) === String(aff.alternativeOperationId));
+            const altRating = getOpRating(assignment.operatorId, aff.alternativeOperationId, altOp);
+            if (altRating) {
               affinityCoverage = {
                 sourceOpName: aff.alternativeOperationName || "Alt Skill",
                 transferPct: Number(aff.efficiencyTransferPct) || 85,
@@ -164,16 +187,20 @@ export function OperatorPlacementPage() {
         <div className="p-6 border-b border-[#F0EAE0] bg-[#FDFBF7]">
           <div className="max-w-sm">
             <label className="text-[10.5px] font-extrabold tracking-[0.1em] uppercase text-[#8C7E6E] block mb-1.5">View Placement For Order</label>
-            <select
+            <CustomSelect
               value={selectedOrderId}
-              onChange={e => setSelectedOrderId(e.target.value)}
-              className="w-full h-10 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs"
-            >
-              <option value="">— Select Order —</option>
-              {orders.map(o => (
-                <option key={o.id} value={o.id}>{o.orderNo} ({o.buyer})</option>
-              ))}
-            </select>
+              onChange={val => setSelectedOrderId(val)}
+              options={[
+                { value: "", label: "— Select Order —" },
+                ...orders.map(o => ({
+                  value: String(o.id),
+                  label: o.orderNo,
+                  sublabel: o.buyer || undefined,
+                  badge: `${o.totalQuantity} pcs`
+                }))
+              ]}
+              size="md"
+            />
           </div>
         </div>
 

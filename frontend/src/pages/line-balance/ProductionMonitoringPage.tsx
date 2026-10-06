@@ -26,18 +26,18 @@ import { operatorsApi, type Operator } from "../../features/operators/api";
 import { operationsApi, type Operation } from "../../features/operations/api";
 import { linesApi, type SewingLine } from "../../features/lines/api";
 import { linePlanApi, type LinePlan } from "../../features/line-balance/api";
-import { skillApi, type SkillAssessment } from "../../features/skill-matrix/api";
+import { lineDesignApi, type LineDesign } from "../../features/linedesign/api";
+import { skillApi, cycleTimeToRating, type SkillAssessment } from "../../features/skill-matrix/api";
 import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/api";
 import { pieceProductionApi, type OperatorTimesheet24h, type PieceProductionLog } from "../../features/production-logs/api";
 import { RecordPieceModal } from "../../features/production-logs/RecordPieceModal";
 import type { Shift } from "../../features/shifts/types";
 import { DataCard, DataCardHeader, EmptyState } from "../../components/ui/PremiumUI";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 import { useMasterDataSubscription } from "../../utils/masterDataEvents";
 
 // 24 Hours array (0 to 23)
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => i);
-// Standard 8 hours for line order monitor
-const SHIFT_HOURS = Array.from({ length: 8 }, (_, i) => i + 1);
 
 export function ProductionMonitoringPage() {
   const [searchParams] = useSearchParams();
@@ -81,20 +81,14 @@ export function ProductionMonitoringPage() {
   // Line monitoring data
   const [selectedOrderId, setSelectedOrderId] = useState<string>(paramOrderId || "");
   const [linePlan, setLinePlan] = useState<LinePlan | null>(null);
-  const [hourlyOutput, setHourlyOutput] = useState<Record<number, number>>({});
-
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const [allLineDesigns, setAllLineDesigns] = useState<LineDesign[]>([]);
 
   const currentLiveHour = new Date().getHours();
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ords, shfts, oprsList, opsList, lns, ts, bulls, skills, plans] = await Promise.all([
+      const [ords, shfts, oprsList, opsList, lns, ts, bulls, skills, plans, designs] = await Promise.all([
         ordersApi.getOrders(),
         shiftApi.getShifts(),
         operatorsApi.getOperators(),
@@ -104,6 +98,7 @@ export function ProductionMonitoringPage() {
         bulletinsApi.getBulletins().catch(() => []),
         skillApi.getCurrentMatrix().catch(() => []),
         linePlanApi.getAllPlans().catch(() => []),
+        lineDesignApi.getDesigns().catch(() => []),
       ]);
       setOrders(ords);
       setShifts(shfts.filter(s => s.active));
@@ -114,6 +109,7 @@ export function ProductionMonitoringPage() {
       setBulletins(bulls);
       setSkillAssessments(skills);
       setAllLinePlans(plans || []);
+      setAllLineDesigns(designs || []);
 
       if (ords.length > 0 && !selectedOrderId) {
         const match = paramOrderId ? ords.find(o => String(o.id) === String(paramOrderId)) : null;
@@ -200,6 +196,15 @@ export function ProductionMonitoringPage() {
   const selectedOrder = useMemo(() => orders.find(o => String(o.id) === String(selectedOrderId)), [orders, selectedOrderId]);
   const selectedLine = useMemo(() => lines.find(l => String(l.id) === String(selectedLineId) || l.lineCode === selectedLineId), [lines, selectedLineId]);
 
+  // Active Line Design matching selected order and line
+  const activeLineDesign = useMemo(() => {
+    if (!selectedOrderId || allLineDesigns.length === 0) return null;
+    return allLineDesigns.find(d => 
+      String(d.orderId) === String(selectedOrderId) && 
+      (!selectedLineId || selectedLineId === "ALL" || String(d.lineId) === String(selectedLineId))
+    ) || allLineDesigns.find(d => String(d.orderId) === String(selectedOrderId)) || null;
+  }, [selectedOrderId, selectedLineId, allLineDesigns]);
+
   // Active Shift for the Line
   const activeShiftObj = useMemo(() => {
     if (linePlan?.shiftId) {
@@ -227,58 +232,27 @@ export function ProductionMonitoringPage() {
   const dailyNetWorkingSecs = netWorkingMins * 60;
   const dailyAvailableTimeSecs = dailyNetWorkingSecs;
 
-  const targetOutput = linePlan?.targetOutput || selectedOrder?.totalQuantity || 480;
-  const taktTimeSecs = targetOutput > 0 ? dailyAvailableTimeSecs / targetOutput : 0;
-  const hourlyTarget = taktTimeSecs > 0 ? Math.round(3600 / taktTimeSecs) : Math.round(targetOutput / shiftHours);
+  const targetOutput = linePlan?.targetOutput || selectedOrder?.totalQuantity || 834;
 
-  // Real-Time Second-by-Second Shift Countdown & Available Production Seconds
-  const shiftScheduleMetrics = useMemo(() => {
-    const [sh = 8, sm = 0] = (activeShiftObj?.startTime || "08:00").split(":").map(Number);
-    const [eh = 17, em = 0] = (activeShiftObj?.endTime || "17:00").split(":").map(Number);
-
-    const now = currentTime;
-    const nowMs = now.getTime();
-
-    const shiftStartToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 0, 0);
-    const shiftEndToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em, 0, 0);
-    if (shiftEndToday.getTime() <= shiftStartToday.getTime()) {
-      shiftEndToday.setDate(shiftEndToday.getDate() + 1);
+  const plannedHourlyTarget = useMemo(() => {
+    if (activeLineDesign?.targetHourlyOutput && Number(activeLineDesign.targetHourlyOutput) > 0) {
+      return Number(activeLineDesign.targetHourlyOutput);
     }
-
-    const startMs = shiftStartToday.getTime();
-    const endMs = shiftEndToday.getTime();
-    const netRatio = grossShiftMins > 0 ? netWorkingMins / grossShiftMins : 1;
-    const fullShiftDurationGrossSecs = Math.max(1, (endMs - startMs) / 1000);
-
-    let remainingGrossSecs = 0;
-    let isShiftActive = false;
-
-    if (nowMs < startMs) {
-      remainingGrossSecs = fullShiftDurationGrossSecs;
-    } else if (nowMs >= startMs && nowMs <= endMs) {
-      remainingGrossSecs = Math.max(1, (endMs - nowMs) / 1000);
-      isShiftActive = true;
-    } else {
-      remainingGrossSecs = fullShiftDurationGrossSecs;
+    if (targetOutput > 0 && shiftHours > 0) {
+      return Math.round(targetOutput / shiftHours);
     }
+    return 112;
+  }, [activeLineDesign, targetOutput, shiftHours]);
 
-    const liveShiftAvailableSecs = isShiftActive
-      ? Math.min(dailyNetWorkingSecs, Math.max(1, remainingGrossSecs * netRatio))
-      : dailyNetWorkingSecs;
-
-    const remSecTotal = Math.round(remainingGrossSecs);
-    const hours = Math.floor(remSecTotal / 3600);
-    const mins = Math.floor((remSecTotal % 3600) / 60);
-    const secs = remSecTotal % 60;
-    const countdownFormatted = `${hours}h ${mins.toString().padStart(2, "0")}m ${secs.toString().padStart(2, "0")}s`;
-
-    return {
-      isShiftActive,
-      remainingGrossSecs,
-      liveShiftAvailableSecs,
-      countdownFormatted,
-    };
-  }, [currentTime, activeShiftObj, grossShiftMins, netWorkingMins, dailyNetWorkingSecs]);
+  const taktTimeSecs = useMemo(() => {
+    if (plannedHourlyTarget > 0) {
+      return Math.round((3600 / plannedHourlyTarget) * 10) / 10;
+    }
+    if (targetOutput > 0 && dailyAvailableTimeSecs > 0) {
+      return Math.round((dailyAvailableTimeSecs / targetOutput) * 10) / 10;
+    }
+    return 32.1;
+  }, [plannedHourlyTarget, targetOutput, dailyAvailableTimeSecs]);
 
   // Delivery countdown metrics for selected order
   const deliveryCountdown = useMemo(() => {
@@ -454,9 +428,33 @@ export function ProductionMonitoringPage() {
 
   const totalLineSMVSecs = useMemo(() => plannedStations.reduce((sum, s) => sum + s.smvSeconds, 0), [plannedStations]);
   const totalAllocatedOps = useMemo(() => plannedStations.reduce((sum, s) => sum + Math.max(1, s.operatorIds.length), 0), [plannedStations]);
-  const plannedLineEfficiency = (totalAllocatedOps > 0 && taktTimeSecs > 0)
-    ? Math.min(100, Math.round((totalLineSMVSecs / (totalAllocatedOps * taktTimeSecs)) * 100 * 10) / 10)
-    : 85.0;
+
+  const maxStationCycleTime = useMemo(() => {
+    if (plannedStations.length === 0) return 0;
+    return Math.max(...plannedStations.map(s => s.smvSeconds / Math.max(1, s.operatorIds.length)));
+  }, [plannedStations]);
+
+  const plannedEfficiency = useMemo(() => {
+    return Number(linePlan?.plannedEfficiency || activeLineDesign?.plannedEfficiency || 85);
+  }, [linePlan, activeLineDesign]);
+
+  const lineBalanceEfficiency = useMemo(() => {
+    if (activeLineDesign?.lineBalanceEfficiency) return Number(activeLineDesign.lineBalanceEfficiency);
+    if (totalAllocatedOps > 0 && maxStationCycleTime > 0) {
+      return Math.min(100, Math.round((totalLineSMVSecs / (totalAllocatedOps * maxStationCycleTime)) * 100));
+    }
+    return 73;
+  }, [activeLineDesign, totalAllocatedOps, maxStationCycleTime, totalLineSMVSecs]);
+
+  const designedPitchTimeSecs = useMemo(() => {
+    if (activeLineDesign?.designedPitchSecs && Number(activeLineDesign.designedPitchSecs) > 0) {
+      return Number(activeLineDesign.designedPitchSecs);
+    }
+    if (maxStationCycleTime > 0) {
+      return Math.round(maxStationCycleTime * 10) / 10;
+    }
+    return 27.0;
+  }, [activeLineDesign, maxStationCycleTime]);
 
   // Station Execution Matrix with Live Actual Performance from Floor Logs & Flow Precedence
   const stationLiveExecution = useMemo(() => {
@@ -494,14 +492,16 @@ export function ProductionMonitoringPage() {
     });
 
     // 3. Flow-bound constraint: Station k output cannot exceed predecessor Station k-1 output
-    let maxPrevGood = Infinity;
+    let prevGood = Infinity;
+    const stationExecutionResults = [];
 
-    return sorted.map((st, idx) => {
+    for (let idx = 0; idx < sorted.length; idx++) {
+      const st = sorted[idx];
       const opIdStr = String(st.operationId);
       const raw = rawMap.get(st.stationNum) || { good: 0, reject: 0, workMins: 0 };
-      const boundedGood = Math.min(raw.good, maxPrevGood);
-      const queueWip = idx > 0 && maxPrevGood !== Infinity ? Math.max(0, maxPrevGood - boundedGood) : 0;
-      maxPrevGood = boundedGood;
+      const boundedGood = Math.min(raw.good, prevGood);
+      const queueWip = idx > 0 && prevGood !== Infinity ? Math.max(0, prevGood - boundedGood) : 0;
+      prevGood = boundedGood;
 
       const allocatedOps = Math.max(1, st.operatorIds.length);
       const plannedCycleSecs = st.smvSeconds / allocatedOps;
@@ -519,15 +519,20 @@ export function ProductionMonitoringPage() {
       const operatorDetails = st.operatorIds.map(id => {
         const op = operators.find(o => String(o.id) === String(id));
         const assessment = skillAssessments.find(a => String(a.operatorId) === String(id) && String(a.operationId) === opIdStr);
+        let rating = assessment?.rating || null;
+        if (assessment?.cycleTimeSeconds && assessment.cycleTimeSeconds > 0) {
+          const targetOp = operations.find(o => String(o.id) === opIdStr);
+          rating = cycleTimeToRating(assessment.cycleTimeSeconds, targetOp?.name, targetOp?.standardSmv);
+        }
         return {
           id,
           name: op?.name || `Op #${id}`,
           empId: op?.employeeId || "EMP",
-          rating: assessment?.rating || null,
+          rating,
         };
       });
 
-      return {
+      stationExecutionResults.push({
         ...st,
         allocatedOps,
         plannedCycleSecs,
@@ -542,9 +547,11 @@ export function ProductionMonitoringPage() {
         isWipBottleneck,
         isBottleneck,
         operatorDetails,
-      };
-    });
-  }, [plannedStations, timesheetData, operators, skillAssessments, taktTimeSecs]);
+      });
+    }
+
+    return stationExecutionResults;
+  }, [plannedStations, timesheetData, operators, skillAssessments, taktTimeSecs, operations]);
 
   // End-Line Throughput Output (Theory of Constraints minimum completed pieces)
   const endLineOutput = useMemo(() => {
@@ -562,33 +569,6 @@ export function ProductionMonitoringPage() {
   }, [stationLiveExecution, filteredTimesheet]);
 
   const remainingShiftBalance = Math.max(0, targetOutput - endLineOutput);
-
-  const dynamicRemainingTaktSecs = useMemo(() => {
-    const balance = remainingShiftBalance > 0 ? remainingShiftBalance : 1;
-    if (shiftScheduleMetrics.liveShiftAvailableSecs <= 0) return 0;
-    return Math.round((shiftScheduleMetrics.liveShiftAvailableSecs / balance) * 100) / 100;
-  }, [shiftScheduleMetrics.liveShiftAvailableSecs, remainingShiftBalance]);
-
-  const effectiveTaktSecs = dynamicRemainingTaktSecs > 0 ? dynamicRemainingTaktSecs : taktTimeSecs;
-  const dynamicPitchTimeSecs = effectiveTaktSecs > 0 ? Math.round((effectiveTaktSecs * (plannedLineEfficiency / 100)) * 100) / 100 : 0;
-  const effectiveHourlyTarget = effectiveTaktSecs > 0 ? Math.round((3600 / effectiveTaktSecs) * 10) / 10 : hourlyTarget;
-
-  // Hourly Pitch Output Handler
-  const handleOutputChange = (hour: number, value: string) => {
-    if (value === "") {
-      setHourlyOutput(prev => {
-        const next = { ...prev };
-        delete next[hour];
-        return next;
-      });
-      return;
-    }
-    const num = Math.max(0, parseInt(value, 10));
-    setHourlyOutput(prev => ({
-      ...prev,
-      [hour]: isNaN(num) ? 0 : num
-    }));
-  };
 
   // Active columns to render based on shift timings
   const displayedHours = useMemo(() => {
@@ -916,33 +896,39 @@ export function ProductionMonitoringPage() {
       </div>
 
       {/* ── Navigation Tabs ────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-[#E6DDCE] pb-2">
+      <div className="bg-[#EFE9DF] p-1.5 rounded-2xl border border-[#E0D5C5] inline-flex items-center gap-2 shadow-xs">
         <button
           type="button"
           onClick={() => setActiveTab("24h-timesheet")}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+          className={`flex items-center gap-2.5 px-5 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === "24h-timesheet"
-              ? "bg-white text-[#221912] border border-[#E6DDCE] shadow-2xs"
-              : "text-[#8C7E6E] hover:text-[#221912]"
+              ? "bg-white text-[#9C5B3C] border border-[#E6DDCE] shadow-md shadow-[#9C5B3C]/10"
+              : "text-[#4A3E35] hover:text-[#221912] hover:bg-white/60"
           }`}
         >
-          <Clock className="w-4 h-4 text-[#9C5B3C]" />
-          <span>24-Hour Operator Timesheet</span>
+          <Clock className={`w-4 h-4 ${activeTab === "24h-timesheet" ? "text-[#9C5B3C]" : "text-[#7C6E5E]"}`} />
+          <span className="tracking-wide">24-Hour Operator Timesheet</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab("line-monitoring")}
-          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+          className={`flex items-center gap-2.5 px-5 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
             activeTab === "line-monitoring"
-              ? "bg-white text-[#221912] border border-[#E6DDCE] shadow-2xs"
-              : "text-[#8C7E6E] hover:text-[#221912]"
+              ? "bg-white text-[#9C5B3C] border border-[#E6DDCE] shadow-md shadow-[#9C5B3C]/10"
+              : "text-[#4A3E35] hover:text-[#221912] hover:bg-white/60"
           }`}
         >
-          <Gauge className="w-4 h-4 text-[#9C5B3C]" />
-          <span>Live Line Balancing & Execution Monitor</span>
+          <Gauge className={`w-4 h-4 ${activeTab === "line-monitoring" ? "text-[#9C5B3C]" : "text-[#7C6E5E]"}`} />
+          <span className="tracking-wide">Live Line Balancing &amp; Execution Monitor</span>
           {linePlan && (
-            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-mono px-1.5 py-0.2 rounded font-bold">
+            <span
+              className={`text-[10.5px] font-mono px-2 py-0.5 rounded-md font-bold border ${
+                activeTab === "line-monitoring"
+                  ? "bg-[#FAF7F2] text-[#9C5B3C] border-[#E6DDCE]"
+                  : "bg-emerald-100 text-emerald-800 border-emerald-300"
+              }`}
+            >
               Plan #{linePlan.id}
             </span>
           )}
@@ -992,32 +978,36 @@ export function ProductionMonitoringPage() {
               </div>
 
               {/* Shift Filter */}
-              <select
-                value={selectedShiftId}
-                onChange={e => setSelectedShiftId(e.target.value)}
-                className="px-3 py-2 bg-white border border-[#E6DDCE] rounded-xl text-xs font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer shrink-0"
-              >
-                <option value="ALL">All Shifts (24 Hours)</option>
-                {shifts.map(s => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.shiftName} ({s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)})
-                  </option>
-                ))}
-              </select>
+              <div className="w-56 shrink-0">
+                <CustomSelect
+                  value={selectedShiftId}
+                  onChange={val => setSelectedShiftId(val)}
+                  options={[
+                    { value: "ALL", label: "All Shifts (24 Hours)" },
+                    ...shifts.map(s => ({
+                      value: String(s.id),
+                      label: `${s.shiftName} (${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)})`
+                    }))
+                  ]}
+                  size="md"
+                />
+              </div>
 
               {/* Line Filter */}
-              <select
-                value={selectedLineId}
-                onChange={e => setSelectedLineId(e.target.value)}
-                className="px-3 py-2 bg-white border border-[#E6DDCE] rounded-xl text-xs font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer shrink-0"
-              >
-                <option value="ALL">All Physical Lines</option>
-                {lines.map(l => (
-                  <option key={l.id} value={String(l.id)}>
-                    {l.lineCode} · {l.lineName}
-                  </option>
-                ))}
-              </select>
+              <div className="w-56 shrink-0">
+                <CustomSelect
+                  value={selectedLineId}
+                  onChange={val => setSelectedLineId(val)}
+                  options={[
+                    { value: "ALL", label: "All Physical Lines" },
+                    ...lines.map(l => ({
+                      value: String(l.id),
+                      label: `${l.lineCode} · ${l.lineName}`
+                    }))
+                  ]}
+                  size="md"
+                />
+              </div>
             </div>
 
             {/* Right Controls: Search Box */}
@@ -1565,9 +1555,6 @@ export function ProductionMonitoringPage() {
                     {linePlan ? `Active Plan Linked (#${linePlan.id})` : "No Saved Plan Found"}
                   </span>
                 </div>
-                <p className="text-xs text-[#8C7E6E] mt-0.5">
-                  Synchronized live with Planned Lines & Balancing: compare Planned Takt Time and Station Capacity with real-time floor piece output
-                </p>
               </div>
 
               <div className="flex items-center gap-2.5 flex-wrap">
@@ -1587,10 +1574,9 @@ export function ProductionMonitoringPage() {
               {/* 1. Order Selector */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-[#221912] block">Production Order (PO)</label>
-                <select
+                <CustomSelect
                   value={selectedOrderId}
-                  onChange={e => {
-                    const newOrderId = e.target.value;
+                  onChange={newOrderId => {
                     setSelectedOrderId(newOrderId);
                     if (newOrderId) {
                       const matchingPlan = allLinePlans.find(p => String(p.orderId) === String(newOrderId));
@@ -1599,15 +1585,17 @@ export function ProductionMonitoringPage() {
                       }
                     }
                   }}
-                  className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-                >
-                  <option value="">— Select Production Order —</option>
-                  {orders.map(o => (
-                    <option key={o.id} value={o.id}>
-                      {o.orderNo} · {o.buyer || "General"} ({o.totalQuantity} pcs)
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: "— Select Production Order —" },
+                    ...orders.map(o => ({
+                      value: String(o.id),
+                      label: o.orderNo,
+                      sublabel: o.buyer || "General",
+                      badge: `${o.totalQuantity.toLocaleString()} pcs`
+                    }))
+                  ]}
+                  size="lg"
+                />
                 {selectedOrder && (
                   <span className="text-[11px] text-slate-500 block truncate font-medium">
                     Due: <strong>{deliveryCountdown.formatted}</strong> ({deliveryCountdown.days}d left)
@@ -1618,10 +1606,9 @@ export function ProductionMonitoringPage() {
               {/* 2. Sewing Line */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-[#221912] block">Physical Sewing Line</label>
-                <select
+                <CustomSelect
                   value={selectedLineId}
-                  onChange={e => {
-                    const newLineId = e.target.value;
+                  onChange={newLineId => {
                     setSelectedLineId(newLineId);
                     if (newLineId !== "ALL") {
                       const matchingPlan = allLinePlans.find(p => String(p.lineId) === String(newLineId));
@@ -1630,15 +1617,15 @@ export function ProductionMonitoringPage() {
                       }
                     }
                   }}
-                  className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-                >
-                  <option value="ALL">All Lines</option>
-                  {lines.map(l => (
-                    <option key={l.id} value={String(l.id)}>
-                      {l.lineCode} · {l.lineName}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "ALL", label: "All Lines" },
+                    ...lines.map(l => ({
+                      value: String(l.id),
+                      label: `${l.lineCode} · ${l.lineName}`
+                    }))
+                  ]}
+                  size="lg"
+                />
                 {selectedLine && (
                   <span className="text-[11px] text-slate-500 block truncate">
                     {selectedLine.floor || "Main Floor"} · {selectedLine.supervisorName || "Supervisor: Unassigned"}
@@ -1649,23 +1636,18 @@ export function ProductionMonitoringPage() {
               {/* 3. Shift */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-[#221912] block">Active Shift</label>
-                <select
+                <CustomSelect
                   value={selectedShiftId}
-                  onChange={e => setSelectedShiftId(e.target.value)}
-                  className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-                >
-                  <option value="ALL">All Shifts</option>
-                  {shifts.map(s => (
-                    <option key={s.id} value={String(s.id)}>
-                      {s.shiftName} ({s.startTime.slice(0, 5)}–{s.endTime.slice(0, 5)})
-                    </option>
-                  ))}
-                </select>
-                {activeShiftObj && (
-                  <span className="text-[11px] text-slate-500 block truncate font-mono">
-                    Net Work: <strong>{netWorkingMins}m</strong> (Breaks: {breakDurationMins}m)
-                  </span>
-                )}
+                  onChange={val => setSelectedShiftId(val)}
+                  options={[
+                    { value: "ALL", label: "All Shifts" },
+                    ...shifts.map(s => ({
+                      value: String(s.id),
+                      label: `${s.shiftName} (${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)})`
+                    }))
+                  ]}
+                  size="lg"
+                />
               </div>
 
               {/* 4. Monitoring Date */}
@@ -1677,9 +1659,6 @@ export function ProductionMonitoringPage() {
                   onChange={e => setSelectedDate(e.target.value)}
                   className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-mono font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
                 />
-                <span className="text-[11px] text-[#77876F] font-bold block truncate">
-                  Net: {netWorkingMins} min ({dailyNetWorkingSecs}s)
-                </span>
               </div>
             </div>
           </div>
@@ -1704,33 +1683,33 @@ export function ProductionMonitoringPage() {
             <>
               {/* ── 2. Live Calculation Summary Cards (Synced with Planned Lines & Balancing) ── */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Card 1: LIVE DYNAMIC TAKT TIME */}
+                {/* Card 1: TAKT & PITCH PACING */}
                 <div className="bg-[#F6F1E8] border border-[#E6DDCE] rounded-2xl p-5 shadow-[0_1px_3px_rgba(34,25,18,0.05)] flex flex-col justify-between min-h-[135px]">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#9C5B3C]">
-                        LIVE DYNAMIC TAKT & PITCH
+                        LINE PACING & TAKT
                       </span>
                     </div>
                     <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-[#9C5B3C] bg-white px-2.5 py-0.5 rounded-lg border border-[#E6DDCE] shrink-0 shadow-2xs">
-                      Pitch: {dynamicPitchTimeSecs > 0 ? dynamicPitchTimeSecs.toFixed(2) : "0.00"}s
+                      Pitch: {designedPitchTimeSecs.toFixed(1)}s
                     </span>
                   </div>
 
                   <div className="my-2 flex items-baseline gap-2 flex-wrap">
                     <span className="text-3xl font-black text-[#221912] font-mono tracking-tight">
-                      {effectiveTaktSecs > 0 ? effectiveTaktSecs.toFixed(2) : "0.00"}
+                      {taktTimeSecs.toFixed(1)}
                     </span>
                     <span className="text-xs font-bold text-[#9C5B3C]">sec / pc</span>
                   </div>
 
                   <div className="text-[10.5px] text-[#8C7E6E] font-mono border-t border-[#E6DDCE]/60 pt-1.5 truncate flex items-center justify-between">
                     <span>
-                      Pitch: <strong className="text-[#221912] font-bold">{dynamicPitchTimeSecs.toFixed(2)}s</strong> (@ {plannedLineEfficiency}% Eff)
+                      Pitch: <strong className="text-[#221912] font-bold">{designedPitchTimeSecs.toFixed(1)}s</strong> (@ {plannedEfficiency}% Plan Eff)
                     </span>
                     <span className="text-emerald-700 font-bold font-sans">
-                      {endLineOutput > 0 ? `Done: ${endLineOutput} pcs (Bal: ${remainingShiftBalance})` : `Target: ${targetOutput} pcs`}
+                      Target: {targetOutput} pcs
                     </span>
                   </div>
                 </div>
@@ -1743,7 +1722,7 @@ export function ProductionMonitoringPage() {
                     </span>
                     <span className="inline-flex items-center gap-1 text-[10.5px] font-mono font-bold text-blue-700 bg-blue-50/90 px-2.5 py-1 rounded-lg border border-blue-200/80 shadow-2xs">
                       <TrendingUp className="w-3 h-3 text-blue-600" />
-                      <span>{effectiveHourlyTarget} pcs/hr</span>
+                      <span>{plannedHourlyTarget} pcs/hr</span>
                     </span>
                   </div>
 
@@ -1770,7 +1749,7 @@ export function ProductionMonitoringPage() {
                     </span>
                     <span className="inline-flex items-center gap-1 text-[10.5px] font-mono font-bold text-slate-700 bg-slate-100/90 px-2.5 py-1 rounded-lg border border-slate-200/80 shadow-2xs">
                       <Layers className="w-3 h-3 text-slate-500" />
-                      <span>{plannedStations.length} Operations</span>
+                      <span>{plannedStations.length} Operations ({totalAllocatedOps} Ops)</span>
                     </span>
                   </div>
 
@@ -1778,11 +1757,11 @@ export function ProductionMonitoringPage() {
                     <span className="text-3xl font-black text-[#221912] font-mono">
                       {totalLineSMVSecs.toFixed(1)}
                     </span>
-                    <span className="text-xs font-semibold text-[#8C7E6E] font-mono">sec ({(totalLineSMVSecs / 60).toFixed(2)} min)</span>
+                    <span className="text-xs font-semibold text-[#8C7E6E] font-mono">sec ({(totalLineSMVSecs / 60).toFixed(2)} min SAM)</span>
                   </div>
 
                   <div className="text-[10.5px] text-[#8C7E6E] flex items-center justify-between border-t border-slate-100 pt-1.5">
-                    <span>Pitch: {(totalLineSMVSecs / Math.max(1, plannedStations.length)).toFixed(1)}s</span>
+                    <span>Pitch: {designedPitchTimeSecs.toFixed(1)}s</span>
                     <span>Stations: {plannedStations.length}</span>
                   </div>
                 </div>
@@ -1794,16 +1773,14 @@ export function ProductionMonitoringPage() {
                       END-LINE FLOW & PROGRESS
                     </span>
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10.5px] font-mono font-bold shadow-2xs border ${
-                      plannedLineEfficiency >= 85
+                      plannedEfficiency >= 80
                         ? "bg-emerald-50 text-emerald-800 border-emerald-200/90"
-                        : plannedLineEfficiency >= 70
-                        ? "bg-sky-50 text-sky-800 border-sky-200/90"
-                        : "bg-rose-50 text-rose-800 border-rose-200/90"
+                        : "bg-sky-50 text-sky-800 border-sky-200/90"
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${
-                        plannedLineEfficiency >= 85 ? "bg-emerald-500" : plannedLineEfficiency >= 70 ? "bg-sky-500" : "bg-rose-500"
+                        plannedEfficiency >= 80 ? "bg-emerald-500" : "bg-sky-500"
                       }`} />
-                      <span>{plannedLineEfficiency}% Eff</span>
+                      <span>{plannedEfficiency}% Plan Eff · {lineBalanceEfficiency}% Bal</span>
                     </span>
                   </div>
 
@@ -1827,7 +1804,6 @@ export function ProductionMonitoringPage() {
               <DataCard noPad>
                 <DataCardHeader 
                   title="Station Workstation Allocations & Live Execution Tracking" 
-                  subtitle="Live performance comparison between Planned Balance (SMV, Machine, Allocated Operator) and Measured Floor Production" 
                 />
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse text-xs" style={{ minWidth: "1100px" }}>

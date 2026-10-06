@@ -21,6 +21,7 @@ import * as XLSX from "xlsx";
 
 import { Button } from "../../components/ui/Button";
 import { PageHeader, DataCard, EmptyState, SkeletonTable } from "../../components/ui/PremiumUI";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 import { Modal } from "../../components/ui/Modal";
 
 import { bulletinsApi, type OperationBulletin, type CreateBulletinDTO, type BulletinStatus } from "../../features/bulletins/api";
@@ -414,30 +415,36 @@ export function BulletinsPage() {
             </div>
 
             {/* Style Filter Dropdown */}
-            <select
-              value={styleFilter}
-              onChange={(e) => setStyleFilter(e.target.value)}
-              className="text-xs font-semibold px-3 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer shadow-2xs shrink-0"
-            >
-              <option value="ALL">All Garment Styles</option>
-              {styles.map(s => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.styleNo} {s.buyer ? `(${s.buyer})` : ""}
-                </option>
-              ))}
-            </select>
+            <div className="w-48 shrink-0">
+              <CustomSelect
+                value={styleFilter}
+                onChange={val => setStyleFilter(val)}
+                options={[
+                  { value: "ALL", label: "All Garment Styles" },
+                  ...styles.map(s => ({
+                    value: String(s.id),
+                    label: s.styleNo,
+                    sublabel: s.buyer || undefined
+                  }))
+                ]}
+                size="sm"
+              />
+            </div>
 
             {/* Sort Selector */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="text-xs font-semibold px-3 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer shadow-2xs shrink-0"
-            >
-              <option value="CREATED_DESC">Latest First</option>
-              <option value="CODE_ASC">Code (A to Z)</option>
-              <option value="SMV_DESC">SMV (High to Low)</option>
-              <option value="SMV_ASC">SMV (Low to High)</option>
-            </select>
+            <div className="w-44 shrink-0">
+              <CustomSelect
+                value={sortBy}
+                onChange={val => setSortBy(val as any)}
+                options={[
+                  { value: "CREATED_DESC", label: "Latest First" },
+                  { value: "CODE_ASC", label: "Code (A to Z)" },
+                  { value: "SMV_DESC", label: "SMV (High to Low)" },
+                  { value: "SMV_ASC", label: "SMV (Low to High)" }
+                ]}
+                size="sm"
+              />
+            </div>
           </div>
         </div>
 

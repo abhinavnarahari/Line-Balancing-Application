@@ -1,5 +1,5 @@
-import React from "react";
-import { Target, Users, Sparkles, ChevronRight, Database, Layers } from "lucide-react";
+import React, { useState } from "react";
+import { Compass, Target, Users, Star, Layers, Database, Sparkles, ChevronRight, BarChart3, AlertOctagon, HelpCircle } from "lucide-react";
 import type { ChatContext } from "./types";
 
 interface SuggestedQuestionsProps {
@@ -8,96 +8,203 @@ interface SuggestedQuestionsProps {
 }
 
 interface PromptCategory {
-  title: string;
+  id: string;
+  label: string;
   icon: React.ReactNode;
-  prompts: string[];
+  prompts: { title: string; subtitle?: string; query: string }[];
 }
 
 export const SuggestedQuestions: React.FC<SuggestedQuestionsProps> = ({ context, onSelectPrompt }) => {
-  const page = context?.page || "";
-
-  // Dynamic context-aware categories prioritized by active screen
-  const isLineOrBalancing = page.toLowerCase().includes("line") || page.toLowerCase().includes("balance");
-  const isBulletinOrStyle = page.toLowerCase().includes("bulletin") || page.toLowerCase().includes("style") || page.toLowerCase().includes("operation");
-  const isOperatorOrSkill = page.toLowerCase().includes("operator") || page.toLowerCase().includes("skill") || page.toLowerCase().includes("attendance");
+  const [activeCategory, setActiveCategory] = useState<string>("featured");
 
   const categories: PromptCategory[] = [
     {
-      title: "🏛️ Master Data & Factory Inventory",
-      icon: <Database className="h-3.5 w-3.5 text-[#9C5B3C]" />,
+      id: "featured",
+      label: "🚀 App How-To Guides",
+      icon: <Compass className="h-3.5 w-3.5 text-blue-600" />,
       prompts: [
-        "Show Master Data Overview",
-        "List all 8 garment styles and buyers",
-        "Show machine inventory & maintenance status",
-        "What are the working shifts & break hours?",
+        {
+          title: "How does this application work?",
+          subtitle: "Complete 6-phase Garment IE workflow from Master Data to Live Floor Monitoring",
+          query: "How does this application work?",
+        },
+        {
+          title: "How do I balance a line in this app?",
+          subtitle: "Step-by-step procedure: Fixed Delivery Date vs Fixed Shift Target balancing",
+          query: "How do I balance a line in this app?",
+        },
+        {
+          title: "How does the 1–5 Star Skill Matrix work?",
+          subtitle: "Proficiency hierarchy, speed/quality scoring against Standard SMVs",
+          query: "How does the 1–5 Skill Matrix work?",
+        },
+        {
+          title: "How do I add and manage operators?",
+          subtitle: "Workforce directory setup, department assignments, and skill ratings",
+          query: "How do I add an operator?",
+        },
       ],
     },
     {
-      title: isOperatorOrSkill ? "★ Operators & Skill Matrix" : "👥 Workforce & Skill Matrix",
-      icon: <Users className="h-3.5 w-3.5 text-blue-600" />,
+      id: "balancing",
+      label: "⚡ Line Balancing",
+      icon: <Target className="h-3.5 w-3.5 text-amber-600" />,
       prompts: [
-        "Who are the floater operators?",
-        "Who is the highest rated operator for OP-001?",
-        "Show certified operators for Bottom Hem",
-        "Show profile and skill matrix for EMP-001",
+        {
+          title: "What is line balancing?",
+          subtitle: "Core objectives, Pitch Time vs Takt Time formulas, and bottleneck elimination",
+          query: "What is line balancing?",
+        },
+        {
+          title: "Calculate line balancing for 10 operators",
+          subtitle: "Instant IE simulation for OB-POLO-800 at 85% efficiency",
+          query: "Calculate line balancing for 10 operators",
+        },
+        {
+          title: "Which operations exceed pitch time?",
+          subtitle: "Identify bottleneck operations that require parallel workstations",
+          query: "Which operations exceed pitch time?",
+        },
+        {
+          title: "What is the takt time for 120 pcs/hr?",
+          subtitle: "Determine required line pacing for shift target output",
+          query: "What is the takt time for 120 pcs/hr?",
+        },
       ],
     },
     {
-      title: isBulletinOrStyle ? "★ Bulletins & SMVs" : "📋 Operation Bulletins & SMVs",
-      icon: <Layers className="h-3.5 w-3.5 text-indigo-600" />,
+      id: "workforce",
+      label: "👥 Operators & Skills",
+      icon: <Users className="h-3.5 w-3.5 text-indigo-600" />,
       prompts: [
-        "Show details of OB-POLO-800",
-        "List all 5 Operation Bulletins and SMVs",
-        "What are the WIP buffer thresholds for Polo?",
-        "List all 18 sewing operations",
+        {
+          title: "Who are the floater operators?",
+          subtitle: "List multi-skilled operators available for bottleneck deployment",
+          query: "Who are the floater operators?",
+        },
+        {
+          title: "Show profile and skill matrix for EMP-001",
+          subtitle: "Detailed 1–5 rating breakdown for Priya Sharma across all operations",
+          query: "Show profile and skill matrix for EMP-001",
+        },
+        {
+          title: "Who is the highest rated operator for OP-001?",
+          subtitle: "Find top-performing operators certified for Collar Make",
+          query: "Who is the highest rated operator for OP-001?",
+        },
+        {
+          title: "How do I deploy floaters to bottlenecks?",
+          subtitle: "Step-by-step guide for Immediate Actions floater intervention",
+          query: "How do I deploy floaters to bottlenecks?",
+        },
       ],
     },
     {
-      title: isLineOrBalancing ? "★ Line Balancing & Bottlenecks" : "⚡ IE Balancing & Takt Times",
-      icon: <Target className="h-3.5 w-3.5 text-emerald-600" />,
+      id: "bulletins",
+      label: "📋 Operation Bulletins",
+      icon: <Layers className="h-3.5 w-3.5 text-emerald-600" />,
       prompts: [
-        "Calculate line balancing for 10 operators",
-        "Which operations exceed pitch time?",
-        "What is the takt time for 120 pcs/hr?",
-        "Show hourly production output & variance",
+        {
+          title: "Show details of OB-POLO-800",
+          subtitle: "Polo T-Shirt routing: 8 operations, SMVs, and WIP buffer thresholds",
+          query: "Show details of OB-POLO-800",
+        },
+        {
+          title: "What is the standard SMV for Sleeve Attach?",
+          subtitle: "Lookup certified standard SAM values and machine specifications",
+          query: "What is the standard SMV for Sleeve Attach?",
+        },
+        {
+          title: "List all 18 sewing operations",
+          subtitle: "Full operational catalog with machine types and base SMVs",
+          query: "List all 18 sewing operations",
+        },
+        {
+          title: "List all 5 Operation Bulletins and SMVs",
+          subtitle: "Catalog of active styles with total assembly standard minutes",
+          query: "List all 5 Operation Bulletins and SMVs",
+        },
+      ],
+    },
+    {
+      id: "masters",
+      label: "🏛️ Master Catalog",
+      icon: <Database className="h-3.5 w-3.5 text-teal-600" />,
+      prompts: [
+        {
+          title: "Show Master Data Overview",
+          subtitle: "Complete factory inventory: Lines, Machines, Shifts, Operators, Styles",
+          query: "Show Master Data Overview",
+        },
+        {
+          title: "Show me all lines",
+          subtitle: "Configured sewing lines, floor locations, and daily capacities",
+          query: "Show me all lines",
+        },
+        {
+          title: "List all garment styles and buyers",
+          subtitle: "Nike, Zara, Tommy Hilfiger brand specs and active purchase orders",
+          query: "List all 8 garment styles and buyers",
+        },
+        {
+          title: "Tell me about the dashboard",
+          subtitle: "Executive Overview vs Line Supervisor vs Plant Management dashboards",
+          query: "Tell me about the dashboard",
+        },
       ],
     },
   ];
 
+  const currentCategory = categories.find((c) => c.id === activeCategory) || categories[0];
+
   return (
-    <div className="w-full space-y-3 my-2">
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-1.5 text-xs font-bold text-[#8C7E6E] uppercase tracking-wider">
-          <Sparkles className="h-3.5 w-3.5 text-[#9C5B3C]" />
-          <span>Quick Manufacturing Inquiries</span>
-        </div>
-        <span className="text-[10px] text-[#A6998A] font-medium">Click to ask instantly</span>
+    <div className="w-full space-y-3.5 my-2">
+      {/* Category Pills Bar */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+        {categories.map((cat) => (
+          <button
+            key={cat.id}
+            type="button"
+            onClick={() => setActiveCategory(cat.id)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 ${
+              activeCategory === cat.id
+                ? "bg-[#9C5B3C] text-white shadow-xs"
+                : "bg-white hover:bg-[#F6F1E8] text-[#8B4E32] border border-[#E6DDCE]"
+            }`}
+          >
+            <span>{cat.label}</span>
+          </button>
+        ))}
       </div>
 
+      {/* Prompts Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-        {categories.map((cat, idx) => (
-          <div
-            key={idx}
-            className="p-3 bg-white/90 hover:bg-white rounded-xl border border-[#E8E2D9] hover:border-[#9C5B3C]/40 shadow-xs hover:shadow-sm transition-all duration-200"
+        {currentCategory.prompts.map((p, pIdx) => (
+          <button
+            key={pIdx}
+            type="button"
+            onClick={() => onSelectPrompt(p.query)}
+            className="p-3 bg-white hover:bg-[#FAF7F2] rounded-2xl border border-[#E6DDCE] hover:border-[#9C5B3C] shadow-2xs hover:shadow-xs transition-all text-left group cursor-pointer flex flex-col justify-between"
           >
-            <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b border-[#F0EAE1]">
-              {cat.icon}
-              <span className="text-[11px] font-bold text-[#221912]">{cat.title}</span>
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-xs font-bold text-[#221912] group-hover:text-[#9C5B3C] transition-colors">
+                  {p.title}
+                </span>
+                <ChevronRight className="h-3.5 w-3.5 text-stone-400 group-hover:text-[#9C5B3C] group-hover:translate-x-0.5 transition-transform shrink-0" />
+              </div>
+              {p.subtitle && (
+                <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed">
+                  {p.subtitle}
+                </p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
-              {cat.prompts.map((p, pIdx) => (
-                <button
-                  key={pIdx}
-                  onClick={() => onSelectPrompt(p)}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg bg-[#FAF7F2] hover:bg-[#9C5B3C]/10 text-[11px] text-[#4A3B32] hover:text-[#9C5B3C] font-medium transition-colors flex items-center justify-between group cursor-pointer"
-                >
-                  <span className="truncate pr-1">{p}</span>
-                  <ChevronRight className="h-3 w-3 text-[#8C7E6E] group-hover:text-[#9C5B3C] group-hover:translate-x-0.5 transition-transform shrink-0" />
-                </button>
-              ))}
+            <div className="mt-2.5 pt-2 border-t border-[#F2ECE1] flex items-center justify-between text-[10px] text-[#9C5B3C] font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+              <span>Ask SewNexa AI</span>
+              <span>↵</span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>

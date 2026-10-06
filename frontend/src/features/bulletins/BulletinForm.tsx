@@ -14,9 +14,7 @@ import {
   GitBranch,
   ShieldCheck,
   Tag,
-  Sliders,
-  ChevronDown,
-  ChevronUp
+  Sliders
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import type { CreateBulletinDTO, BulletinLine, OperationBulletin, BulletinStatus } from "./api";
@@ -717,7 +715,6 @@ export function BulletinForm({
           {filteredLines.map((line, index) => {
             const isExpanded = expandedLineIndex === index;
             const smvSec = ((Number(line.smv) || 0) * 60).toFixed(1);
-            const sectionObj = GARMENT_SECTIONS.find(s => s.id === line.section) || GARMENT_SECTIONS[3];
 
             return (
               <div 
@@ -815,12 +812,12 @@ export function BulletinForm({
 
                     {/* Machine Dropdown (Populated from Master Data) */}
                     <div className="flex items-center gap-1.5 bg-[#FAF7F2] px-2.5 py-1 rounded-xl border border-[#E6DDCE] shadow-2xs flex-1 min-w-[200px]" title="Machine equipment required">
-                      <Cpu className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <Cpu className="w-3.5 h-3.5 text-[#9C5B3C] shrink-0" />
                       <span className="text-[10px] font-bold text-[#8C7E6E] uppercase shrink-0">Machine:</span>
                       <select
                         value={line.machineType || ""}
                         onChange={(e) => handleUpdateLine(index, { machineType: e.target.value })}
-                        className="w-full bg-white px-2 py-0.5 rounded border border-[#E6DDCE] text-xs font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer truncate"
+                        className="w-full bg-white px-2 py-0.5 rounded-lg border border-[#E6DDCE] text-xs font-bold text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 cursor-pointer truncate transition-colors"
                       >
                         <option value="" disabled>Select Machine...</option>
 
@@ -870,12 +867,12 @@ export function BulletinForm({
 
                     {/* Skill Rating (1-5) */}
                     <div className="flex items-center gap-1.5 bg-[#FAF7F2] px-2.5 py-1 rounded-xl border border-[#E6DDCE] shadow-2xs" title="Skill Rating required">
-                      <ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#9C5B3C] shrink-0" />
                       <span className="text-[10px] font-bold text-[#8C7E6E] uppercase">Skill:</span>
                       <select
                         value={line.skillRatingRequired}
                         onChange={(e) => handleUpdateLine(index, { skillRatingRequired: parseInt(e.target.value, 10) as any })}
-                        className="bg-white px-2 py-0.5 rounded border border-[#E6DDCE] font-bold text-amber-800 text-xs focus:outline-hidden cursor-pointer"
+                        className="bg-white px-2 py-0.5 rounded-lg border border-[#E6DDCE] font-bold text-[#221912] text-xs hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 cursor-pointer transition-colors"
                       >
                         <option value={1}>★ 1 Basic</option>
                         <option value={2}>★★ 2 Semi-Skilled</option>
@@ -886,16 +883,29 @@ export function BulletinForm({
                     </div>
 
                     {/* WIP Threshold input */}
-                    <div className="flex items-center gap-1.5 bg-[#FAF7F2] px-2.5 py-1 rounded-xl border border-[#E6DDCE] shadow-2xs" title="WIP Buffer Threshold (in pieces)">
-                      <Layers className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <div className="flex items-center gap-1.5 bg-[#FAF7F2] px-2.5 py-1 rounded-xl border border-[#E6DDCE] shadow-2xs" title="WIP Buffer Threshold (in pieces, minimum 0)">
+                      <Layers className="w-3.5 h-3.5 text-[#9C5B3C] shrink-0" />
                       <span className="text-[10px] font-bold text-[#8C7E6E] uppercase">WIP Limit:</span>
                       <input
                         type="number"
-                        min="1"
+                        min="0"
                         step="1"
-                        value={line.wipThreshold ?? 20}
-                        onChange={(e) => handleUpdateLine(index, { wipThreshold: parseInt(e.target.value, 10) || 20 })}
-                        className="w-10 bg-white px-1.5 py-0.5 rounded border border-[#E6DDCE] font-mono font-bold text-amber-900 text-center focus:outline-hidden focus:border-[#9C5B3C]"
+                        value={line.wipThreshold !== undefined ? line.wipThreshold : 20}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "") {
+                            handleUpdateLine(index, { wipThreshold: "" as any });
+                          } else {
+                            const parsed = parseInt(val, 10);
+                            handleUpdateLine(index, { wipThreshold: isNaN(parsed) ? 0 : Math.max(0, parsed) });
+                          }
+                        }}
+                        onBlur={() => {
+                          if (line.wipThreshold == null || (line.wipThreshold as any) === "" || isNaN(Number(line.wipThreshold))) {
+                            handleUpdateLine(index, { wipThreshold: 0 });
+                          }
+                        }}
+                        className="w-14 bg-white px-1.5 py-0.5 rounded-lg border border-[#E6DDCE] font-mono font-bold text-[#9C5B3C] text-center hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 transition-colors"
                       />
                       <span className="font-mono text-[11px] font-bold text-[#8C7E6E]">pcs</span>
                     </div>
@@ -912,7 +922,7 @@ export function BulletinForm({
                         <select
                           value={line.section}
                           onChange={(e) => handleUpdateLine(index, { section: e.target.value })}
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl font-bold text-[#221912]"
+                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl font-bold text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 cursor-pointer transition-colors"
                         >
                           {GARMENT_SECTIONS.map(s => (
                             <option key={s.id} value={s.id}>{s.label}</option>
@@ -930,7 +940,7 @@ export function BulletinForm({
                           value={line.predecessorIds || ""}
                           onChange={(e) => handleUpdateLine(index, { predecessorIds: e.target.value })}
                           placeholder="e.g. 1, 2, 4"
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl font-mono text-xs text-[#221912]"
+                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl font-mono text-xs text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 transition-colors"
                           title="Comma-separated sequence numbers of prior operations that must be completed before this step"
                         />
                       </div>
@@ -941,7 +951,7 @@ export function BulletinForm({
                         <select
                           value={line.stitchType || ""}
                           onChange={(e) => handleUpdateLine(index, { stitchType: e.target.value })}
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs font-semibold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer"
+                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs font-semibold text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 cursor-pointer transition-colors"
                         >
                           <option value="">Select Stitch Type (Optional)</option>
                           {STITCH_TYPES.map(st => (
@@ -956,7 +966,7 @@ export function BulletinForm({
                         <select
                           value={line.seamType || ""}
                           onChange={(e) => handleUpdateLine(index, { seamType: e.target.value })}
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs font-semibold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer"
+                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs font-semibold text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 cursor-pointer transition-colors"
                         >
                           <option value="">Select Seam Type (Optional)</option>
                           {SEAM_TYPES.map(st => (
@@ -975,7 +985,7 @@ export function BulletinForm({
                           value={line.attachmentType || ""}
                           onChange={(e) => handleUpdateLine(index, { attachmentType: e.target.value })}
                           placeholder="e.g. 1/4 inch Hemmer Folder, Edge Guide"
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs text-[#221912]"
+                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 transition-colors"
                         />
                       </div>
 
@@ -986,13 +996,26 @@ export function BulletinForm({
                         </label>
                         <input
                           type="number"
-                          min="1"
+                          min="0"
                           step="1"
-                          value={line.wipThreshold ?? 20}
-                          onChange={(e) => handleUpdateLine(index, { wipThreshold: parseInt(e.target.value, 10) || 20 })}
-                          placeholder="e.g. 20"
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl font-mono font-bold text-xs text-[#221912]"
-                          title="Maximum queue pieces before triggering a bottleneck alert on the sewing line"
+                          value={line.wipThreshold !== undefined ? line.wipThreshold : 20}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "") {
+                              handleUpdateLine(index, { wipThreshold: "" as any });
+                            } else {
+                              const parsed = parseInt(val, 10);
+                              handleUpdateLine(index, { wipThreshold: isNaN(parsed) ? 0 : Math.max(0, parsed) });
+                            }
+                          }}
+                          onBlur={() => {
+                            if (line.wipThreshold == null || (line.wipThreshold as any) === "" || isNaN(Number(line.wipThreshold))) {
+                              handleUpdateLine(index, { wipThreshold: 0 });
+                            }
+                          }}
+                          placeholder="0 or higher (e.g. 20)"
+                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl font-mono font-bold text-xs text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 transition-colors"
+                          title="Maximum queue pieces before triggering a bottleneck alert on the sewing line (can be set to 0 or any positive integer)"
                         />
                       </div>
 
@@ -1024,7 +1047,7 @@ export function BulletinForm({
                             <select
                               value={line.splitType || "RATIO"}
                               onChange={(e) => handleUpdateLine(index, { splitType: e.target.value })}
-                              className="px-2 py-1 bg-white border border-[#E6DDCE] rounded-lg text-xs font-mono font-bold"
+                              className="px-2 py-1 bg-white border border-[#E6DDCE] rounded-lg text-xs font-mono font-bold text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 cursor-pointer transition-colors"
                             >
                               <option value="RATIO">Split by Ratio (e.g. 50/50)</option>
                               <option value="DISCRETE">Discrete Split</option>

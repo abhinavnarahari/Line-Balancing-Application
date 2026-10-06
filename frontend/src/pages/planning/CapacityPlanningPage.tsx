@@ -13,11 +13,13 @@ import {
   Pencil,
   Trash2,
   AlertTriangle,
-  X
+  X,
+  Lock
 } from "lucide-react";
 
 import { PageHeader, DataCard } from "../../components/ui/PremiumUI";
 import { Button } from "../../components/ui/Button";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 
 import { capacityApi, type CapacityPlan, type CapacityPlanRequest } from "../../features/capacity/api";
 import { ordersApi, type Order } from "../../features/orders/api";
@@ -459,52 +461,50 @@ export function CapacityPlanningPage() {
             {/* Order Selector */}
             <div className="space-y-1">
               <label className="font-bold text-[#8C7E6E] uppercase text-[10px]">Select Production Order *</label>
-              <select
+              <CustomSelect
                 value={selectedOrderId}
-                onChange={(e) => setSelectedOrderId(e.target.value)}
-                className="w-full px-3 py-2 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-              >
-                {orders.map(o => (
-                  <option key={o.id} value={o.id}>
-                    {o.orderNo} - {o.buyer || "Buyer"} ({((o as any).totalQuantity || (o as any).quantity || 1000)} pcs)
-                  </option>
-                ))}
-              </select>
+                onChange={val => setSelectedOrderId(val)}
+                options={orders.map(o => ({
+                  value: String(o.id),
+                  label: o.orderNo,
+                  sublabel: o.buyer || "Buyer",
+                  badge: `${((o as any).totalQuantity || (o as any).quantity || 1000).toLocaleString()} pcs`
+                }))}
+                size="md"
+              />
             </div>
 
             {/* Linked Bulletin Selector */}
             <div className="space-y-1">
               <label className="font-bold text-[#8C7E6E] uppercase text-[10px]">Operation Bulletin (OB) *</label>
-              <select
+              <CustomSelect
                 value={selectedBulletinId}
-                onChange={(e) => setSelectedBulletinId(e.target.value)}
-                className="w-full px-3 py-2 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-              >
-                {bulletins.map(b => {
+                onChange={val => setSelectedBulletinId(val)}
+                options={bulletins.map(b => {
                   const smv = b.totalSmv || (b.lines ? b.lines.reduce((a, l) => a + (Number(l.smv) || 0), 0) : 0);
-                  return (
-                    <option key={b.id} value={b.id}>
-                      {b.bulletinCode} - {b.name} (SMV: {(smv * 60).toFixed(1)}s, {b.lines?.length || 0} ops)
-                    </option>
-                  );
+                  return {
+                    value: String(b.id),
+                    label: b.bulletinCode,
+                    sublabel: b.name,
+                    badge: `SMV: ${(smv * 60).toFixed(0)}s (${b.lines?.length || 0} ops)`
+                  };
                 })}
-              </select>
+                size="md"
+              />
             </div>
 
             {/* Shift & Available Time */}
             <div className="space-y-1">
               <label className="font-bold text-[#8C7E6E] uppercase text-[10px]">Production Shift</label>
-              <select
+              <CustomSelect
                 value={selectedShiftId}
-                onChange={(e) => setSelectedShiftId(e.target.value)}
-                className="w-full px-3 py-2 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-              >
-                {shifts.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.shiftName} ({s.startTime} - {s.endTime})
-                  </option>
-                ))}
-              </select>
+                onChange={val => setSelectedShiftId(val)}
+                options={shifts.map(s => ({
+                  value: String(s.id),
+                  label: `${s.shiftName} (${s.startTime} - ${s.endTime})`
+                }))}
+                size="md"
+              />
             </div>
 
             {/* Shift Time Breakdown Card */}
@@ -563,32 +563,42 @@ export function CapacityPlanningPage() {
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <label className="font-bold text-[#8C7E6E] uppercase text-[10px]">Order Quantity (pcs)</label>
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-[#8C7E6E] uppercase text-[10px] flex items-center gap-1">
+                        Order Quantity (pcs)
+                      </label>
+                      <span className="text-[9.5px] font-semibold text-[#8C7E6E] flex items-center gap-0.5" title="Auto-synced from selected Commercial Order">
+                        <Lock className="w-2.5 h-2.5 text-[#8C7E6E]" />
+                        <span>Order</span>
+                      </span>
+                    </div>
                     <input
                       type="number"
-                      min="1"
+                      readOnly
+                      tabIndex={-1}
                       value={orderQuantity}
-                      onChange={(e) => setOrderQuantity(parseInt(e.target.value, 10) || 1)}
-                      className="w-full px-3 py-2 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl font-mono font-bold text-[#221912]"
+                      className="w-full px-3 py-2 bg-[#F0EAE1]/90 border border-[#E6DDCE] rounded-xl font-mono font-bold text-[#221912] cursor-not-allowed select-none shadow-2xs focus:outline-hidden"
+                      title="Order Quantity is auto-synced from the selected commercial order and cannot be modified here."
                     />
                   </div>
 
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <label className="font-bold text-[#8C7E6E] uppercase text-[10px]">Available Days</label>
-                      {orderScheduleDates && (
-                        <span className="text-[10px] text-[#9C5B3C] font-mono font-bold">
-                          {orderScheduleDates.workingDaysCount}d
-                        </span>
-                      )}
+                      <label className="font-bold text-[#8C7E6E] uppercase text-[10px] flex items-center gap-1">
+                        Available Days
+                      </label>
+                      <span className="text-[9.5px] font-semibold text-[#8C7E6E] flex items-center gap-0.5" title="Auto-calculated from order delivery schedule (excluding factory Sundays)">
+                        <Lock className="w-2.5 h-2.5 text-[#8C7E6E]" />
+                        <span>Schedule</span>
+                      </span>
                     </div>
                     <input
                       type="number"
-                      min="1"
-                      max="100"
+                      readOnly
+                      tabIndex={-1}
                       value={availableDays}
-                      onChange={(e) => setAvailableDays(parseInt(e.target.value, 10) || 1)}
-                      className="w-full px-3 py-2 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl font-mono font-bold text-[#221912]"
+                      className="w-full px-3 py-2 bg-[#F0EAE1]/90 border border-[#E6DDCE] rounded-xl font-mono font-bold text-[#221912] cursor-not-allowed select-none shadow-2xs focus:outline-hidden"
+                      title="Available working days are auto-calculated based on the order schedule (excluding factory Sundays)."
                     />
                   </div>
                 </div>
@@ -786,48 +796,42 @@ export function CapacityPlanningPage() {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-[#E6DDCE] bg-[#F9F7F4] text-[10.5px] font-bold text-[#8C7E6E] uppercase tracking-wider">
-                <th className="py-3 px-6">Plan Code</th>
-                <th className="py-3 px-4">Order / Style</th>
-                <th className="py-3 px-4 text-right">Order Qty</th>
-                <th className="py-3 px-4 text-right">Target (pcs/hr)</th>
-                <th className="py-3 px-4 text-right">Planned Eff</th>
-                <th className="py-3 px-4 text-right">Takt (sec)</th>
-                <th className="py-3 px-4 text-right">Pitch (sec)</th>
-                <th className="py-3 px-4 text-center">Planned Ops</th>
-                <th className="py-3 px-6 text-right">Action</th>
+                <th className="py-3.5 px-6">Plan Code</th>
+                <th className="py-3.5 px-4 min-w-[130px]">Order / Style</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap">Order Qty</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap">Target (pcs/hr)</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap">Planned Eff</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap">Takt (sec)</th>
+                <th className="py-3.5 px-4 text-right whitespace-nowrap">Pitch (sec)</th>
+                <th className="py-3.5 px-6 text-right whitespace-nowrap">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E6DDCE]">
               {existingPlans.map((plan) => (
                 <tr key={plan.id} className="hover:bg-[#FFFDFB] transition-colors">
-                  <td className="py-3 px-6 font-mono font-bold text-[#9C5B3C]">
+                  <td className="py-3.5 px-6 font-mono font-bold text-[#9C5B3C] whitespace-nowrap">
                     {plan.planCode}
                   </td>
-                  <td className="py-3 px-4">
-                    <span className="font-bold text-[#221912]">{plan.orderNo || "Order"}</span>
-                    <span className="text-[#8C7E6E] block text-[10px]">{plan.styleNo || "Style"}</span>
+                  <td className="py-3.5 px-4">
+                    <span className="font-bold text-[#221912] block text-xs">{plan.orderNo || "Order"}</span>
+                    <span className="text-[#8C7E6E] block text-[10.5px] font-medium">{plan.styleNo || "Style"}</span>
                   </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-[#221912]">
+                  <td className="py-3.5 px-4 text-right font-mono font-bold text-xs text-[#221912] whitespace-nowrap">
                     {plan.orderQuantity}
                   </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
+                  <td className="py-3.5 px-4 text-right font-mono font-bold text-xs text-emerald-700 whitespace-nowrap">
                     {plan.targetHourlyOutput}
                   </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-[#221912]">
+                  <td className="py-3.5 px-4 text-right font-mono font-bold text-xs text-[#221912] whitespace-nowrap">
                     {plan.plannedEfficiency}%
                   </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-amber-700">
+                  <td className="py-3.5 px-4 text-right font-mono font-bold text-xs text-amber-700 whitespace-nowrap">
                     {plan.customerTaktSecs ? plan.customerTaktSecs.toFixed(1) : "—"}s
                   </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-[#9C5B3C]">
+                  <td className="py-3.5 px-4 text-right font-mono font-bold text-xs text-[#9C5B3C] whitespace-nowrap">
                     {plan.designedPitchSecs ? plan.designedPitchSecs.toFixed(1) : "—"}s
                   </td>
-                  <td className="py-3 px-4 text-center">
-                    <span className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-700 font-mono font-bold border border-indigo-200">
-                      {plan.plannedManpower} ops
-                    </span>
-                  </td>
-                  <td className="py-3 px-6 text-right">
+                  <td className="py-3.5 px-6 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1.5">
                       <Button
                         size="sm"
@@ -857,7 +861,7 @@ export function CapacityPlanningPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => navigate(`/line-design?capacityPlanId=${plan.id}&orderId=${plan.orderId}`)}
-                        className="border-[#E6DDCE] text-[#221912] hover:bg-[#F6F1E8] text-xs font-bold px-3 py-1.5 flex items-center gap-1"
+                        className="border-[#E6DDCE] text-[#221912] hover:bg-[#F6F1E8] text-xs font-bold px-3 py-1.5 flex items-center gap-1 shadow-2xs"
                       >
                         <span>Design Line</span>
                         <ChevronRight className="w-3.5 h-3.5" />
@@ -868,7 +872,7 @@ export function CapacityPlanningPage() {
               ))}
               {existingPlans.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-6 text-center text-[#8C7E6E] italic">
+                  <td colSpan={8} className="py-8 text-center text-[#8C7E6E] italic">
                     No capacity plans created yet. Configure above and click "Save Plan &amp; Design Line".
                   </td>
                 </tr>

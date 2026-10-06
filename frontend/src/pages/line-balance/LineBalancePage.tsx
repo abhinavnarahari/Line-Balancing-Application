@@ -14,7 +14,7 @@ import { operatorsApi, type Operator } from "../../features/operators/api";
 import { shiftsApi } from "../../features/shifts/api";
 import { ordersApi, type Order } from "../../features/orders/api";
 import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/api";
-import { skillApi, cycleTimeToRating, type SkillAssessment } from "../../features/skill-matrix/api";
+import { skillApi, cycleTimeToRating, type SkillAssessment, type PerformanceLog } from "../../features/skill-matrix/api";
 import { linePlanApi, type LinePlan } from "../../features/line-balance/api";
 import { linesApi, type SewingLine } from "../../features/lines/api";
 import { attendanceApi, type AttendanceRecord } from "../../features/attendance/api";
@@ -24,6 +24,7 @@ import type { Shift } from "../../features/shifts/types";
 import { DataCard } from "../../components/ui/PremiumUI";
 import { Button } from "../../components/ui/Button";
 import { OperatorCombobox } from "../../components/ui/OperatorCombobox";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 import { exportToExcel } from "../../utils/excel";
 import { lineDesignApi, type LineDesign } from "../../features/linedesign/api";
 import { 
@@ -537,6 +538,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [bulletins, setBulletins] = useState<OperationBulletin[]>([]);
   const [skillAssessments, setSkillAssessments] = useState<SkillAssessment[]>([]);
+  const [performanceLogs, setPerformanceLogs] = useState<PerformanceLog[]>([]);
   const [affinities, setAffinities] = useState<OperationAffinity[]>([]);
 
   // Selections
@@ -568,11 +570,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
           if (design.lineId) setSelectedLineId(String(design.lineId));
           if (design.shiftId) setSelectedShiftId(String(design.shiftId));
           if (design.bulletinId) setSelectedBulletinId(String(design.bulletinId));
-          const eff = Number(design.plannedEfficiency || design.lineBalanceEfficiency || 80);
+          const eff = Number(design.plannedEfficiency || 80);
           setPlannedEfficiency(eff);
-          if (design.targetHourlyOutput) {
-            setCustomShiftTarget(Math.round(design.targetHourlyOutput * 8));
-          }
         }
       }).catch(err => console.warn("Failed to load line design:", err));
     } else if (selectedOrderId && allLineDesigns.length > 0) {
@@ -583,11 +582,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
       if (match) {
         setActiveLineDesign(match);
-        const eff = Number(match.plannedEfficiency || match.lineBalanceEfficiency || 80);
+        const eff = Number(match.plannedEfficiency || 80);
         setPlannedEfficiency(eff);
-        if (match.targetHourlyOutput) {
-          setCustomShiftTarget(Math.round(match.targetHourlyOutput * 8));
-        }
       }
     }
   }, [paramLineDesignId, selectedOrderId, selectedLineId, allLineDesigns]);
@@ -634,7 +630,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   const fetchAll = useCallback(async () => {
     try {
       const today = new Date().toISOString().split("T")[0];
-      const [ops, oprs, shfts, ords, bulls, skills, lns, atts, ts, logs, plans, affs, designs] = await Promise.all([
+      const [ops, oprs, shfts, ords, bulls, skills, lns, atts, ts, logs, plans, affs, designs, perfLogs] = await Promise.all([
         operationsApi.getOperations().catch(() => []),
         operatorsApi.getOperators().catch(() => []),
         shiftsApi.getShifts().catch(() => []),
@@ -648,10 +644,14 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
         linePlanApi.getAllPlans().catch(() => []),
         operationsApi.getAllAffinities().catch(() => []),
         lineDesignApi.getDesigns().catch(() => []),
+        skillApi.getPerformanceLogs().catch(() => []),
       ]);
       setOperations(ops || []);
-      setOperators((oprs || []).filter(o => o && o.active));
+      // Only machine operators (dedicated sewers and floaters) can be assigned to operations
+      // Non-machine workforce (Quality Checkers, Helpers, Supervisors) cannot be assigned to operations
+      setOperators((oprs || []).filter(o => o && o.active && (o.role === "OPERATOR" || o.role === "FLOATER" || !o.role)));
       setSkillAssessments(skills || []);
+      setPerformanceLogs(perfLogs || []);
       setAffinities(affs || []);
       setLines(lns || []);
       setAttendanceRecords(atts || []);
@@ -1477,14 +1477,12 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     ? Math.round((3600 / designedPitchTimeSecs) * 10) / 10
     : (requiredHourlyTarget > 0 ? Math.round((requiredHourlyTarget / plannedEfficiencyFraction) * 10) / 10 : 0);
 
-  // Reset custom shift target override on order change (only if not loaded from active line design)
+  // Reset custom shift target override on order change so shift target mirrors the new order's delivery pace
   useEffect(() => {
-    if (!activeLineDesign) {
-      setCustomShiftTarget(null);
-    }
-  }, [selectedOrderId, activeLineDesign]);
+    setCustomShiftTarget(null);
+  }, [selectedOrderId]);
 
-  // ─── Operator Skill Lookup Helper ────────────────────────────────────────────
+  // ─── Operator Skill Lookup Helper (Synchronized with Sewing Skill Matrix) ───
   const getOperatorSkill = useCallback((operatorId: string | number | null, operationId: string | number): number | null => {
     if (!operatorId || !operationId) return null;
     const opIdStr = String(operatorId);
@@ -1493,6 +1491,20 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     const targetOpCode = targetOp?.operationCode || targetOpIdStr;
     const targetOpName = targetOp?.name?.toLowerCase().trim();
 
+    // 1. Check submitted performance test logs (matches Sewing Skill Matrix dynamic calculation)
+    const submittedLogs = performanceLogs.filter(
+      l => String(l.operatorId) === opIdStr &&
+           (String(l.operationId) === targetOpIdStr || (targetOp && String(l.operationId) === String(targetOp.id)) ||
+            (targetOpCode && l.operationCode === targetOpCode) ||
+            (targetOpName && l.operationName && l.operationName.toLowerCase().trim() === targetOpName)) &&
+           (l.status === "SUBMITTED" || !l.status)
+    );
+    if (submittedLogs.length > 0) {
+      const avg = submittedLogs.reduce((a, b) => a + b.actualCycleTimeSeconds, 0) / submittedLogs.length;
+      return cycleTimeToRating(avg, targetOp?.name, targetOp?.standardSmv);
+    }
+
+    // 2. Check current skill assessment matrix
     const assessment = skillAssessments.find(a => {
       const matchOp = String(a.operatorId) === opIdStr;
       if (!matchOp) return false;
@@ -1511,7 +1523,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       return assessment.rating || null;
     }
     return null;
-  }, [skillAssessments, operations]);
+  }, [skillAssessments, performanceLogs, operations]);
 
   // Helper to filter operators based on required skill rating
   const getEligibleOpsForSkill = (operationId: string | number, reqRating?: number | string) => {
@@ -2367,7 +2379,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 </span>
               </div>
               <p className="text-[11px] text-[#8C7E6E] mt-0.5">
-                {activeLineDesign.totalWorkstations} Workstations ({activeLineDesign.totalOperators} Sewing Operators) · Target {activeLineDesign.targetHourlyOutput} pcs/hr @ {activeLineDesign.plannedEfficiency}% Planned Efficiency (Pitch: {activeLineDesign.designedPitchSecs ? activeLineDesign.designedPitchSecs.toFixed(1) : "—"}s)
+                {activeLineDesign.totalWorkstations} Workstations ({activeLineDesign.totalOperators} Sewing Operators) · Target {activeLineDesign.targetHourlyOutput} pcs/hr @ {activeLineDesign.plannedEfficiency}% Planned Efficiency{activeLineDesign.lineBalanceEfficiency ? ` · ${activeLineDesign.lineBalanceEfficiency.toFixed(1)}% LBE` : ""} (Pitch: {activeLineDesign.designedPitchSecs ? activeLineDesign.designedPitchSecs.toFixed(1) : "—"}s)
               </p>
             </div>
           </div>
@@ -2452,227 +2464,231 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
           /* ── Mode A: Planned Pace (Master Delivery Plan) ──────────────── */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* 1. Sewing Line Selection */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#221912] block">Physical Sewing Line</label>
-              <select
-                value={selectedLineId}
-                onChange={e => setSelectedLineId(e.target.value)}
-                className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-              >
-                {lines.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.lineCode} · {l.lineName}
-                  </option>
-                ))}
-              </select>
-              {selectedLine && (
-                <span className="text-[11px] text-[#8C7E6E] block truncate">
-                  {selectedLine.floor || "Main Floor"} · {selectedLine.supervisorName || "Supervisor: Unassigned"}
-                </span>
-              )}
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div>
+                <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Physical Sewing Line</label>
+                <CustomSelect
+                  value={selectedLineId}
+                  onChange={val => setSelectedLineId(val)}
+                  options={lines.map(l => ({
+                    value: String(l.id),
+                    label: `${l.lineCode} · ${l.lineName}`
+                  }))}
+                  size="lg"
+                />
+              </div>
+              <span className="text-[11px] text-[#8C7E6E] block truncate min-h-[16px]">
+                {selectedLine ? `${selectedLine.floor || "Main Floor"} · ${selectedLine.supervisorName || "Supervisor: Unassigned"}` : "Select line"}
+              </span>
             </div>
 
             {/* 2. Order Selection */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#221912] block">Production Order (PO)</label>
-              <select
-                value={selectedOrderId}
-                onChange={e => {
-                  setSelectedOrderId(e.target.value);
-                }}
-                className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-              >
-                {orders.map(ord => (
-                  <option key={ord.id} value={ord.id}>
-                    {ord.orderNo} · {ord.buyer} ({ord.totalQuantity} pcs)
-                  </option>
-                ))}
-              </select>
-              {selectedOrder ? (
-                <span className="text-[11px] text-[#77876F] font-bold block truncate">
-                  Demand: {totalOrderQuantity.toLocaleString()} pcs ({selectedOrder.color || "Standard"})
-                </span>
-              ) : (
-                <span className="text-[11px] text-amber-700 block truncate">
-                  No order selected
-                </span>
-              )}
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div>
+                <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Production Order (PO)</label>
+                <CustomSelect
+                  value={selectedOrderId}
+                  onChange={val => setSelectedOrderId(val)}
+                  options={orders.map(ord => ({
+                    value: String(ord.id),
+                    label: ord.orderNo,
+                    sublabel: ord.buyer,
+                  }))}
+                  size="lg"
+                />
+              </div>
+              <span className="text-[11px] text-[#77876F] font-bold block truncate min-h-[16px]">
+                {selectedOrder ? `Demand: ${totalOrderQuantity.toLocaleString()} pcs (${selectedOrder.color || "Standard"})` : "No order selected"}
+              </span>
             </div>
 
             {/* 3. Real-Time Planned Completion & Delivery Window */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-[#221912] block">Planned Complete Target</label>
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div>
+                <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Planned Complete Target</label>
+                <div className="h-11 bg-white border border-[#E6DDCE] rounded-xl px-3 flex items-center justify-between shadow-2xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Calendar className="w-3.5 h-3.5 text-[#9C5B3C] shrink-0" />
+                    <span className="text-xs font-bold text-[#221912] font-mono truncate">
+                      {deliveryScheduleMetrics.plannedCompletionFormatted || "—"}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE] shrink-0">
+                    {deliveryScheduleMetrics.workingDaysRemaining}d left
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-[11px] min-h-[16px]">
                 <button
                   type="button"
                   onClick={() => setWorkDaysOnly(!workDaysOnly)}
-                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded transition-colors cursor-pointer ${
-                    workDaysOnly ? "bg-amber-100 text-amber-900 border border-amber-200" : "bg-slate-100 text-slate-700"
+                  className={`font-semibold hover:text-[#9C5B3C] transition-colors cursor-pointer flex items-center gap-1 ${
+                    workDaysOnly ? "text-[#9C5B3C]" : "text-[#8C7E6E]"
                   }`}
                   title="Toggle between 6-day work week (excluding Sundays) and 7-day continuous schedule"
                 >
-                  {workDaysOnly ? "6-Day Wk (Excl Sun)" : "7-Day Wk"}
+                  <span className={`w-1.5 h-1.5 rounded-full ${workDaysOnly ? "bg-[#9C5B3C]" : "bg-slate-400"}`} />
+                  <span>{workDaysOnly ? "6-Day Wk (Excl Sun)" : "7-Day Wk"}</span>
                 </button>
-              </div>
-              <div className="h-11 bg-slate-50 border border-[#E6DDCE] rounded-2xl px-3 flex items-center justify-between shadow-2xs">
-                <div className="flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-[#9C5B3C]" />
-                  <span className="text-xs font-bold text-[#221912] font-mono">
-                    {deliveryScheduleMetrics.workingDaysRemaining} <span className="text-[10px] text-[#8C7E6E] font-sans font-normal">work days left</span>
-                  </span>
-                </div>
-                <span className="text-[10.5px] font-mono font-bold text-[#9C5B3C] bg-[#F6F1E8] px-2 py-0.5 rounded-lg border border-[#E6DDCE]">
-                  {deliveryScheduleMetrics.plannedCompletionFormatted}
-                </span>
               </div>
             </div>
 
             {/* 4. Production Shift */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#221912] block">Production Shift</label>
-              <select
-                value={selectedShiftId}
-                onChange={e => setSelectedShiftId(e.target.value)}
-                className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-              >
-                {shifts.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.shiftCode} ({s.startTime} - {s.endTime})
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div>
+                <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Production Shift</label>
+                <CustomSelect
+                  value={selectedShiftId}
+                  onChange={val => setSelectedShiftId(val)}
+                  options={shifts.map(s => ({
+                    value: String(s.id),
+                    label: `${s.shiftCode} (${s.startTime} - ${s.endTime})`
+                  }))}
+                  size="lg"
+                />
+              </div>
+              <span className="text-[11px] text-[#8C7E6E] block truncate min-h-[16px]">
+                {selectedShift ? `${selectedShift.shiftName || "Standard Shift"} · 8.0h shift` : "8.0h working shift"}
+              </span>
             </div>
 
             {/* 5. Required Daily Target */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#221912] block">Required Daily Target</label>
-              <div className="h-11 bg-slate-50 border border-[#E6DDCE] rounded-2xl px-3 flex items-center justify-between shadow-2xs">
-                <span className="font-mono text-xs font-black text-[#221912]">
-                  {requiredDailyTarget.toLocaleString()} <span className="text-[10px] text-[#8C7E6E] font-normal font-sans">pcs/day</span>
-                </span>
-                <span className="inline-flex items-center gap-1 text-[10.5px] text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-lg font-bold border border-blue-200/80 font-mono shadow-2xs">
-                  <TrendingUp className="w-3 h-3 text-blue-600" />
-                  {requiredHourlyTarget.toFixed(1)} pcs/hr
-                </span>
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div>
+                <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Required Daily Target</label>
+                <div className="h-11 bg-white border border-[#E6DDCE] rounded-xl px-3 flex items-center justify-between shadow-2xs">
+                  <div className="flex items-baseline gap-1 min-w-0">
+                    <span className="font-mono text-xs font-black text-[#221912]">
+                      {requiredDailyTarget.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-[#8C7E6E] font-normal font-sans shrink-0">pcs/day</span>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10.5px] text-[#77876F] bg-[#F3F5F2] px-2 py-0.5 rounded-md font-bold border border-[#d4decb] font-mono shadow-2xs shrink-0">
+                    <TrendingUp className="w-3 h-3 text-[#77876F]" />
+                    {requiredHourlyTarget.toFixed(1)} pcs/hr
+                  </span>
+                </div>
               </div>
+              <span className="text-[11px] text-[#8C7E6E] block truncate min-h-[16px]">
+                Pace target for on-time delivery
+              </span>
             </div>
           </div>
         ) : (
           /* ── Mode B: Fixed Shift Target (Live Shift Execution) ─────────── */
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* 1. Sewing Line Selection */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#221912] block">Physical Sewing Line</label>
-              <select
-                value={selectedLineId}
-                onChange={e => setSelectedLineId(e.target.value)}
-                className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-              >
-                {lines.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.lineCode} · {l.lineName}
-                  </option>
-                ))}
-              </select>
-              {selectedLine && (
-                <span className="text-[11px] text-[#8C7E6E] block truncate">
-                  {selectedLine.floor || "Main Floor"} · {selectedLine.supervisorName || "Supervisor: Unassigned"}
-                </span>
-              )}
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div>
+                <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Physical Sewing Line</label>
+                <CustomSelect
+                  value={selectedLineId}
+                  onChange={val => setSelectedLineId(val)}
+                  options={lines.map(l => ({
+                    value: String(l.id),
+                    label: `${l.lineCode} · ${l.lineName}`
+                  }))}
+                  size="lg"
+                />
+              </div>
+              <span className="text-[11px] text-[#8C7E6E] block truncate min-h-[16px]">
+                {selectedLine ? `${selectedLine.floor || "Main Floor"} · ${selectedLine.supervisorName || "Supervisor: Unassigned"}` : "Select line"}
+              </span>
             </div>
 
             {/* 2. Order Selection */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#221912] block">Production Order (PO)</label>
-              <select
-                value={selectedOrderId}
-                onChange={e => {
-                  setSelectedOrderId(e.target.value);
-                }}
-                className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-              >
-                {orders.map(ord => (
-                  <option key={ord.id} value={ord.id}>
-                    {ord.orderNo} · {ord.buyer} ({ord.totalQuantity} pcs)
-                  </option>
-                ))}
-              </select>
-              {selectedOrder ? (
-                <span className="text-[11px] text-[#77876F] font-bold block truncate">
-                  Demand: {totalOrderQuantity.toLocaleString()} pcs ({selectedOrder.color || "Standard"})
-                </span>
-              ) : (
-                <span className="text-[11px] text-amber-700 block truncate">
-                  No order selected
-                </span>
-              )}
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div>
+                <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Production Order (PO)</label>
+                <CustomSelect
+                  value={selectedOrderId}
+                  onChange={val => setSelectedOrderId(val)}
+                  options={orders.map(ord => ({
+                    value: String(ord.id),
+                    label: ord.orderNo,
+                    sublabel: ord.buyer,
+                  }))}
+                  size="lg"
+                />
+              </div>
+              <span className="text-[11px] text-[#77876F] font-bold block truncate min-h-[16px]">
+                {selectedOrder ? `Demand: ${totalOrderQuantity.toLocaleString()} pcs (${selectedOrder.color || "Standard"})` : "No order selected"}
+              </span>
             </div>
 
             {/* 3. Production Shift with Live Countdown */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-[#221912] block">Production Shift</label>
-              <select
-                value={selectedShiftId}
-                onChange={e => setSelectedShiftId(e.target.value)}
-                className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-              >
-                {shifts.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.shiftCode} ({s.startTime} - {s.endTime})
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div>
+                <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Production Shift</label>
+                <CustomSelect
+                  value={selectedShiftId}
+                  onChange={val => setSelectedShiftId(val)}
+                  options={shifts.map(s => ({
+                    value: String(s.id),
+                    label: `${s.shiftCode} (${s.startTime} - ${s.endTime})`
+                  }))}
+                  size="lg"
+                />
+              </div>
+              <span className="text-[11px] text-[#8C7E6E] block truncate min-h-[16px]">
+                {selectedShift ? `${selectedShift.shiftName || "Standard Shift"} · 8.0h shift` : "8.0h working shift"}
+              </span>
             </div>
 
             {/* 4. Shift Target Output Input */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-[#221912]">Shift Target Output</label>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-slate-500 font-mono">Pace: {plannedPaceDailyTarget} pcs</span>
-                  {customShiftTarget !== null && customShiftTarget !== plannedPaceDailyTarget && (
-                    <button
-                      type="button"
-                      onClick={() => setCustomShiftTarget(null)}
-                      className="text-[9.5px] text-blue-600 font-bold hover:underline cursor-pointer"
-                      title="Reset to Planned Pace Target"
-                    >
-                      Reset
-                    </button>
-                  )}
-                </div>
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div>
+                <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Shift Target Output</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={customShiftTarget !== null ? customShiftTarget : plannedPaceDailyTarget}
+                  onChange={e => {
+                    const val = Number(e.target.value);
+                    setCustomShiftTarget(val > 0 ? val : null);
+                  }}
+                  className="w-full h-11 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-mono font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs"
+                />
               </div>
-              <input
-                type="number"
-                min={1}
-                value={customShiftTarget !== null ? customShiftTarget : plannedPaceDailyTarget}
-                onChange={e => {
-                  const val = Number(e.target.value);
-                  setCustomShiftTarget(val > 0 ? val : null);
-                }}
-                className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-mono font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs"
-              />
+              <div className="flex items-center justify-between text-[11px] text-[#8C7E6E] min-h-[16px]">
+                <span className="font-mono text-[10.5px]">Pace: {plannedPaceDailyTarget} pcs</span>
+                {customShiftTarget !== null && customShiftTarget !== plannedPaceDailyTarget && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomShiftTarget(null)}
+                    className="text-[10px] text-[#9C5B3C] font-bold hover:underline cursor-pointer"
+                    title="Reset to Planned Pace Target"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* 5. End-Line Output & Remaining Shift Balance */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-[#221912]">End-Line Output</label>
-                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/80 font-mono" title="Governed by the bottleneck minimum completed station pace">
-                  Min Flow
-                </span>
-              </div>
-              <div className="h-11 bg-slate-50 border border-[#E6DDCE] rounded-2xl px-3 flex items-center justify-between shadow-2xs">
-                <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="font-mono text-xs font-black text-[#221912]">
-                    {endLineOutput} <span className="text-[10px] text-[#8C7E6E] font-normal font-sans">pcs</span>
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-[#221912] block truncate">End-Line Output</label>
+                  <span className="text-[9.5px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/80 font-mono shrink-0" title="Governed by the bottleneck minimum completed station pace">
+                    Min Flow
                   </span>
                 </div>
-                <span className="inline-flex items-center gap-1 text-[10.5px] font-mono font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-lg border border-emerald-300/80 shadow-2xs">
-                  Bal: {remainingShiftBalance} pcs
-                </span>
+                <div className="h-11 bg-white border border-[#E6DDCE] rounded-xl px-3 flex items-center justify-between shadow-2xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="font-mono text-xs font-black text-[#221912]">
+                      {endLineOutput} <span className="text-[10px] text-[#8C7E6E] font-normal font-sans">pcs</span>
+                    </span>
+                  </div>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-md border border-emerald-300/80 shadow-2xs shrink-0">
+                    Bal: {remainingShiftBalance} pcs
+                  </span>
+                </div>
               </div>
+              <span className="text-[11px] text-[#8C7E6E] block truncate min-h-[16px]">
+                Shift completed balance
+              </span>
             </div>
           </div>
         )}
@@ -3258,10 +3274,10 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                               if (hasGap) {
                                 return (
                                   <span
-                                    className="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-300 shadow-2xs"
+                                    className="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-[#fffbeb] text-[#b45309] border border-[#fde68a] shadow-2xs"
                                     title="One or more assigned operators do not meet the required skill rating for this operation"
                                   >
-                                    <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                                    <AlertTriangle className="w-2.5 h-2.5 text-[#b45309]" />
                                     <span>Skill Deficit</span>
                                   </span>
                                 );
@@ -3269,10 +3285,10 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
                               return (
                                 <span
-                                  className="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs"
+                                  className="inline-flex items-center gap-1 text-[9.5px] font-bold px-1.5 py-0.5 rounded-md bg-[#F3F5F2] text-[#77876F] border border-[#d4decb] shadow-2xs"
                                   title="All assigned operators meet or exceed the station's required skill rating"
                                 >
-                                  <Check className="w-2.5 h-2.5 text-emerald-600" />
+                                  <Check className="w-2.5 h-2.5 text-[#77876F]" />
                                   <span>Qualified</span>
                                 </span>
                               );
@@ -3563,8 +3579,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
           <div className="flex flex-wrap items-center gap-5">
             <span>Total Stations: <strong className="text-[#221912] font-mono">{stations.length}</strong></span>
             <span>Allocated Manpower: <strong className="text-[#221912] font-mono">{totalAllocatedOps} ops</strong></span>
-            <span>Planned Manpower: <strong className="text-[#9C5B3C] font-mono">{totalPlannedManpower.toFixed(1)} ops</strong> <span className="text-[11px] text-[#A89F91]">(@ {plannedEfficiency}% Eff)</span></span>
-            <span>Theoretical Min: <strong className="text-[#8C7E6E] font-mono">{totalTheoreticalManpower.toFixed(1)} ops</strong></span>
             <span>Balance Efficiency: <strong className="text-[#77876F] font-mono">{lineBalanceEfficiency}%</strong></span>
           </div>
           <div className="flex flex-wrap items-center gap-4">

@@ -163,7 +163,7 @@ export function Sidebar() {
       <motion.div
         animate={{ width: isCollapsed ? 76 : 264 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-        className="flex h-full flex-col bg-[#06202B] border-r border-[#0A2947] relative z-20 shadow-lg select-none shrink-0 overflow-hidden"
+        className="flex h-full flex-col bg-[#06202B] border-r border-[#0A2947] relative z-20 shadow-lg select-none shrink-0 overflow-hidden antialiased"
       >
         {/* Logo & Collapse Toggle Header */}
         <div
@@ -180,20 +180,20 @@ export function Sidebar() {
               title="Expand Sidebar (Ctrl+B)"
               aria-label="Expand Sidebar"
             >
-              <span className="text-white font-black text-sm tracking-wide group-hover:hidden">S</span>
+              <span className="text-white font-bold text-sm tracking-wide group-hover:hidden">S</span>
               <PanelLeftOpen className="w-4 h-4 text-white hidden group-hover:block transition-all" />
             </button>
           ) : (
             <>
               <Link to="/" className="flex items-center gap-3 overflow-hidden group cursor-pointer">
                 <div className="w-9 h-9 flex items-center justify-center rounded-xl bg-gradient-to-br from-[#9C5B3C] to-[#8B5E3C] shadow-md shadow-[#9C5B3C]/30 shrink-0 group-hover:scale-105 transition-transform">
-                  <span className="text-white font-black text-sm tracking-wide">S</span>
+                  <span className="text-white font-bold text-sm tracking-wide">S</span>
                 </div>
                 <div className="overflow-hidden whitespace-nowrap">
                   <span className="text-[15px] font-bold text-white tracking-tight block leading-tight">
                     SewNexa
                   </span>
-                  <span className="text-[11px] font-medium text-[#8C7E6E] tracking-wide leading-tight group-hover:text-[#FAF7F2] transition-colors">
+                  <span className="text-[11px] font-medium text-slate-400 tracking-normal leading-tight group-hover:text-slate-200 transition-colors">
                     Line Balancing Suite
                   </span>
                 </div>
@@ -202,11 +202,11 @@ export function Sidebar() {
               <button
                 type="button"
                 onClick={toggleSidebar}
-                className="p-1.5 rounded-lg text-[#8C7E6E] hover:text-white hover:bg-[#0A2947] transition-all cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-[#0A2947]/80 transition-all cursor-pointer"
                 title="Collapse Sidebar (Ctrl+B)"
                 aria-label="Collapse Sidebar"
               >
-                <PanelLeftClose className="w-4 h-4 text-[#8C7E6E] hover:text-white transition-colors" />
+                <PanelLeftClose className="w-4 h-4 text-slate-400 hover:text-white transition-colors" />
               </button>
             </>
           )}
@@ -221,7 +221,7 @@ export function Sidebar() {
                   isCollapsed ? (
                     <div className="my-2 border-t border-[#0A2947]/70" />
                   ) : (
-                    <p className="px-3 mb-2 text-[10.5px] font-extrabold tracking-[0.14em] text-[#8C7E6E] uppercase whitespace-nowrap overflow-hidden">
+                    <p className="px-3 mb-2 text-[10.5px] font-semibold tracking-[0.08em] text-slate-400/90 uppercase whitespace-nowrap overflow-hidden">
                       {section.group}
                     </p>
                   )
@@ -243,23 +243,23 @@ export function Sidebar() {
                           to={item.href}
                           title={isCollapsed ? item.name : undefined}
                           className={cn(
-                            "group flex items-center text-[13px] font-bold transition-all relative overflow-hidden rounded-xl",
+                            "group flex items-center text-[13px] transition-all relative overflow-hidden rounded-xl",
                             isCollapsed
                               ? "justify-center py-2.5 px-0 h-10 w-full"
                               : "px-3.5 py-2.5",
                             active
-                              ? "text-white bg-[#9C5B3C] shadow-sm shadow-[#9C5B3C]/30"
-                              : "text-[#8C7E6E] hover:text-white hover:bg-[#0A2947]/70"
+                              ? "text-white bg-[#9C5B3C] font-semibold shadow-sm shadow-[#9C5B3C]/30"
+                              : "text-slate-200 font-medium hover:text-white hover:bg-[#0A2947]/75"
                           )}
                         >
                           <item.icon
                             className={cn(
                               "h-[18px] w-[18px] flex-shrink-0 transition-colors",
                               isCollapsed ? "mr-0" : "mr-3",
-                              active ? "text-white" : "text-[#8C7E6E] group-hover:text-[#B48259]"
+                              active ? "text-white" : "text-slate-400 group-hover:text-white"
                             )}
                             aria-hidden="true"
-                            strokeWidth={active ? 2.2 : 1.7}
+                            strokeWidth={active ? 2 : 1.75}
                           />
                           <AnimatePresence>
                             {!isCollapsed && (
@@ -290,16 +290,16 @@ export function Sidebar() {
             to="/settings"
             title={isCollapsed ? "Settings & Masters" : undefined}
             className={cn(
-              "w-full flex items-center text-[13px] font-bold transition-colors rounded-xl",
+              "w-full flex items-center text-[13px] transition-colors rounded-xl",
               isCollapsed ? "justify-center py-2.5 px-0 h-10" : "gap-3 px-3.5 py-2.5",
               isActive("/settings")
-                ? "text-white bg-[#9C5B3C] shadow-sm shadow-[#9C5B3C]/30"
-                : "text-[#8C7E6E] hover:text-white hover:bg-[#0A2947]/70"
+                ? "text-white bg-[#9C5B3C] font-semibold shadow-sm shadow-[#9C5B3C]/30"
+                : "text-slate-200 font-medium hover:text-white hover:bg-[#0A2947]/75"
             )}
           >
             <Settings
-              className={cn("w-[18px] h-[18px] shrink-0", isActive("/settings") ? "text-white" : "text-[#8C7E6E]")}
-              strokeWidth={1.7}
+              className={cn("w-[18px] h-[18px] shrink-0", isActive("/settings") ? "text-white" : "text-slate-400 group-hover:text-white")}
+              strokeWidth={1.75}
             />
             <AnimatePresence>
               {!isCollapsed && (

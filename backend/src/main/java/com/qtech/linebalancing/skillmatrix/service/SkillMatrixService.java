@@ -38,7 +38,9 @@ public class SkillMatrixService {
 
     public List<SkillAssessmentResponse> getCurrentMatrix() {
         return skillRepository.findByIsCurrentTrueOrderByOperatorIdAscOperationIdAsc()
-                .stream().map(this::toResponse).toList();
+                .stream()
+                .filter(a -> !isNonMachineRole(a.getOperator()))
+                .map(this::toResponse).toList();
     }
 
     public List<SkillAssessmentResponse> getHistory(Long operatorId, Long operationId) {
@@ -46,7 +48,27 @@ public class SkillMatrixService {
                 .stream().map(this::toResponse).toList();
     }
 
+    public boolean isNonMachineRole(Operator operator) {
+        if (operator == null || operator.getRole() == null) return false;
+        return operator.getRole() == Operator.OperatorRole.QUALITY_CHECKER
+                || operator.getRole() == Operator.OperatorRole.LINE_SUPERVISOR
+                || operator.getRole() == Operator.OperatorRole.HELPER;
+    }
+
+    public void validateMachineOperator(Operator operator) {
+        if (isNonMachineRole(operator)) {
+            throw new IllegalArgumentException(
+                "Skill ratings cannot be recorded for non-machine workforce (" + 
+                operator.getRole() + ": " + operator.getName() + "). Non-machine personnel do not operate sewing machines."
+            );
+        }
+    }
+
     public List<SkillAssessmentResponse> getByOperator(Long operatorId) {
+        Operator operator = operatorService.findEntityById(operatorId);
+        if (isNonMachineRole(operator)) {
+            return List.of();
+        }
         return skillRepository.findByOperatorIdAndIsCurrentTrue(operatorId)
                 .stream().map(this::toResponse).toList();
     }
@@ -54,6 +76,7 @@ public class SkillMatrixService {
     @Transactional
     public SkillAssessmentResponse addAssessment(SkillAssessmentRequest request) {
         Operator operator = operatorService.findEntityById(request.getOperatorId());
+        validateMachineOperator(operator);
         Operation operation = operationService.findEntityById(request.getOperationId());
         int maxRevision = skillRepository.findMaxRevision(operator.getId(), operation.getId());
         int nextRevision = maxRevision + 1;
@@ -215,6 +238,7 @@ public class SkillMatrixService {
     @Transactional
     public PerformanceLogResponse addPerformanceLog(PerformanceLogRequest request) {
         Operator operator = operatorService.findEntityById(request.getOperatorId());
+        validateMachineOperator(operator);
         Operation operation = operationService.findEntityById(request.getOperationId());
         String status = (request.getStatus() != null && !request.getStatus().isBlank())
                 ? request.getStatus().toUpperCase()
@@ -249,6 +273,7 @@ public class SkillMatrixService {
 
         for (PerformanceLogRequest req : requests) {
             Operator operator = operatorService.findEntityById(req.getOperatorId());
+            validateMachineOperator(operator);
             Operation operation = operationService.findEntityById(req.getOperationId());
             String status = (req.getStatus() != null && !req.getStatus().isBlank())
                     ? req.getStatus().toUpperCase()
@@ -284,6 +309,7 @@ public class SkillMatrixService {
     public PerformanceLogResponse submitPerformanceLog(Long id) {
         OperatorPerformanceLog entry = perfLogRepository.findById(id)
                 .orElseThrow(() -> new com.qtech.linebalancing.common.exception.ResourceNotFoundException("PerformanceLog", "id", id));
+        validateMachineOperator(entry.getOperator());
         entry.setStatus("SUBMITTED");
         OperatorPerformanceLog saved = perfLogRepository.save(entry);
         syncSkillRatingFromPerformanceLogs(saved.getOperator().getId(), saved.getOperation().getId());
@@ -300,6 +326,9 @@ public class SkillMatrixService {
             var opt = perfLogRepository.findById(id);
             if (opt.isPresent()) {
                 OperatorPerformanceLog entry = opt.get();
+                if (isNonMachineRole(entry.getOperator())) {
+                    continue;
+                }
                 entry.setStatus("SUBMITTED");
                 OperatorPerformanceLog saved = perfLogRepository.save(entry);
                 submitted.add(toLogResponse(saved));
@@ -333,6 +362,9 @@ public class SkillMatrixService {
     @Transactional
     public void syncSkillRatingFromPerformanceLogs(Long operatorId, Long operationId) {
         Operator operator = operatorService.findEntityById(operatorId);
+        if (isNonMachineRole(operator)) {
+            return;
+        }
         Operation operation = operationService.findEntityById(operationId);
 
         List<OperatorPerformanceLog> allLogs = perfLogRepository.findByOperatorIdAndOperationIdOrderByLogDateDesc(operatorId, operationId);
@@ -384,10 +416,18 @@ public class SkillMatrixService {
     }
 
     public List<PerformanceLogResponse> getPerformanceLogs(Long operatorId) {
-        List<OperatorPerformanceLog> logs = (operatorId != null)
-                ? perfLogRepository.findByOperatorIdOrderByLogDateDesc(operatorId)
-                : perfLogRepository.findAllByOrderByLogDateDesc();
-        return logs.stream().map(this::toLogResponse).toList();
+        if (operatorId != null) {
+            Operator operator = operatorService.findEntityById(operatorId);
+            if (isNonMachineRole(operator)) {
+                return List.of();
+            }
+            return perfLogRepository.findByOperatorIdOrderByLogDateDesc(operatorId)
+                    .stream().map(this::toLogResponse).toList();
+        }
+        return perfLogRepository.findAllByOrderByLogDateDesc()
+                .stream()
+                .filter(l -> !isNonMachineRole(l.getOperator()))
+                .map(this::toLogResponse).toList();
     }
 
     @Transactional
@@ -405,6 +445,7 @@ public class SkillMatrixService {
     @Transactional
     public List<SkillAssessmentResponse> autoUpdateSkillMatrix(Long operatorId) {
         Operator operator = operatorService.findEntityById(operatorId);
+        validateMachineOperator(operator);
         List<Object[]> avgResults = perfLogRepository.findAvgCycleTimeByOperator(operatorId);
         if (avgResults.isEmpty()) return List.of();
 
@@ -449,7 +490,9 @@ public class SkillMatrixService {
     }
 
     public List<com.qtech.linebalancing.skillmatrix.dto.SkillMatrixHistoryResponse> getAllHistoryLogs() {
-        return historyLogRepository.findAllByOrderByUpdatedAtDesc().stream().map(h -> {
+        return historyLogRepository.findAllByOrderByUpdatedAtDesc().stream()
+                .filter(h -> !isNonMachineRole(h.getOperator()))
+                .map(h -> {
             var r = new com.qtech.linebalancing.skillmatrix.dto.SkillMatrixHistoryResponse();
             r.setId(h.getId());
             r.setOperatorId(h.getOperator().getId());

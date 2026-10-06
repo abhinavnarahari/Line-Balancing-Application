@@ -7,7 +7,6 @@ import {
   EyeOff, 
   ArrowRight, 
   ShieldCheck, 
-  Check, 
   X, 
   AlertCircle,
   Sparkles,

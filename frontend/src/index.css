@@ -255,6 +255,82 @@ input[type="number"] {
   color: #221912;
 }
 
+/* ─── Global Universal Dropdown Theming ────────────────────────────── */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: #FFFFFF;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239C5B3C' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem 1rem;
+  padding-right: 2.25rem !important;
+  color: #221912;
+  color-scheme: light;
+  accent-color: #9C5B3C;
+  border: 1px solid #E6DDCE;
+  border-radius: 0.75rem;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(34, 25, 18, 0.04);
+}
+
+select:hover:not(:disabled) {
+  border-color: #9C5B3C;
+  background-color: #FDFBF7;
+}
+
+select:focus {
+  outline: none;
+  border-color: #9C5B3C !important;
+  box-shadow: 0 0 0 3px rgba(156, 91, 60, 0.18) !important;
+  background-color: #FFFFFF;
+}
+
+select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background-color: #F6F1E8;
+  border-color: #E6DDCE;
+}
+
+/* Style select optgroups to match application color */
+select optgroup {
+  background-color: #FAF7F2;
+  color: #9C5B3C;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 12px;
+  letter-spacing: 0.02em;
+}
+
+/* Style select options popup */
+select option {
+  background-color: #FFFFFF;
+  color: #221912;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 14px;
+}
+
+select option:checked {
+  background-color: #F6F1E8 !important;
+  color: #9C5B3C !important;
+  font-weight: 700;
+}
+
+select option:hover,
+select option:focus {
+  background-color: #F6F1E8 !important;
+  color: #9C5B3C !important;
+}
+
 /* ─── Animation Utilities ───────────────────────────────────────────── */
 @keyframes rowFadeIn {
   from { opacity: 0; transform: translateY(4px); }

@@ -4,14 +4,11 @@ import * as XLSX from "xlsx";
 import {
   Users,
   UserCheck,
-  Calendar,
-  Sparkles,
   Download,
   Search,
   ChevronRight,
   ChevronLeft,
   RefreshCw,
-  Filter,
   Star,
   X,
   ArrowUpRight,
@@ -20,11 +17,6 @@ import {
   Check,
   Copy,
   Layers,
-  Activity,
-  Cpu,
-  ShieldCheck,
-  CheckCircle2,
-  AlertTriangle,
   Zap,
   TrendingUp,
   GraduationCap,
@@ -74,7 +66,7 @@ export function PlantManagementDashboard({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"table" | "grid">("grid");
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(10);
+  const pageSize = 10;
 
   // Selected Operator for Detailed Modal Profile
   const [selectedOperatorForModal, setSelectedOperatorForModal] = useState<any | null>(null);
@@ -139,12 +131,15 @@ export function PlantManagementDashboard({
       const assignment =
         operatorAssignmentMap.get(String(op.id)) || operatorAssignmentMap.get(op.employeeId);
 
-      const opSkills = skillMatrix.filter(
+      const roleUpper = String(op.role || "").toUpperCase();
+      const isNonMachine = ["HELPER", "QC", "QUALITY_CONTROLLER", "SUPERVISOR", "LINE_SUPERVISOR"].includes(roleUpper);
+
+      const opSkills = isNonMachine ? [] : skillMatrix.filter(
         (s) => String(s.operatorId) === String(op.id) || s.employeeId === op.employeeId
       );
       const bestSkill = [...opSkills].sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0))[0];
 
-      const certifiedOperations = opSkills.map((s) => ({
+      const certifiedOperations = isNonMachine ? [] : opSkills.map((s) => ({
         id: s.id,
         operationId: s.operationId,
         operationName: s.operationName || "Sewing Operation",
@@ -154,8 +149,10 @@ export function PlantManagementDashboard({
       }));
 
       const isAllocated = !!assignment;
-      const skillRating = bestSkill ? Number(bestSkill.rating) || 3 : 3;
-      const primarySkill = bestSkill ? bestSkill.operationName : "General Sewing Operations";
+      const skillRating = isNonMachine ? null : (bestSkill ? Number(bestSkill.rating) : 3);
+      const primarySkill = isNonMachine
+        ? (roleUpper.includes("SUPERVISOR") ? "Floor Oversight & Target Pacing" : roleUpper.includes("QC") ? "Quality Inspection & Inline Audit" : "Material Handling & Trimming")
+        : (bestSkill ? bestSkill.operationName : "General Sewing Operations");
 
       return {
         id: op.id,
@@ -164,6 +161,7 @@ export function PlantManagementDashboard({
         department: op.department || "Sewing Department",
         role: op.role || "OPERATOR",
         joiningDate: op.joiningDate,
+        isNonMachine,
         isAllocated,
         assignedLineId: assignment?.line?.id || null,
         assignedLineCode: assignment?.line?.lineCode || (assignment ? "Line 01" : null),
@@ -186,17 +184,21 @@ export function PlantManagementDashboard({
     const seatedPercent = totalCount > 0 ? Math.round((seatedCount / totalCount) * 100) : 0;
     const unallocatedPercent = totalCount > 0 ? 100 - seatedPercent : 0;
 
-    const masterReservesCount = unallocatedList.filter((d) => d.skillRating >= 4).length;
+    // Filter machine operators for skill metrics
+    const machineDeployments = allDeployments.filter((d) => !d.isNonMachine);
+    const totalMachineOps = machineDeployments.length;
 
-    // Multi-skilling versatility ratio (% with >= 2 certified skills)
-    const multiSkilledCount = allDeployments.filter((d) => d.certifiedOperations.length >= 2).length;
-    const multiSkilledPercent = totalCount > 0 ? Math.round((multiSkilledCount / totalCount) * 100) : 0;
-
-    // Average skill rating across factory
+    const ratedMachineOps = machineDeployments.filter((d) => d.skillRating != null && d.skillRating > 0);
     const avgSkillRating =
-      totalCount > 0
-        ? Math.round((allDeployments.reduce((sum, d) => sum + d.skillRating, 0) / totalCount) * 10) / 10
-        : 3.5;
+      ratedMachineOps.length > 0
+        ? Math.round((ratedMachineOps.reduce((sum, d) => sum + (d.skillRating || 0), 0) / ratedMachineOps.length) * 10) / 10
+        : 3.8;
+
+    const masterReservesCount = unallocatedList.filter((d) => !d.isNonMachine && d.skillRating != null && d.skillRating >= 4).length;
+
+    // Multi-skilling versatility ratio (% with >= 2 certified skills among machine operators)
+    const multiSkilledCount = machineDeployments.filter((d) => d.certifiedOperations.length >= 2).length;
+    const multiSkilledPercent = totalMachineOps > 0 ? Math.round((multiSkilledCount / totalMachineOps) * 100) : 0;
 
     return {
       totalCount,
@@ -217,7 +219,10 @@ export function PlantManagementDashboard({
     return lines
       .filter((l) => l.active !== false)
       .map((line) => {
-        const plan = linePlans.find((p) => String(p.lineId) === String(line.id) || p.lineCode === line.lineCode);
+        const linePlansForLine = linePlans.filter((p) => String(p.lineId) === String(line.id) || p.lineCode === line.lineCode);
+        const plan = linePlansForLine.find((p) => String(p.status).toLowerCase() === "active")
+          || [...linePlansForLine].sort((a, b) => Number(b.id) - Number(a.id))[0]
+          || null;
         const order = plan?.orderId ? orders.find((o) => String(o.id) === String(plan.orderId)) : null;
         const targetCapacity = Number(line.capacityPerDay) || 600;
         const reqOperators = Number(line.operatorCount) || 12;
@@ -310,6 +315,7 @@ export function PlantManagementDashboard({
 
       // 4. Skill Rating Filter
       if (selectedSkillRatingFilter !== "ALL") {
+        if (op.isNonMachine) return false;
         const reqLvl = Number(selectedSkillRatingFilter);
         if (op.skillRating !== reqLvl && !op.certifiedOperations.some((c) => c.rating === reqLvl)) {
           return false;
@@ -940,33 +946,39 @@ export function PlantManagementDashboard({
 
                       {/* Skill Rating Level */}
                       <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1 font-mono font-bold text-xs px-2.5 py-1 rounded-lg border shadow-2xs ${
-                            op.skillRating >= 5
-                              ? "bg-amber-50 text-amber-900 border-amber-300"
-                              : op.skillRating >= 4
-                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                : op.skillRating >= 3
-                                  ? "bg-sky-50 text-sky-800 border-sky-200"
-                                  : "bg-slate-100 text-slate-700 border-slate-200"
-                          }`}
-                        >
-                          <Star
-                            className={`w-3 h-3 ${
-                              op.skillRating >= 4 ? "fill-amber-400 text-amber-500" : "text-slate-400"
-                            }`}
-                          />
-                          <span>
-                            L{op.skillRating}{" "}
-                            {op.skillRating >= 5
-                              ? "Master"
-                              : op.skillRating >= 4
-                                ? "Expert"
-                                : op.skillRating >= 3
-                                  ? "Competent"
-                                  : "Developing"}
+                        {op.isNonMachine ? (
+                          <span className="inline-flex items-center gap-1 font-sans font-semibold text-[10.5px] px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">
+                            Non-Machine
                           </span>
-                        </span>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center gap-1 font-mono font-bold text-xs px-2.5 py-1 rounded-lg border shadow-2xs ${
+                              (op.skillRating ?? 0) >= 5
+                                ? "bg-amber-50 text-amber-900 border-amber-300"
+                                : (op.skillRating ?? 0) >= 4
+                                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                  : (op.skillRating ?? 0) >= 3
+                                    ? "bg-sky-50 text-sky-800 border-sky-200"
+                                    : "bg-slate-100 text-slate-700 border-slate-200"
+                            }`}
+                          >
+                            <Star
+                              className={`w-3 h-3 ${
+                                (op.skillRating ?? 0) >= 4 ? "fill-amber-400 text-amber-500" : "text-slate-400"
+                              }`}
+                            />
+                            <span>
+                              L{op.skillRating}{" "}
+                              {(op.skillRating ?? 0) >= 5
+                                ? "Master"
+                                : (op.skillRating ?? 0) >= 4
+                                  ? "Expert"
+                                  : (op.skillRating ?? 0) >= 3
+                                    ? "Competent"
+                                    : "Developing"}
+                            </span>
+                          </span>
+                        )}
                       </td>
 
                       {/* Action Column */}
@@ -1064,24 +1076,30 @@ export function PlantManagementDashboard({
                     <span className="text-[10px] font-bold uppercase text-[#8C7E6E]">
                       {op.isAllocated ? "Active Operation" : "Primary Competency"}
                     </span>
-                    <span
-                      className={`inline-flex items-center gap-1 font-mono font-bold text-[11px] px-2 py-0.2 rounded border ${
-                        op.skillRating >= 5
-                          ? "bg-amber-50 text-amber-900 border-amber-300"
-                          : op.skillRating >= 4
-                            ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                            : "bg-sky-50 text-sky-800 border-sky-200"
-                      }`}
-                    >
-                      <Star
-                        className={`w-2.5 h-2.5 ${
-                          op.skillRating >= 4 ? "fill-amber-400 text-amber-500" : "text-slate-400"
-                        }`}
-                      />
-                      <span>
-                        L{op.skillRating} {op.skillRating >= 5 ? "Master" : op.skillRating >= 4 ? "Expert" : "Competent"}
+                    {op.isNonMachine ? (
+                      <span className="inline-flex items-center gap-1 font-sans font-semibold text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                        Non-Machine Role
                       </span>
-                    </span>
+                    ) : (
+                      <span
+                        className={`inline-flex items-center gap-1 font-mono font-bold text-[11px] px-2 py-0.2 rounded border ${
+                          (op.skillRating ?? 0) >= 5
+                            ? "bg-amber-50 text-amber-900 border-amber-300"
+                            : (op.skillRating ?? 0) >= 4
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              : "bg-sky-50 text-sky-800 border-sky-200"
+                        }`}
+                      >
+                        <Star
+                          className={`w-2.5 h-2.5 ${
+                            (op.skillRating ?? 0) >= 4 ? "fill-amber-400 text-amber-500" : "text-slate-400"
+                          }`}
+                        />
+                        <span>
+                          L{op.skillRating} {(op.skillRating ?? 0) >= 5 ? "Master" : (op.skillRating ?? 0) >= 4 ? "Expert" : "Competent"}
+                        </span>
+                      </span>
+                    )}
                   </div>
 
                   <div className="font-bold text-xs text-[#221912] truncate">
@@ -1431,6 +1449,15 @@ export function PlantManagementDashboard({
                       </strong>
                     </div>
                   </div>
+                ) : selectedOperatorForModal.isNonMachine ? (
+                  <div className="text-xs space-y-1">
+                    <strong className="text-slate-800 block font-bold">
+                      Non-Machine Workforce Role
+                    </strong>
+                    <span className="text-[#8C7E6E]">
+                      Provides indirect support and floor oversight. In accordance with garment manufacturing standards, non-machine workforce are not assigned to sewing machine workstations.
+                    </span>
+                  </div>
                 ) : (
                   <div className="flex items-center justify-between text-xs">
                     <div>
@@ -1462,17 +1489,23 @@ export function PlantManagementDashboard({
                     <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
                     <span>Certified Competency Matrix ({selectedOperatorForModal.certifiedOperations?.length || 0} Skills)</span>
                   </h4>
-                  <Link
-                    to="/skill-matrix"
-                    className="text-xs font-bold text-[#9C5B3C] hover:underline"
-                    onClick={() => setSelectedOperatorForModal(null)}
-                  >
-                    Update in Skill Matrix →
-                  </Link>
+                  {!selectedOperatorForModal.isNonMachine && (
+                    <Link
+                      to="/skill-matrix"
+                      className="text-xs font-bold text-[#9C5B3C] hover:underline"
+                      onClick={() => setSelectedOperatorForModal(null)}
+                    >
+                      Update in Skill Matrix →
+                    </Link>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  {(!selectedOperatorForModal.certifiedOperations ||
+                  {selectedOperatorForModal.isNonMachine ? (
+                    <p className="text-xs text-[#8C7E6E] p-4 bg-[#FAF8F5] rounded-xl text-center border border-[#E6DDCE]">
+                      Non-machine workforce roles (Inspectors, Helpers, Supervisors) do not operate sewing machines and have no machine skill ratings.
+                    </p>
+                  ) : (!selectedOperatorForModal.certifiedOperations ||
                     selectedOperatorForModal.certifiedOperations.length === 0) ? (
                     <p className="text-xs text-[#8C7E6E] italic p-4 bg-[#FAF8F5] rounded-xl text-center border border-[#E6DDCE]">
                       No individual skill assessments logged for this operator.

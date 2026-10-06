@@ -21,6 +21,34 @@ import type { AttendanceRecord } from "../attendance/api";
 import type { Shift } from "../shifts/types";
 import type { OperatorTimesheet24h, PieceProductionLog } from "../production-logs/api";
 
+/**
+ * Indexes line plans by line ID and line Code, prioritizing active plans and higher IDs.
+ */
+export function indexActiveLinePlans(linePlans: LinePlan[]): Map<string, LinePlan> {
+  const planByLineId = new Map<string, LinePlan>();
+  const setBetterPlan = (key: string, p: LinePlan) => {
+    const existing = planByLineId.get(key);
+    if (!existing) {
+      planByLineId.set(key, p);
+      return;
+    }
+    const isPActive = String(p.status).toLowerCase() === "active";
+    const isExistingActive = String(existing.status).toLowerCase() === "active";
+    if (isPActive && !isExistingActive) {
+      planByLineId.set(key, p);
+    } else if (isPActive === isExistingActive && Number(p.id) > Number(existing.id)) {
+      planByLineId.set(key, p);
+    }
+  };
+
+  linePlans.forEach((p) => {
+    if (p.lineId != null) setBetterPlan(String(p.lineId), p);
+    if (p.lineCode) setBetterPlan(p.lineCode, p);
+  });
+
+  return planByLineId;
+}
+
 // ─── Live Production Snapshot ──────────────────────────────────────────────────
 
 export interface PerLineProductionSummary {
@@ -200,12 +228,8 @@ export function computePlantKPIs(
   const activeLines = lines.filter((l) => l.active !== false);
   const totalLines = lines.length;
 
-  // Active line plans mapping
-  const planByLineId = new Map<string, LinePlan>();
-  linePlans.forEach((p) => {
-    if (p.lineId != null) planByLineId.set(String(p.lineId), p);
-    if (p.lineCode) planByLineId.set(p.lineCode, p);
-  });
+  // Active line plans mapping (prioritizing active line plans)
+  const planByLineId = indexActiveLinePlans(linePlans);
 
   // Count running lines
   let runningLines = 0;
@@ -447,11 +471,7 @@ export function computeLineStatusGrid(
 ): LineStatusSummary[] {
   const activeLines = lines.filter((l) => l.active !== false);
 
-  const planByLineId = new Map<string, LinePlan>();
-  linePlans.forEach((p) => {
-    if (p.lineId != null) planByLineId.set(String(p.lineId), p);
-    if (p.lineCode) planByLineId.set(p.lineCode, p);
-  });
+  const planByLineId = indexActiveLinePlans(linePlans);
 
   const orderById = new Map<string, Order>();
   orders.forEach((o) => {
@@ -777,11 +797,7 @@ export function computeLiveProductionSnapshot(
   const shiftHours = Math.round((netWorkingMinutes / 60) * 10) / 10;
 
   // Plan maps
-  const planByLineId = new Map<string, LinePlan>();
-  linePlans.forEach((p) => {
-    if (p.lineId != null) planByLineId.set(String(p.lineId), p);
-    if (p.lineCode) planByLineId.set(p.lineCode, p);
-  });
+  const planByLineId = indexActiveLinePlans(linePlans);
 
   const orderById = new Map<string, Order>();
   orders.forEach((o) => {

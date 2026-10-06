@@ -17,6 +17,7 @@ import {
 
 import { PageHeader, DataCard } from "../../components/ui/PremiumUI";
 import { Button } from "../../components/ui/Button";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 import { Modal } from "../../components/ui/Modal";
 
 import { lineDesignApi, type LineDesign, type LineDesignRequest } from "../../features/linedesign/api";
@@ -151,10 +152,10 @@ export function LineDesignPage() {
     }));
 
     const plannedEff = currentPlan?.plannedEfficiency || 80;
-    const targetOps = currentPlan?.plannedManpower || undefined;
     const targetHourly = currentPlan?.targetHourlyOutput || undefined;
     const targetPitchSecs = currentPlan?.designedPitchSecs || undefined;
-    return generateLineBalancingScenarios(opSteps, 8, targetOps, plannedEff, targetHourly, targetPitchSecs);
+    // Operators are planned dynamically based on line layout scenarios
+    return generateLineBalancingScenarios(opSteps, 8, undefined, plannedEff, targetHourly, targetPitchSecs);
   }, [currentBulletin, currentPlan]);
 
   const activeScenario = useMemo(() => {
@@ -173,12 +174,17 @@ export function LineDesignPage() {
       } else {
         setDesignCode(`LD-ORDER-${currentOrder?.id || 1}-${activeScenario.id.toUpperCase()}`);
       }
+    } else if (currentBulletin?.lines?.length) {
+      setTotalWorkstations(currentBulletin.lines.length);
+      setTotalOperators(currentBulletin.lines.length);
+      setDesignCode(`LD-${currentPlan?.planCode || "PLAN"}`);
     } else if (currentPlan?.plannedManpower) {
-      setTotalWorkstations(currentPlan.plannedManpower);
-      setTotalOperators(currentPlan.plannedManpower);
+      const roundedOps = Math.ceil(currentPlan.plannedManpower);
+      setTotalWorkstations(roundedOps);
+      setTotalOperators(roundedOps);
       setDesignCode(`LD-${currentPlan.planCode || "PLAN"}`);
     }
-  }, [activeScenario, currentPlan, currentOrder, editingDesignId]);
+  }, [activeScenario, currentPlan, currentOrder, currentBulletin, editingDesignId]);
 
   // Machine Breakdown & Inventory Matching (based on active scenario or bulletin)
   const machineRequirements = useMemo(() => {
@@ -282,9 +288,9 @@ export function LineDesignPage() {
     setSaving(true);
     try {
       const selectedLine = sewingLines.find(l => String(l.id) === String(selectedLineId));
-      const targetHourly = (activeScenario ? activeScenario.hourlyOutputPlanned : undefined) || currentPlan?.targetHourlyOutput || 70;
-      const plannedEff = (activeScenario?.lineBalanceEfficiency ? Number(activeScenario.lineBalanceEfficiency.toFixed(1)) : undefined) || currentPlan?.plannedEfficiency || 80;
-      const pitchSecs = (activeScenario ? Number((activeScenario.pitchTime * 60).toFixed(1)) : undefined) || currentPlan?.designedPitchSecs || 41.1;
+      const targetHourly = currentPlan?.targetHourlyOutput || (activeScenario ? activeScenario.hourlyOutputPlanned : undefined) || 70;
+      const plannedEff = currentPlan?.plannedEfficiency || (activeScenario?.plannedEfficiency || 80);
+      const pitchSecs = currentPlan?.designedPitchSecs || (activeScenario ? Number((activeScenario.pitchTime * 60).toFixed(1)) : 41.1);
 
       const payload: LineDesignRequest = {
         designCode: designCode || `LD-LINE-${selectedLineId}`,
@@ -462,52 +468,51 @@ export function LineDesignPage() {
             {/* Capacity Plan Selector */}
             <div className="space-y-1">
               <label className="font-bold text-[#8C7E6E] uppercase text-[10px]">Source Capacity Plan</label>
-              <select
+              <CustomSelect
                 value={selectedPlanId}
-                onChange={(e) => setSelectedPlanId(e.target.value)}
-                className="w-full px-3 py-2 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-              >
-                <option value="">Direct Order Balancing (No Pre-Saved Plan)</option>
-                {capacityPlans.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.planCode} - {p.orderNo || "Order"} ({p.plannedManpower} ops, {p.targetHourlyOutput} pcs/hr)
-                  </option>
-                ))}
-              </select>
+                onChange={val => setSelectedPlanId(val)}
+                options={[
+                  { value: "", label: "Direct Order Balancing (No Pre-Saved Plan)" },
+                  ...capacityPlans.map(p => ({
+                    value: String(p.id),
+                    label: p.planCode,
+                    sublabel: p.orderNo ? (p.styleNo ? `${p.orderNo} · ${p.styleNo}` : p.orderNo) : (p.orderNo || "Order"),
+                  }))
+                ]}
+                size="md"
+              />
             </div>
 
             {/* Direct Order (if no plan selected) */}
             {!selectedPlanId && (
               <div className="space-y-1">
                 <label className="font-bold text-[#8C7E6E] uppercase text-[10px]">Production Order *</label>
-                <select
+                <CustomSelect
                   value={selectedOrderId}
-                  onChange={(e) => setSelectedOrderId(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-                >
-                  {orders.map(o => (
-                    <option key={o.id} value={o.id}>
-                      {o.orderNo} - {o.buyer || "Buyer"} ({((o as any).totalQuantity || (o as any).quantity || 1000)} pcs)
-                    </option>
-                  ))}
-                </select>
+                  onChange={val => setSelectedOrderId(val)}
+                  options={orders.map(o => ({
+                    value: String(o.id),
+                    label: o.orderNo,
+                    sublabel: o.buyer || "Buyer",
+                    badge: `${((o as any).totalQuantity || (o as any).quantity || 1000).toLocaleString()} pcs`
+                  }))}
+                  size="md"
+                />
               </div>
             )}
 
             {/* Sewing Line Selector */}
             <div className="space-y-1">
               <label className="font-bold text-[#8C7E6E] uppercase text-[10px]">Target Sewing Line *</label>
-              <select
+              <CustomSelect
                 value={selectedLineId}
-                onChange={(e) => setSelectedLineId(e.target.value)}
-                className="w-full px-3 py-2 bg-[#F6F1E8] border border-[#E6DDCE] rounded-xl font-bold text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-              >
-                {sewingLines.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.lineCode} - {l.lineName}
-                  </option>
-                ))}
-              </select>
+                onChange={val => setSelectedLineId(val)}
+                options={sewingLines.map(l => ({
+                  value: String(l.id),
+                  label: `${l.lineCode} - ${l.lineName}`
+                }))}
+                size="md"
+              />
             </div>
 
             {/* Design Code */}

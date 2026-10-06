@@ -196,6 +196,11 @@ export function OperatorCombobox({
 
     return availableOperators
       .filter((op) => {
+        // Non-machine workforce (QC Inspectors, Helpers, Supervisors) cannot be assigned to operations
+        if (op.role === "QUALITY_CHECKER" || op.role === "LINE_SUPERVISOR" || op.role === "HELPER") {
+          return false;
+        }
+
         // Tab filter
         const att = getOperatorAttendance(op.id);
         const skill = getOperatorSkill(op.id, operationId);
@@ -209,7 +214,7 @@ export function OperatorCombobox({
         if (activeTab === "expert" && (skill === null || skill < 4)) {
           return false;
         }
-        if (activeTab === "floater" && op.role !== "FLOATER" && op.role !== "HELPER") {
+        if (activeTab === "floater" && op.role !== "FLOATER") {
           return false;
         }
 

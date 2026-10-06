@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
 import {
   Plus, Search, ChevronDown, ShoppingBag, Activity,
   Clock, Package, Layers,
@@ -9,6 +8,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "../../components/ui/Button";
 import { PageHeader, DataCard, EmptyState, SkeletonTable } from "../../components/ui/PremiumUI";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 import { Modal } from "../../components/ui/Modal";
 import { ordersApi, type Order, type CreateOrderDTO, type OrderStatus } from "../../features/orders/api";
 import { OrderForm } from "../../features/orders/OrderForm";
@@ -417,30 +417,32 @@ export function OrdersPage() {
             </div>
 
             {/* Buyer Filter */}
-            <select
-              value={buyerFilter}
-              onChange={e => setBuyerFilter(e.target.value)}
-              className="text-xs font-semibold px-3 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-[#221912] focus:outline-none focus:border-[#9C5B3C] cursor-pointer shadow-2xs shrink-0"
-            >
-              <option value="ALL">All Buyers</option>
-              {distinctBuyers.map(b => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
+            <div className="w-40 shrink-0">
+              <CustomSelect
+                value={buyerFilter}
+                onChange={val => setBuyerFilter(val)}
+                options={[
+                  { value: "ALL", label: "All Buyers" },
+                  ...distinctBuyers.map(b => ({ value: b, label: b }))
+                ]}
+                size="sm"
+              />
+            </div>
 
             {/* Sort Selector */}
-            <select
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value as any)}
-              className="text-xs font-semibold px-3 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-[#221912] focus:outline-none focus:border-[#9C5B3C] cursor-pointer shadow-2xs shrink-0"
-            >
-              <option value="orderDate">Order Date (Newest)</option>
-              <option value="delivery">Delivery (Earliest First)</option>
-              <option value="quantity">Quantity (Highest First)</option>
-              <option value="orderNo">Order No (A-Z)</option>
-            </select>
+            <div className="w-48 shrink-0">
+              <CustomSelect
+                value={sortBy}
+                onChange={val => setSortBy(val as any)}
+                options={[
+                  { value: "orderDate", label: "Order Date (Newest)" },
+                  { value: "delivery", label: "Delivery (Earliest First)" },
+                  { value: "quantity", label: "Quantity (Highest First)" },
+                  { value: "orderNo", label: "Order No (A-Z)" }
+                ]}
+                size="sm"
+              />
+            </div>
           </div>
         </div>
 
@@ -739,34 +741,28 @@ export function OrdersPage() {
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="border-t border-blue-100 bg-slate-50/90 p-5 overflow-hidden"
+                className="border-t border-[#E6DDCE] bg-[#FAF7F2] p-5 overflow-hidden"
               >
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 mb-4">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-[#E6DDCE] mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shadow-blue-500/20">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#9C5B3C] to-[#7D462E] text-white flex items-center justify-center font-bold text-sm shadow-sm shadow-[#9C5B3C]/20 ring-2 ring-[#9C5B3C]/10">
                       <Layers className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-slate-900">
-                        Size Distribution Breakdown — <span className="font-mono text-blue-700">{expOrder.orderNo}</span>
+                      <h4 className="text-sm font-bold text-[#221912]">
+                        Size Distribution Breakdown — <span className="font-mono text-[#9C5B3C] font-bold">{expOrder.orderNo}</span>
                       </h4>
-                      <p className="text-xs text-slate-500">
-                        Style: <strong className="text-slate-700">{style?.styleNo}</strong> ({style?.description || "No description"}) · Buyer: <strong className="text-slate-700">{expOrder.buyer}</strong>
+                      <p className="text-xs text-[#8C7E6E]">
+                        Style: <strong className="text-[#221912]">{style?.styleNo}</strong> ({style?.description || "No description"}) · Buyer: <strong className="text-[#221912]">{expOrder.buyer}</strong>
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Link
-                      to={`/line-balance?orderId=${expOrder.id}`}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors shadow-xs"
-                    >
-                      <Activity className="w-3.5 h-3.5" />
-                      Configure Line Balancing
-                    </Link>
                     <button
                       onClick={() => setExpandedOrderId(null)}
-                      className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+                      className="p-1.5 rounded-xl text-[#8C7E6E] hover:text-[#221912] hover:bg-[#EFE9DF] transition-colors cursor-pointer"
+                      title="Close"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -785,25 +781,25 @@ export function OrdersPage() {
                       return (
                         <div
                           key={size.id}
-                          className="bg-white rounded-xl border border-slate-200 p-3 shadow-2xs space-y-1 text-center"
+                          className="bg-white rounded-xl border border-[#E6DDCE] p-3 shadow-2xs space-y-1 text-center hover:border-[#9C5B3C]/50 transition-colors"
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold font-mono uppercase bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] font-bold font-mono uppercase bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE] px-2 py-0.5 rounded-md">
                               {size.code}
                             </span>
-                            <span className="text-[10px] font-semibold text-slate-400">
+                            <span className="text-[10px] font-semibold text-[#8C7E6E]">
                               {percent}%
                             </span>
                           </div>
-                          <p className="text-lg font-extrabold text-slate-900 font-mono pt-1">
+                          <p className="text-lg font-extrabold text-[#221912] font-mono pt-1">
                             {qty.toLocaleString()}
                           </p>
-                          <p className="text-[10px] text-slate-500 font-medium truncate">
+                          <p className="text-[10px] text-[#8C7E6E] font-medium truncate">
                             {size.label || `Size ${size.code}`}
                           </p>
-                          <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden">
+                          <div className="w-full bg-[#EFE9DF] rounded-full h-1.5 mt-2 overflow-hidden">
                             <div
-                              className="bg-blue-600 h-full rounded-full"
+                              className="bg-gradient-to-r from-[#B48259] to-[#9C5B3C] h-full rounded-full transition-all duration-300"
                               style={{ width: `${percent}%` }}
                             />
                           </div>

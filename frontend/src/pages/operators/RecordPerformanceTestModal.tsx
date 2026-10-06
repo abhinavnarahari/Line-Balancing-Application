@@ -101,6 +101,12 @@ export function RecordPerformanceTestModal({
   };
 
   const handleSave = async (status: "DRAFT" | "SUBMITTED") => {
+    const isNonMachine = operator.role === "QUALITY_CHECKER" || operator.role === "LINE_SUPERVISOR" || operator.role === "HELPER";
+    if (isNonMachine) {
+      alert(`Skill ratings cannot be recorded for ${operator.name} (${operator.role}). Non-machine personnel do not operate sewing machines.`);
+      return;
+    }
+
     if (!operationId || validTimes.length === 0) {
       alert("Please select an operation and enter at least one valid test cycle time.");
       return;

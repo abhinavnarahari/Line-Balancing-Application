@@ -34,6 +34,7 @@ public class BulletinLineRequest {
     private String stitchType;
     private String seamType;
     private String attachmentType;
+    @Min(value = 0, message = "WIP threshold must be at least 0")
     private Integer wipThreshold;
 
     private String notes;

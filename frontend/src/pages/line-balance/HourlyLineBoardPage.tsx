@@ -11,6 +11,7 @@ import { linesApi, type SewingLine } from "../../features/lines/api";
 import type { Shift } from "../../features/shifts/types";
 import { Modal } from "../../components/ui/Modal";
 import { Button } from "../../components/ui/Button";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 import { exportToExcel } from "../../utils/excel";
 import {
   hourlyBoardApi,
@@ -229,7 +230,7 @@ function CellEntryModal({ row, cell, linePlanId, logDate, onClose, onSaved }: Ce
           <button
             onClick={handleSave}
             disabled={saving}
-            className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm shadow-blue-500/20 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            className="px-5 py-2 text-xs font-bold text-white bg-[#9C5B3C] hover:bg-[#854B30] rounded-xl shadow-sm shadow-[#9C5B3C]/20 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
           >
             {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
             Save Output
@@ -617,33 +618,36 @@ export function HourlyLineBoardPage() {
       <div className="flex flex-wrap items-center gap-3 p-3.5 bg-white border border-[#E6DDCE] rounded-2xl shadow-[0_1px_3px_rgba(34,25,18,0.05)]">
         {/* Sewing Line select */}
         {lines.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[#8C7E6E]">Line:</span>
-            <select
+          <div className="flex items-center gap-2 min-w-[220px]">
+            <span className="text-xs font-bold text-[#8C7E6E] shrink-0">Line:</span>
+            <CustomSelect
               value={selectedLineId}
-              onChange={e => setSelectedLineId(e.target.value)}
-              className="h-9 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] cursor-pointer"
-            >
-              {lines.map(l => (
-                <option key={l.id} value={l.id}>{l.lineCode} · {l.lineName}</option>
-              ))}
-            </select>
+              onChange={val => setSelectedLineId(val)}
+              options={lines.map(l => ({
+                value: String(l.id),
+                label: `${l.lineCode} · ${l.lineName}`
+              }))}
+              size="sm"
+            />
           </div>
         )}
 
         {/* Order select */}
-        <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-[#9C5B3C]" />
-          <select
+        <div className="flex items-center gap-2 min-w-[260px]">
+          <Activity className="w-4 h-4 text-[#9C5B3C] shrink-0" />
+          <CustomSelect
             value={selectedOrderId}
-            onChange={e => setSelectedOrderId(e.target.value)}
-            className="h-9 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] cursor-pointer"
-          >
-            <option value="">— Select Order —</option>
-            {orders.map(o => (
-              <option key={o.id} value={o.id}>{o.orderNo} {o.buyer ? `· ${o.buyer}` : ""}</option>
-            ))}
-          </select>
+            onChange={val => setSelectedOrderId(val)}
+            options={[
+              { value: "", label: "— Select Order —" },
+              ...orders.map(o => ({
+                value: String(o.id),
+                label: o.orderNo,
+                sublabel: o.buyer || undefined
+              }))
+            ]}
+            size="sm"
+          />
         </div>
 
         {/* Shift pills */}

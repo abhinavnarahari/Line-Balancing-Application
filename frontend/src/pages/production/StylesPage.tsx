@@ -4,6 +4,7 @@ import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { motion } from "framer-motion";
 import { Button } from "../../components/ui/Button";
 import { PageHeader, DataCard, EmptyState, StatusBadge, SkeletonTable, RecentActivityLog } from "../../components/ui/PremiumUI";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { stylesApi, type Style, type CreateStyleDTO, type UpdateStyleDTO } from "../../features/styles/api";
@@ -186,16 +187,17 @@ export function StylesPage() {
 
             {/* Buyer Selector */}
             {distinctBuyers.length > 0 && (
-              <select
-                value={buyerFilter}
-                onChange={e => setBuyerFilter(e.target.value)}
-                className="h-8.5 bg-white border border-slate-200 rounded-xl px-3 text-xs font-semibold text-slate-700 focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-              >
-                <option value="ALL">All Buyers ({distinctBuyers.length})</option>
-                {distinctBuyers.map(b => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
+              <div className="w-44 shrink-0">
+                <CustomSelect
+                  value={buyerFilter}
+                  onChange={val => setBuyerFilter(val)}
+                  options={[
+                    { value: "ALL", label: `All Buyers (${distinctBuyers.length})` },
+                    ...distinctBuyers.map(b => ({ value: b, label: b }))
+                  ]}
+                  size="sm"
+                />
+              </div>
             )}
 
             {/* Search Input */}

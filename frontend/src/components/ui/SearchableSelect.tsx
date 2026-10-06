@@ -124,11 +124,11 @@ export function SearchableSelect({
           }
         }}
         className={cn(
-          "w-full h-10 bg-white border rounded-lg px-3 text-xs text-[#0F172A] flex items-center justify-between transition-all cursor-pointer shadow-2xs",
+          "w-full h-10 bg-white border rounded-xl px-3 text-xs text-[#221912] flex items-center justify-between transition-all cursor-pointer shadow-2xs",
           isOpen
-            ? "border-[#9C5B3C] ring-2 ring-[#9C5B3C]/20"
-            : "border-[#E2E8F0] hover:border-[#9C5B3C]/60",
-          disabled && "opacity-50 cursor-not-allowed hover:border-[#E2E8F0]"
+            ? "border-[#9C5B3C] ring-2 ring-[#9C5B3C]/15"
+            : "border-[#E6DDCE] hover:border-[#B48259]",
+          disabled && "opacity-50 cursor-not-allowed hover:border-[#E6DDCE]"
         )}
       >
         <div className="flex-1 flex items-center gap-2 overflow-hidden mr-2">
@@ -141,21 +141,21 @@ export function SearchableSelect({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Type to search size..."
-                className="w-full bg-transparent text-xs text-[#0F172A] placeholder-[#64748B] focus:outline-none font-medium"
+                className="w-full bg-transparent text-xs text-[#221912] placeholder-[#8C7E6E] focus:outline-none font-medium"
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
           ) : selectedOption ? (
             <div className="flex items-center gap-2 truncate">
-              <span className="font-semibold text-xs text-[#0F172A]">
+              <span className="font-semibold text-xs text-[#221912]">
                 {selectedOption.label}
               </span>
               {selectedOption.sublabel && (
-                <span className="text-[#64748B] text-xs font-mono font-normal">({selectedOption.sublabel})</span>
+                <span className="text-[#8C7E6E] text-xs font-mono font-normal">({selectedOption.sublabel})</span>
               )}
             </div>
           ) : (
-            <span className="text-[#64748B] text-xs font-normal">{placeholder}</span>
+            <span className="text-[#8C7E6E] text-xs font-normal">{placeholder}</span>
           )}
         </div>
 
@@ -168,7 +168,7 @@ export function SearchableSelect({
                 onChange("");
                 setQuery("");
               }}
-              className="p-1 hover:bg-[#F1F5F9] rounded-md text-[#64748B] hover:text-[#0F172A] transition-colors cursor-pointer"
+              className="p-1 hover:bg-[#F6F1E8] rounded-md text-[#8C7E6E] hover:text-[#9C5B3C] transition-colors cursor-pointer"
               title="Clear selection"
             >
               <X className="w-3 h-3" />
@@ -176,8 +176,8 @@ export function SearchableSelect({
           )}
           <ChevronDown
             className={cn(
-              "w-3.5 h-3.5 text-[#64748B] transition-transform duration-200",
-              isOpen && "rotate-180 text-[#9C5B3C]"
+              "w-4 h-4 text-[#9C5B3C] transition-transform duration-200",
+              isOpen && "rotate-180 text-[#B06C49]"
             )}
           />
         </div>
@@ -191,12 +191,12 @@ export function SearchableSelect({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.99 }}
             transition={{ duration: 0.12 }}
-            className="absolute z-[70] w-full min-w-[240px] mt-1 bg-white border border-[#E2E8F0] rounded-xl shadow-xl overflow-hidden flex flex-col max-h-60"
+            className="absolute z-[70] min-w-full w-max max-w-[min(92vw,560px)] left-0 mt-1.5 bg-white border border-[#E6DDCE] rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-60"
           >
-            <div ref={listRef} className="overflow-y-auto p-1.5 space-y-0.5">
+            <div ref={listRef} className="overflow-y-auto custom-scrollbar p-1.5 space-y-0.5">
               {filteredOptions.length === 0 ? (
-                <div className="py-5 text-center text-xs text-[#64748B]">
-                  No operations found matching &ldquo;<span className="font-semibold text-[#0F172A]">{query}</span>&rdquo;
+                <div className="py-5 text-center text-xs text-[#8C7E6E]">
+                  No options found matching &ldquo;<span className="font-semibold text-[#221912]">{query}</span>&rdquo;
                 </div>
               ) : (
                 filteredOptions.map((opt, idx) => {
@@ -210,20 +210,20 @@ export function SearchableSelect({
                       onClick={() => handleSelect(opt.value)}
                       onMouseEnter={() => setHighlightedIndex(idx)}
                       className={cn(
-                        "w-full px-3 py-2 text-xs rounded-lg text-left flex items-center justify-between transition-colors cursor-pointer",
+                        "w-full px-3 py-2 text-xs rounded-xl text-left flex items-center justify-between gap-3 transition-colors cursor-pointer",
                         isSelected
-                          ? "bg-[#FAF7F2] text-[#9C5B3C] font-semibold"
+                          ? "bg-[#F6F1E8] text-[#9C5B3C] font-bold"
                           : isHighlighted
                           ? "bg-[#FAF7F2] text-[#221912]"
-                          : "text-[#475569]"
+                          : "text-[#221912] hover:bg-[#FAF7F2]"
                       )}
                     >
-                      <div className="flex items-center gap-2 truncate">
-                        <span className="font-medium text-xs text-[#0F172A]">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="font-medium text-xs text-[#221912] whitespace-normal">
                           {opt.label}
                         </span>
                         {opt.sublabel && (
-                          <span className="text-[#64748B] text-xs font-mono font-normal">({opt.sublabel})</span>
+                          <span className="text-[#8C7E6E] text-xs font-mono font-normal whitespace-normal">({opt.sublabel})</span>
                         )}
                       </div>
                       {isSelected && <Check className="w-3.5 h-3.5 text-[#9C5B3C] shrink-0 ml-2" />}

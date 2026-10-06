@@ -306,7 +306,7 @@ export const RoleWorkflowGuideModal: React.FC<RoleWorkflowGuideModalProps> = ({
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#9C5B3C] text-white text-[11px] font-bold shadow-xs">
                 IE (Industrial Engineer) • Steps 1-8, 14
               </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[11px] font-bold shadow-xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#0A2947] text-white text-[11px] font-bold shadow-xs">
                 Line Supervisor • Steps 8-13, 15
               </span>
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-bold shadow-xs">

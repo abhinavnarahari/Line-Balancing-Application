@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { X, CheckCircle2, Clock, Calculator, ShieldAlert, Cpu, Trash2, AlertCircle, Layers } from "lucide-react";
 import { pieceProductionApi, type PieceProductionLog } from "./api";
+import { CustomSelect } from "../../components/ui/CustomSelect";
 import type { Operator } from "../../features/operators/api";
 import type { Operation } from "../../features/operations/api";
 import type { Order } from "../../features/orders/api";
@@ -346,38 +347,37 @@ export function RecordPieceModal({
               <label className="block text-[11px] font-bold tracking-wider uppercase text-[#8C7E6E] mb-1.5">
                 Operator <span className="text-rose-500">*</span>
               </label>
-              <select
+              <CustomSelect
                 value={operatorId}
-                onChange={e => setOperatorId(e.target.value)}
-                required
-                className="w-full h-10 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-              >
-                <option value="">— Select Operator —</option>
-                {operators.map(op => (
-                  <option key={op.id} value={op.id}>
-                    {op.employeeId} — {op.name} ({op.department || "Sewing"})
-                  </option>
-                ))}
-              </select>
+                onChange={val => setOperatorId(val)}
+                options={[
+                  { value: "", label: "— Select Operator —" },
+                  ...operators.map(op => ({
+                    value: String(op.id),
+                    label: `${op.employeeId} — ${op.name}`,
+                    sublabel: op.department || "Sewing"
+                  }))
+                ]}
+                size="md"
+              />
             </div>
 
             <div>
               <label className="block text-[11px] font-bold tracking-wider uppercase text-[#8C7E6E] mb-1.5">
                 Operation <span className="text-rose-500">*</span>
               </label>
-              <select
+              <CustomSelect
                 value={operationId}
-                onChange={e => handleOperationChange(e.target.value)}
-                required
-                className="w-full h-10 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-semibold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-              >
-                <option value="">— Select Operation —</option>
-                {operations.map(op => (
-                  <option key={op.id} value={op.id}>
-                    {op.operationCode || (op as any).code || `OP-${op.id}`} — {op.name}
-                  </option>
-                ))}
-              </select>
+                onChange={val => handleOperationChange(val)}
+                options={[
+                  { value: "", label: "— Select Operation —" },
+                  ...operations.map(op => ({
+                    value: String(op.id),
+                    label: `${op.operationCode || (op as any).code || `OP-${op.id}`} — ${op.name}`
+                  }))
+                ]}
+                size="md"
+              />
             </div>
           </div>
 
@@ -400,18 +400,19 @@ export function RecordPieceModal({
               <label className="block text-[11px] font-bold tracking-wider uppercase text-[#8C7E6E] mb-1.5">
                 Production Order
               </label>
-              <select
+              <CustomSelect
                 value={orderId}
-                onChange={e => setOrderId(e.target.value)}
-                className="w-full h-10 bg-white border border-[#E6DDCE] rounded-xl px-3 text-xs font-medium text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-              >
-                <option value="">— Optional Order —</option>
-                {orders.map(o => (
-                  <option key={o.id} value={o.id}>
-                    {o.orderNo} ({o.buyer || "General"})
-                  </option>
-                ))}
-              </select>
+                onChange={val => setOrderId(val)}
+                options={[
+                  { value: "", label: "— Optional Order —" },
+                  ...orders.map(o => ({
+                    value: String(o.id),
+                    label: o.orderNo,
+                    sublabel: o.buyer || "General"
+                  }))
+                ]}
+                size="md"
+              />
             </div>
 
             <div>

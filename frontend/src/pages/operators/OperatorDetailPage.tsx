@@ -60,6 +60,13 @@ export function OperatorDetailPage() {
         const allOps = await operationsApi.getOperations();
         setOperations(allOps);
 
+        const isMachineOperator = !found.role || found.role === "OPERATOR" || found.role === "FLOATER";
+        if (!isMachineOperator) {
+          setSkills({});
+          setPerformanceLogs([]);
+          return;
+        }
+
         // Load skills directly matching Sewing Skill Matrix based on average cycle time
         const [currentSkills, perfLogs] = await Promise.all([
           skillApi.getCurrentMatrix(found.id),
@@ -103,9 +110,17 @@ export function OperatorDetailPage() {
     }
   };
 
+  const isMachine = operator ? (!operator.role || operator.role === "OPERATOR" || operator.role === "FLOATER") : true;
+
   useEffect(() => {
     loadData();
   }, [id]);
+
+  useEffect(() => {
+    if (!isMachine && activeTab === "Skill Matrix") {
+      setActiveTab("Overview");
+    }
+  }, [isMachine, activeTab]);
 
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -300,23 +315,45 @@ export function OperatorDetailPage() {
               <h2 className="font-bold text-[#0F172A] text-sm">{operator.name}</h2>
               <p className="text-[11px] font-medium text-[#64748B]">{operator.department}</p>
             </div>
-            <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${operator.active ? "bg-[#F3F5F2] text-[#77876F] border-[#d4decb]" : "bg-[#fff1f2] text-[#be123c] border-[#fecaca]"}`}>
-              {operator.active ? "Active" : "Inactive"}
-            </span>
-          </div>
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${operator.active ? "bg-[#F3F5F2] text-[#77876F] border-[#d4decb]" : "bg-[#fff1f2] text-[#be123c] border-[#fecaca]"}`}>
+                {operator.active ? "Active" : "Inactive"}
+              </span>
+              {operator.role === "QUALITY_CHECKER" && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border bg-purple-50 text-purple-800 border-purple-200">
+                  Quality Checker
+                </span>
+              )}
+              {operator.role === "LINE_SUPERVISOR" && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border bg-blue-50 text-blue-800 border-blue-200">
+                  Line Supervisor
+                </span>
+              )}
+              {operator.role === "HELPER" && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border bg-slate-100 text-slate-700 border-slate-200">
+                  Floor Helper
+                </span>
+              )}
+              {operator.role === "FLOATER" && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border bg-amber-50 text-amber-800 border-amber-200">
+                  Floater / Relief
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="space-y-4">
             <div>
               <h3 className="text-[10px] font-bold tracking-widest text-[#8C7E6E] uppercase mb-2">
-                Assigned To
+                {isMachine ? "Assigned To" : "Workforce Role"}
               </h3>
               <div className="flex items-center gap-2 p-2.5 bg-white border border-[#E6DDCE] rounded-xl shadow-2xs">
                 <span className="w-5 h-5 rounded-md bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE] text-[10px] font-bold flex items-center justify-center">
-                  L1
+                  {isMachine ? "L1" : "NM"}
                 </span>
-                <span className="text-xs font-bold text-[#221912]">Line 1 (Sewing)</span>
+                <span className="text-xs font-bold text-[#221912]">
+                  {isMachine ? "Line 1 (Sewing)" : "Non-Machine Workforce"}
+                </span>
               </div>
             </div>
 
@@ -360,7 +397,7 @@ export function OperatorDetailPage() {
           {/* Tabs */}
           <div className="px-8 pt-6 border-b border-[#F0EAE0]">
             <div className="flex items-center gap-6">
-              {(["Overview", "Connections", "Skill Matrix"] as Tab[]).map((tab) => (
+              {((isMachine ? ["Overview", "Connections", "Skill Matrix"] : ["Overview", "Connections"]) as Tab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -383,6 +420,17 @@ export function OperatorDetailPage() {
           <div className="flex-1 p-8">
             {activeTab === "Overview" && (
               <div className="max-w-2xl space-y-6">
+                {!isMachine && (
+                  <div className="p-4 bg-[#FAF7F2] border border-[#E6DDCE] rounded-xl flex items-center gap-3 text-xs text-[#8C7E6E]">
+                    <div className="w-8 h-8 rounded-lg bg-white border border-[#E6DDCE] flex items-center justify-center shrink-0 text-[#9C5B3C]">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-bold text-[#221912] block">Non-Machine Role</span>
+                      <span>This staff member is assigned as a {operator.role === "QUALITY_CHECKER" ? "Quality Checker" : operator.role === "LINE_SUPERVISOR" ? "Line Supervisor" : "Floor Helper"}. Sewing machine skill ratings and operation assignments are disabled.</span>
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-between items-center border-b border-[#F0EAE0] pb-2">
                   <h3 className="font-bold text-[#221912] text-base">Employee Details</h3>
                   {!isEditing ? (

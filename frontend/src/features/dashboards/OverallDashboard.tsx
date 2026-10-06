@@ -40,7 +40,6 @@ import {
   computePlantAlerts,
   computeLiveProductionSnapshot,
   type LineStatusSummary,
-  type LiveProductionSnapshot,
 } from "./overallDashboardMetrics";
 
 interface OverallDashboardProps {

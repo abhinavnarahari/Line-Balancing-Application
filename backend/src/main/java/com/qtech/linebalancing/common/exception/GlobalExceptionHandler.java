@@ -43,6 +43,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle 400 — Illegal argument or bad request.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("Illegal argument: {}", ex.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    /**
      * Handle 400 — Bean validation failure (@Valid on request body).
      * Returns a map of field -> error message.
      */
