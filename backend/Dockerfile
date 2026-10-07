@@ -41,8 +41,8 @@ ENV PORT=8085 \
 
 EXPOSE 8085
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=3 \
-  CMD curl -f http://localhost:${PORT}/actuator/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://127.0.0.1:${PORT:-8085}/actuator/health || exit 1
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
