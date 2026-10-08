@@ -649,7 +649,7 @@ export function OperatorDetailPage() {
                           <th className="py-3 px-4 w-16 text-center">Seq</th>
                           <th className="py-3 px-4 w-28">Code</th>
                           <th className="py-3 px-4 min-w-[200px]">Operation & Specification</th>
-                          <th className="py-3 px-4 w-28 text-center">Standard SMV</th>
+                          <th className="py-3 px-4 w-28 text-center">Standard SMV (sec)</th>
                           <th className="py-3 px-4 min-w-[220px]">Current Skill Rating</th>
                           <th className="py-3 px-4 w-32 text-center">Tested Avg Time</th>
                           <th className="py-3 px-4 w-28 text-right pr-4">Actions</th>
@@ -717,14 +717,9 @@ export function OperatorDetailPage() {
 
                               {/* Standard SMV */}
                               <td className="py-3.5 px-4 text-center align-middle whitespace-nowrap">
-                                <div className="flex flex-col items-center">
-                                  <span className="font-mono font-bold text-xs text-[#221912]">
-                                    {smv.toFixed(2)} <span className="text-[10px] text-[#8C7E6E] font-normal">SAM</span>
-                                  </span>
-                                  <span className="text-[10px] text-[#8C7E6E] font-mono font-normal">
-                                    ({smvSec.toFixed(0)}s target)
-                                  </span>
-                                </div>
+                                <span className="font-mono font-bold text-xs text-[#221912]">
+                                  {smvSec.toFixed(0)} <span className="text-[10px] text-[#8C7E6E] font-normal">sec</span>
+                                </span>
                               </td>
 
                               {/* Current Skill Rating (Single Column) */}

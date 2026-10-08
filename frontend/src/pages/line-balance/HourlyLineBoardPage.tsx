@@ -536,7 +536,7 @@ export function HourlyLineBoardPage() {
       "Operation Code": r.operationCode,
       "Operation Name": r.operationName,
       "Assigned Operator": r.operatorName ? `${r.operatorName} (${r.operatorEmployeeId})` : "Unassigned",
-      "SMV (min)": r.samMinutes?.toFixed(2) || "0.00",
+      "SMV (sec)": r.samMinutes ? Math.round(r.samMinutes * 60) : 0,
       "Target Qty (pcs)": r.totalTarget,
       "Actual Qty (pcs)": r.totalActual,
       "Good Qty (pcs)": r.totalGood,
@@ -780,7 +780,7 @@ export function HourlyLineBoardPage() {
                   <th className="p-3 w-12 text-center">#</th>
                   <th className="p-3 w-48">Operation</th>
                   <th className="p-3 w-52">Operator</th>
-                  <th className="p-3 w-16 text-center">SMV</th>
+                  <th className="p-3 w-16 text-center">SMV (s)</th>
                   <th className="p-3 w-16 text-center">Target</th>
                   {hourCols.map(col => (
                     <th key={col.slot} className="p-2 text-center text-[10px] font-bold text-slate-600 border-l border-slate-100">
@@ -828,9 +828,9 @@ export function HourlyLineBoardPage() {
                       </select>
                     </td>
 
-                    {/* SAM */}
+                    {/* SMV (sec) */}
                     <td className="p-3 text-center font-mono text-slate-700 text-xs">
-                      {row.samMinutes?.toFixed(2) || "—"}
+                      {row.samMinutes ? `${Math.round(row.samMinutes * 60)}s` : "—"}
                     </td>
 
                     {/* Shift Target */}

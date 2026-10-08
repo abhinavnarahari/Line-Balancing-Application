@@ -150,7 +150,6 @@ export function BulletinDetailModal({
         "Garment Section": secConfig ? secConfig.label : (l.section || "Main Body Assembly"),
         "Machine Type": l.machineType || "Single Needle",
         "SMV (sec)": Number((smvVal * 60).toFixed(1)),
-        "SMV (min)": smvVal,
         "% Work Share": pctShare,
         "Predecessors": l.predecessorIds || "—",
         "WIP Threshold (pcs)": l.wipThreshold ?? 20,
@@ -164,8 +163,8 @@ export function BulletinDetailModal({
     const summaryRows = [
       { 
         "Seq #": "", 
-        "Operation Code": "TOTAL GARMENT SMV (SAM)", 
-        "Operation Name": `${metrics.totalSmv.toFixed(2)} min`, 
+        "Operation Code": "TOTAL GARMENT SMV", 
+        "Operation Name": `${metrics.totalSmvSec.toFixed(1)} sec`, 
         "Garment Section": "", 
         "Machine Type": "", 
         "SMV (sec)": Number(metrics.totalSmvSec.toFixed(1)), 
@@ -306,7 +305,7 @@ export function BulletinDetailModal({
             {/* Total Garment SMV */}
             <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs">
               <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" /> Total SMV (SAM)
+                <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" /> Total SMV
               </span>
               <div className="mt-1.5 flex items-baseline gap-1">
                 <span className="text-2xl sm:text-3xl font-black font-mono text-[#9C5B3C]">
@@ -314,9 +313,6 @@ export function BulletinDetailModal({
                 </span>
                 <span className="text-xs text-[#8C7E6E] font-bold font-mono">sec</span>
               </div>
-              <p className="text-[11px] text-[#8C7E6E] mt-0.5 font-medium font-mono">
-                ({metrics.totalSmv.toFixed(2)} min standard)
-              </p>
             </div>
 
             {/* Total Operations */}
@@ -435,7 +431,7 @@ export function BulletinDetailModal({
               </div>
 
               <span className="text-xs font-mono font-bold text-[#9C5B3C] bg-white px-2.5 py-1 rounded-lg border border-[#E6DDCE] shrink-0 self-start sm:self-auto">
-                TOTAL: {metrics.totalSmvSec.toFixed(1)}s ({metrics.totalSmv.toFixed(2)} min)
+                TOTAL SMV: {metrics.totalSmvSec.toFixed(1)}s
               </span>
             </div>
 
@@ -502,9 +498,6 @@ export function BulletinDetailModal({
                         </td>
                         <td className="py-3 px-3.5 text-right whitespace-nowrap font-mono">
                           <span className="font-bold text-xs text-[#221912]">{(smvVal * 60).toFixed(1)}s</span>
-                          <span className="block text-[10px] text-[#8C7E6E] font-normal">
-                            ({smvVal.toFixed(2)}m)
-                          </span>
                         </td>
                         <td className="py-3 px-3">
                           <div className="flex items-center justify-center gap-1.5">

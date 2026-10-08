@@ -531,9 +531,6 @@ export function WorkstationFlowPreview({ scenario, onSelectStation }: Workstatio
               <span className="text-base font-black text-[#9C5B3C]">
                 {(selectedStation.effectiveCycleTime * 60).toFixed(1)}s
               </span>
-              <span className="text-[10px] text-[#8C7E6E] block mt-0.5">
-                ({selectedStation.effectiveCycleTime.toFixed(3)} min)
-              </span>
             </div>
 
             <div className="p-3 bg-[#F6F1E8] rounded-xl border border-[#E6DDCE]">
@@ -593,7 +590,7 @@ export function WorkstationFlowPreview({ scenario, onSelectStation }: Workstatio
                   </div>
                   <div className="text-[10.5px] text-[#8C7E6E] flex items-center justify-between">
                     <span>{op.machineType}</span>
-                    <span className="font-mono">{op.smv.toFixed(3)} min</span>
+                    <span className="font-mono text-[#9C5B3C] font-semibold">{op.code || `OP-${op.sequence}`}</span>
                   </div>
                 </div>
               ))}

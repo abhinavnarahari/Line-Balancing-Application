@@ -111,7 +111,7 @@ export const SuggestedQuestions: React.FC<SuggestedQuestionsProps> = ({ context,
         },
         {
           title: "What is the standard SMV for Sleeve Attach?",
-          subtitle: "Lookup certified standard SAM values and machine specifications",
+          subtitle: "Lookup certified standard SMV seconds and machine specifications",
           query: "What is the standard SMV for Sleeve Attach?",
         },
         {
@@ -121,7 +121,7 @@ export const SuggestedQuestions: React.FC<SuggestedQuestionsProps> = ({ context,
         },
         {
           title: "List all 5 Operation Bulletins and SMVs",
-          subtitle: "Catalog of active styles with total assembly standard minutes",
+          subtitle: "Catalog of active styles with total assembly standard SMVs",
           query: "List all 5 Operation Bulletins and SMVs",
         },
       ],

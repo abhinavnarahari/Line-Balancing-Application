@@ -37,12 +37,12 @@ USER appuser:appgroup
 # Cloud Run defaults to $PORT (usually 8085 or 8080)
 ENV PORT=8085 \
     SPRING_PROFILES_ACTIVE=prod \
-    JAVA_OPTS="-XX:+UseG1GC -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
+    JAVA_OPTS="-Xms256m -Xmx600m -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
 
 EXPOSE 8085
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://127.0.0.1:${PORT:-8085}/actuator/health || exit 1
+  CMD curl -f http://127.0.0.1:${PORT:-8085}/actuator/health/liveness || curl -f http://127.0.0.1:${PORT:-8085}/actuator/health || exit 1
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

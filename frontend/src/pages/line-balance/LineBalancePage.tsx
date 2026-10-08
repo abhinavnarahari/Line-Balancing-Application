@@ -350,7 +350,7 @@ function YamazumiPitchChart({
                           <div className="space-y-1 text-[11px] text-[#8C7E6E]">
                             <div className="flex justify-between">
                               <span>SMV:</span>
-                              <span className="text-white font-mono">{station.smvSeconds.toFixed(1)}s ({(station.smvSeconds / 60).toFixed(2)} min)</span>
+                              <span className="text-white font-mono">{station.smvSeconds.toFixed(1)}s</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Cycle Time:</span>
@@ -2161,7 +2161,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       "Operation Code": m.operationCode,
       "Operation Name": m.operationName,
       "Machine Type": m.machineType,
-      "SMV (Min)": (m.smvSeconds / 60).toFixed(2),
       "SMV (Sec)": m.smvSeconds,
       "Benchmark Required Ops": m.requiredOps,
       "Allocated Operators": m.allocatedOps,
@@ -2784,7 +2783,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 {totalLineSMVSecs.toFixed(1)}
               </span>
               <span className="text-xs font-bold text-[#8C7E6E]">sec</span>
-              <span className="text-xs font-mono font-bold text-slate-700">({(totalLineSMVSecs / 60).toFixed(2)} min SAM)</span>
             </div>
 
             <div className="pt-2 border-t border-[#E6DDCE]/50 flex items-center justify-between text-[11px] font-mono text-[#8C7E6E] gap-2">
@@ -2916,7 +2914,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 {totalLineSMVSecs.toFixed(1)}
               </span>
               <span className="text-xs font-bold text-[#8C7E6E]">sec</span>
-              <span className="text-xs font-mono font-bold text-slate-700">({(totalLineSMVSecs / 60).toFixed(2)} min SAM)</span>
             </div>
 
             <div className="pt-2 border-t border-[#E6DDCE]/50 flex items-center justify-between text-[11px] font-mono text-[#8C7E6E] gap-2">

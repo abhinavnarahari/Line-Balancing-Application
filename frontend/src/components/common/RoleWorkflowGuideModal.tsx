@@ -43,7 +43,7 @@ export const LIFECYCLE_STEPS: LifecycleStep[] = [
     role: "IE",
     roleType: "INDUSTRIAL_ENGINEER",
     phase: "Planning & Balancing",
-    description: "New style is planned for production with Style SAM/SMV, operations list, and target hourly output.",
+    description: "New style is planned for production with Style SMV, operations list, and target hourly output.",
     tool: "Style Master & Capacity Planning",
     route: "/capacity-planning",
     icon: Factory,

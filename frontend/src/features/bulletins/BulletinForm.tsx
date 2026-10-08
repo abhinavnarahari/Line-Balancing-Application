@@ -519,7 +519,6 @@ export function BulletinForm({
             <span className="text-2xl font-black font-mono text-[#9C5B3C]">{totalSmvSeconds.toFixed(1)}</span>
             <span className="text-xs font-mono font-bold text-[#8C7E6E]">s</span>
           </div>
-          <span className="text-[10px] text-[#8C7E6E] font-mono">({totalSmvMinutes.toFixed(2)} min standard)</span>
         </div>
 
         <div className="bg-white border border-[#E6DDCE] rounded-2xl p-3.5 shadow-2xs">

@@ -193,15 +193,15 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
           />
         </div>
 
-        {/* Standard SMV / Target Cycle Time (Seconds Primary) */}
+        {/* Standard SMV / Target Cycle Time (Seconds Only) */}
         <div className="md:col-span-2 bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <label className="text-xs font-bold text-slate-900 uppercase tracking-wider block">
-                Standard SMV & Target Cycle Time
+                Standard SMV (in Seconds)
               </label>
               <p className="text-[11px] text-slate-500 font-medium">
-                Enter benchmark cycle time in seconds (or standard minutes).
+                Enter standard cycle time in seconds.
               </p>
             </div>
             
@@ -225,15 +225,12 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+          <div className="pt-1">
             {/* Primary Seconds Input */}
-            <div className="bg-white border-2 border-[#9C5B3C]/40 focus-within:border-[#9C5B3C] rounded-xl p-3 shadow-2xs transition-colors">
+            <div className="bg-white border-2 border-[#9C5B3C]/40 focus-within:border-[#9C5B3C] rounded-xl p-3 shadow-2xs transition-colors max-w-sm">
               <div className="flex items-center justify-between mb-1">
                 <label htmlFor="cycleSeconds" className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                  <span>Cycle Time in Seconds</span>
-                  <span className="px-1.5 py-0.2 rounded bg-amber-50 text-[#9C5B3C] font-bold text-[10px] border border-amber-200">
-                    Primary
-                  </span>
+                  <span>Cycle Time (SMV)</span>
                 </label>
                 <span className="text-[10.5px] font-mono text-slate-400 font-semibold">sec</span>
               </div>
@@ -250,30 +247,6 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
                   required
                 />
                 <span className="text-sm font-bold text-[#9C5B3C] font-mono">seconds</span>
-              </div>
-            </div>
-
-            {/* Equivalent Minutes Input */}
-            <div className="bg-white border border-slate-200 focus-within:border-[#9C5B3C] rounded-xl p-3 shadow-2xs transition-colors">
-              <div className="flex items-center justify-between mb-1">
-                <label htmlFor="smvMinutes" className="text-xs font-bold text-slate-700">
-                  Equivalent Standard SMV (SAM)
-                </label>
-                <span className="text-[10.5px] font-mono text-slate-400 font-semibold">min</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  id="smvMinutes"
-                  step="0.01"
-                  min="0.01"
-                  value={smvVal}
-                  onChange={(e) => handleSmvMinutesChange(e.target.value)}
-                  placeholder="e.g. 0.40"
-                  className="w-full text-lg font-mono font-bold text-slate-700 focus:outline-none bg-transparent"
-                  required
-                />
-                <span className="text-sm font-semibold text-slate-500 font-mono">min</span>
               </div>
             </div>
           </div>

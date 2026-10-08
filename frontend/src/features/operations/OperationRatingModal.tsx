@@ -37,6 +37,7 @@ export function OperationRatingModal({
   onOperationUpdated,
 }: OperationRatingModalProps) {
   const [smvMinutes, setSmvMinutes] = useState<number>(0.5);
+  const [smvSeconds, setSmvSeconds] = useState<number>(30);
   const [tiers, setTiers] = useState<EditableTierState[]>([]);
   const [isCustom, setIsCustom] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
@@ -49,6 +50,7 @@ export function OperationRatingModal({
 
     const currentSmv = Number(operation.standardSmv || 0.5);
     setSmvMinutes(currentSmv);
+    setSmvSeconds(Math.round(currentSmv * 60 * 10) / 10);
 
     const benchmark = getBenchmarkForOperation(operation.name || operation.operationCode, currentSmv);
     setIsCustom(Boolean(benchmark?.isCustom));
@@ -118,7 +120,7 @@ export function OperationRatingModal({
 
   if (!operation) return null;
 
-  const targetCycleSec = Math.round(smvMinutes * 60 * 10) / 10;
+  const targetCycleSec = smvSeconds;
   const capacity8h = targetCycleSec > 0 ? Math.round((480 * 60) / targetCycleSec) : 0;
 
   // Handle tier cycle time input change
@@ -241,6 +243,9 @@ export function OperationRatingModal({
     // Reload default benchmark
     const defaultBenchmark = getBenchmarkForOperation(operation.name, Number(operation.standardSmv || 0.5));
     if (defaultBenchmark) {
+      const defSmv = defaultBenchmark.defaultSmv || 0.5;
+      setSmvMinutes(defSmv);
+      setSmvSeconds(Math.round(defSmv * 60 * 10) / 10);
       const resetTiers: EditableTierState[] = [
         {
           rating: 5,
@@ -356,24 +361,28 @@ export function OperationRatingModal({
               )}
             </div>
 
-            {/* Standard Allowed Minutes (SAM) */}
+            {/* Standard SMV (Seconds) */}
             <div className="border-t sm:border-t-0 sm:border-l border-slate-200 sm:pl-4 space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Standard Allowed Minutes
+                Standard SMV
               </span>
               <div className="flex items-center gap-1.5">
                 <input
                   type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={smvMinutes}
-                  onChange={(e) => setSmvMinutes(Math.max(0.01, parseFloat(e.target.value) || 0.01))}
+                  step="0.5"
+                  min="1"
+                  value={smvSeconds}
+                  onChange={(e) => {
+                    const sec = Math.max(1, parseFloat(e.target.value) || 1);
+                    setSmvSeconds(sec);
+                    setSmvMinutes(sec / 60);
+                  }}
                   className="w-20 h-7 text-xs font-mono font-bold bg-white border border-slate-300 rounded px-1.5 text-slate-900 focus:outline-none focus:border-[#9C5B3C] text-center"
                 />
-                <span className="text-xs font-bold text-slate-600 font-mono">SAM</span>
+                <span className="text-xs font-bold text-slate-600 font-mono">sec</span>
               </div>
               <span className="text-[11px] font-mono text-[#9C5B3C] font-semibold block">
-                {targetCycleSec.toFixed(1)}s target cycle
+                Target cycle time
               </span>
             </div>
 

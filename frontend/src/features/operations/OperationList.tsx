@@ -188,14 +188,11 @@ export function OperationList({ operations, affinities = [], onEdit, onToggleAct
                       </div>
                     </TableCell>
 
-                    {/* Standard SMV (in Seconds & Minutes) */}
+                    {/* Standard SMV (in Seconds) */}
                     <TableCell className="text-center align-middle whitespace-nowrap" onClick={(e) => { e.stopPropagation(); onViewRating(op); }}>
                       <div className="flex flex-col items-center">
                         <span className="font-mono font-extrabold text-sm text-slate-900">
                           {smvSec} <span className="text-xs text-slate-500 font-semibold">sec</span>
-                        </span>
-                        <span className="text-[10.5px] text-[#8C7E6E] font-mono font-medium">
-                          ({smv.toFixed(2)} min)
                         </span>
                       </div>
                     </TableCell>

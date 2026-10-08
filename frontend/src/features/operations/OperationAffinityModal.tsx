@@ -202,7 +202,7 @@ export function OperationAffinityModal({
               <p className="text-xs text-[#8C7E6E] mt-1 flex items-center gap-2">
                 <span>Machine: <strong className="text-[#221912]">{operation.machineType || "Single Needle Lockstitch"}</strong></span>
                 <span>•</span>
-                <span>Benchmark SMV: <strong className="text-[#221912] font-mono">{operation.standardSmv || 0.5} min</strong></span>
+                <span>Benchmark SMV: <strong className="text-[#221912] font-mono">{Math.round(Number(operation.standardSmv || 0.5) * 60)} sec</strong></span>
               </p>
             </div>
             <div className="text-right">
@@ -371,7 +371,7 @@ export function OperationAffinityModal({
                 </span>
               </div>
               <span className="font-mono font-bold text-[11px]">
-                SMV: {selectedAltOp.standardSmv || 0.5}m
+                SMV: {Math.round(Number(selectedAltOp.standardSmv || 0.5) * 60)}s
               </span>
             </div>
           )}

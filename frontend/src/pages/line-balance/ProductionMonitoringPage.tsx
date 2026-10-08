@@ -1757,7 +1757,7 @@ export function ProductionMonitoringPage() {
                     <span className="text-3xl font-black text-[#221912] font-mono">
                       {totalLineSMVSecs.toFixed(1)}
                     </span>
-                    <span className="text-xs font-semibold text-[#8C7E6E] font-mono">sec ({(totalLineSMVSecs / 60).toFixed(2)} min SAM)</span>
+                    <span className="text-xs font-semibold text-[#8C7E6E] font-mono">sec</span>
                   </div>
 
                   <div className="text-[10.5px] text-[#8C7E6E] flex items-center justify-between border-t border-slate-100 pt-1.5">

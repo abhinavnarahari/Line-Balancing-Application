@@ -41,7 +41,7 @@ export function StationAssignment({
                 <p className="text-sm font-medium text-[#0F172A] truncate">{operation.name}</p>
                 <div className="flex gap-4 mt-1 text-[11px] text-slate-500">
                   <span>{operation.operationCode}</span>
-                  <span>SMV: {smv}</span>
+                  <span>SMV: {Math.round(smv * 60)}s</span>
                   <span>{operation.machineType || "Single Needle Lockstitch"}</span>
                 </div>
               </div>

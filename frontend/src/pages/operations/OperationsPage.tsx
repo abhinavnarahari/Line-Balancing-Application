@@ -99,8 +99,8 @@ export function OperationsPage() {
       "Operation Code": op.operationCode,
       "Name": op.name,
       "Machine Type": op.machineType || "Single Needle Lockstitch",
-      "Description": op.description,
-      "Standard SMV": op.standardSmv || 0.5,
+      "Description": op.description || "",
+      "Standard SMV (sec)": Math.round(Number(op.standardSmv || 0.5) * 60 * 10) / 10,
       "Sequence": op.sequence,
       "Status": op.active ? "Active" : "Inactive"
     }));
@@ -111,16 +111,30 @@ export function OperationsPage() {
     try {
       const data = await readFromExcel<any>(file);
       for (const row of data) {
-        await operationsApi.createOperation({
-          operationCode: row["Operation Code"],
+        const opCode = (row["Operation Code"] || "").trim().toUpperCase();
+        const rawSec = row["Standard SMV (sec)"] ?? row["Standard SMV (Sec)"] ?? row["Standard SMV"] ?? row["SMV (sec)"] ?? row["SMV (Sec)"] ?? row["SMV"];
+        const parsedSec = rawSec !== undefined && rawSec !== null && rawSec !== "" ? parseFloat(rawSec) : 30;
+        const validSec = !isNaN(parsedSec) && parsedSec > 0 ? parsedSec : 30;
+        const standardSmvMinutes = validSec / 60;
+
+        const payload = {
+          operationCode: opCode,
           name: row["Name"],
           machineType: row["Machine Type"] || "Single Needle Lockstitch",
           description: row["Description"] || "",
-          standardSmv: parseFloat(row["Standard SMV"]) || 0.5,
+          standardSmv: standardSmvMinutes,
           sequence: parseInt(row["Sequence"]) || 0,
-          active: row["Status"] === "Active"
-        });
+          active: row["Status"] === "Active" || row["Status"] === true || row["Status"] === "active"
+        };
+
+        const existing = operations.find(o => o.operationCode.toUpperCase() === opCode || o.name.toLowerCase() === (row["Name"] || "").toLowerCase());
+        if (existing) {
+          await operationsApi.updateOperation(existing.id, payload);
+        } else {
+          await operationsApi.createOperation(payload);
+        }
       }
+      notifyMasterDataUpdated("operation");
       await loadOperations();
       alert("Operations imported successfully!");
     } catch (err) {
@@ -204,7 +218,7 @@ export function OperationsPage() {
             <p className="text-2xl font-extrabold text-[#9C5B3C] font-mono">
               {(parseFloat(kpiStats.avgSmv) * 60).toFixed(0)} <span className="text-base font-semibold text-[#8C7E6E]">sec</span>
             </p>
-            <p className="text-[11px] font-medium text-[#8C7E6E]">{kpiStats.avgSmv} min benchmark cycle</p>
+            <p className="text-[11px] font-medium text-[#8C7E6E]">Across catalog operations</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-[#FAF7F2] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C] shadow-xs">
             <Activity className="w-5 h-5" />

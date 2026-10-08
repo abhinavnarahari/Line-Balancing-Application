@@ -220,7 +220,6 @@ export function BulletinsPage() {
       "Version": `v${b.version}`,
       "Status": b.status,
       "Total SMV (sec)": Number(((b.totalSmv || 0) * 60).toFixed(1)),
-      "Total SMV (min)": Number((b.totalSmv || 0).toFixed(2)),
       "Total Operations": b.lines?.length || 0,
       "Linked Styles": (b.styles || []).map(s => s.styleNo).join(", ") || "None",
       "Created At": b.createdAt ? new Date(b.createdAt).toLocaleDateString() : "—",
@@ -305,7 +304,7 @@ export function BulletinsPage() {
             <span className="text-xs text-[#8C7E6E] font-bold font-mono">sec</span>
           </div>
           <p className="text-[11px] text-[#8C7E6E] mt-1 font-medium">
-            Standard work content average ({kpis.avgSmv} min)
+            Standard work content average ({kpis.avgSmvSec}s)
           </p>
         </div>
 
@@ -549,9 +548,6 @@ export function BulletinsPage() {
                           {(totalSmv * 60).toFixed(1)}
                         </span>
                         <span className="text-[10px] text-[#8C7E6E] ml-1 font-mono font-bold">sec</span>
-                        <span className="text-[9.5px] text-[#8C7E6E] block font-mono">
-                          ({totalSmv.toFixed(2)} min)
-                        </span>
                       </td>
 
                       {/* 5. Operation Count */}
