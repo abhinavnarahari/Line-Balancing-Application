@@ -16,9 +16,9 @@ spring:
       keepalive-time: 30000
 
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: validate
-      open-in-view: false
     show-sql: false
     properties:
       hibernate:
