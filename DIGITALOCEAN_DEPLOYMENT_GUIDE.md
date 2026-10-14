@@ -50,9 +50,18 @@ curl -fsSL https://raw.githubusercontent.com/your-org/Line-Balancing-Application
 git clone https://github.com/your-org/Line-Balancing-Application.git
 cd Line-Balancing-Application
 
-# 2. Build and launch all containers in detached mode
+# 2. Create your .env (REQUIRED - compose refuses to start without POSTGRES_PASSWORD)
+cp .env.example .env
+sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
+
+# 3. Build and launch all containers in detached mode
 docker compose up -d --build
 ```
+
+> 🔒 PostgreSQL (5432) and the backend (8085) are bound to `127.0.0.1` only. Docker bypasses UFW,
+> so publishing them on `0.0.0.0` exposes the database to the internet, where bots routinely wipe it.
+> Browser traffic reaches the API through the frontend's `/api` proxy. To use a DB client from your PC,
+> tunnel over SSH: `ssh -L 5432:127.0.0.1:5432 root@YOUR_DROPLET_IP`.
 
 ---
 
@@ -60,7 +69,7 @@ docker compose up -d --build
 
 Once started, open your web browser:
 - **Frontend Web Application:** `http://YOUR_DROPLET_IP` *(or `http://YOUR_DROPLET_IP:3000`)*
-- **Backend API & Health Probes:** `http://YOUR_DROPLET_IP:8085/actuator/health`
+- **Backend health (run on the droplet):** `curl http://127.0.0.1:8085/actuator/health`
 
 ### 📦 End-to-End Sample Data Included Automatically:
 Flyway automatically executes all database migrations and seeds the complete enterprise dataset on the first launch:
@@ -90,6 +99,27 @@ If you have a domain name (e.g., `sewnex.yourcompany.com`):
    sudo certbot --nginx -d sewnex.yourcompany.com
    ```
    *Certbot will automatically obtain a free Let's Encrypt certificate and renew it forever.*
+
+---
+
+## 📅 Sample Data Stays Visible Every Day
+
+Attendance and piece-production sample rows are dated. With `DEMO_DATA_DAILY_REFRESH=true` (the compose default),
+the backend fills **today's** sample attendance and production on startup and at 00:01 every day (in `APP_TIMEZONE`),
+only when today has no rows yet, so real entries are never overwritten. Set it to `false` once you enter real factory data.
+
+---
+
+## ♻️ Full Redeploy With Fresh Sample Data (wipes the database)
+
+```bash
+cd Line-Balancing-Application
+/root/backup-db.sh 2>/dev/null || true        # optional: back up the current DB first
+git pull origin main
+docker compose down -v                        # -v deletes the postgres_data volume (ALL data)
+docker compose up -d --build
+docker compose logs -f backend                # wait for "Successfully applied ... migrations"
+```
 
 ---
 

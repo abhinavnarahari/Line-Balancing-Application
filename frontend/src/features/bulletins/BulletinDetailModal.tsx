@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import type { OperationBulletin, BulletinStatus } from "./api";
 import { bulletinsApi } from "./api";
-import { GARMENT_SECTIONS } from "./BulletinForm";
 
 interface BulletinDetailModalProps {
   bulletin: OperationBulletin | null;
@@ -41,7 +40,6 @@ export function BulletinDetailModal({
 }: BulletinDetailModalProps) {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [activeSectionFilter, setActiveSectionFilter] = useState<string>("ALL");
 
   useEffect(() => {
     setMounted(true);
@@ -50,7 +48,6 @@ export function BulletinDetailModal({
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
-      setActiveSectionFilter("ALL");
     } else {
       document.body.style.overflow = "";
     }
@@ -89,35 +86,15 @@ export function BulletinDetailModal({
     });
     const avgSkill = bulletin.lines.length > 0 ? (skillSum / bulletin.lines.length).toFixed(1) : "3.0";
 
-    // Section distribution
-    const sectionMetrics: Record<string, { count: number; smvMin: number; smvSec: number }> = {};
-    GARMENT_SECTIONS.forEach(s => {
-      sectionMetrics[s.id] = { count: 0, smvMin: 0, smvSec: 0 };
-    });
-    bulletin.lines.forEach(l => {
-      const sec = l.section || "MAIN_ASSEMBLY";
-      if (!sectionMetrics[sec]) {
-        sectionMetrics[sec] = { count: 0, smvMin: 0, smvSec: 0 };
-      }
-      sectionMetrics[sec].count += 1;
-      sectionMetrics[sec].smvMin += Number(l.smv) || 0;
-      sectionMetrics[sec].smvSec += (Number(l.smv) || 0) * 60;
-    });
-
     return {
       totalSmv,
       totalSmvSec,
       machineCounts,
       avgSkill,
-      sectionMetrics,
     };
   }, [bulletin]);
 
-  const filteredLines = useMemo(() => {
-    if (!bulletin?.lines) return [];
-    if (activeSectionFilter === "ALL") return bulletin.lines;
-    return bulletin.lines.filter(l => (l.section || "MAIN_ASSEMBLY") === activeSectionFilter);
-  }, [bulletin?.lines, activeSectionFilter]);
+  const filteredLines = bulletin?.lines || [];
 
   if (!isOpen || !bulletin || !mounted) return null;
 
@@ -142,20 +119,15 @@ export function BulletinDetailModal({
     const rows = (bulletin.lines || []).map(l => {
       const smvVal = Number(l.smv) || 0;
       const pctShare = metrics.totalSmv > 0 ? ((smvVal / metrics.totalSmv) * 100).toFixed(1) + "%" : "0%";
-      const secConfig = GARMENT_SECTIONS.find(s => s.id === l.section);
       return {
         "Seq #": l.sequence,
         "Operation Code": l.operationCode || `OP-${l.operationId}`,
         "Operation Name": l.operationName || `Operation ${l.operationId}`,
-        "Garment Section": secConfig ? secConfig.label : (l.section || "Main Body Assembly"),
         "Machine Type": l.machineType || "Single Needle",
         "SMV (sec)": Number((smvVal * 60).toFixed(1)),
         "% Work Share": pctShare,
-        "Predecessors": l.predecessorIds || "—",
         "WIP Threshold (pcs)": l.wipThreshold ?? 20,
         "Skill Required": `L${l.skillRatingRequired || 3}`,
-        "Stitch Type": l.stitchType || "—",
-        "Seam Type": l.seamType || "—",
         "Notes & Quality Points": l.notes || "—",
       };
     });
@@ -165,60 +137,44 @@ export function BulletinDetailModal({
         "Seq #": "", 
         "Operation Code": "TOTAL GARMENT SMV", 
         "Operation Name": `${metrics.totalSmvSec.toFixed(1)} sec`, 
-        "Garment Section": "", 
         "Machine Type": "", 
         "SMV (sec)": Number(metrics.totalSmvSec.toFixed(1)), 
         "% Work Share": "100%", 
-        "Predecessors": "", 
         "WIP Threshold (pcs)": "", 
         "Skill Required": `Avg L${metrics.avgSkill}`, 
-        "Stitch Type": "", 
-        "Seam Type": "", 
         "Notes & Quality Points": `${bulletin.lines?.length || 0} operations` 
       },
       { 
         "Seq #": "", 
         "Operation Code": "TOTAL OPERATIONS", 
         "Operation Name": `${bulletin.lines?.length || 0} sequential steps`, 
-        "Garment Section": "", 
         "Machine Type": "", 
         "SMV (sec)": "", 
         "% Work Share": "", 
-        "Predecessors": "", 
         "WIP Threshold (pcs)": "", 
         "Skill Required": "", 
-        "Stitch Type": "", 
-        "Seam Type": "", 
         "Notes & Quality Points": "" 
       },
       { 
         "Seq #": "", 
         "Operation Code": "UNIQUE MACHINERY TYPES", 
         "Operation Name": `${Object.keys(metrics.machineCounts).length} types`, 
-        "Garment Section": "", 
         "Machine Type": "", 
         "SMV (sec)": "", 
         "% Work Share": "", 
-        "Predecessors": "", 
         "WIP Threshold (pcs)": "", 
         "Skill Required": "", 
-        "Stitch Type": "", 
-        "Seam Type": "", 
         "Notes & Quality Points": "" 
       },
       { 
         "Seq #": "", 
         "Operation Code": "LINKED STYLES", 
         "Operation Name": (bulletin.styles || []).map(s => s.styleNo).join(", ") || "None", 
-        "Garment Section": "", 
         "Machine Type": "", 
         "SMV (sec)": "", 
         "% Work Share": "", 
-        "Predecessors": "", 
         "WIP Threshold (pcs)": "", 
         "Skill Required": "", 
-        "Stitch Type": "", 
-        "Seam Type": "", 
         "Notes & Quality Points": "" 
       },
     ];
@@ -389,45 +345,13 @@ export function BulletinDetailModal({
 
           {/* Complete Sequential Operations Table */}
           <div className="bg-white border border-[#E6DDCE] rounded-2xl shadow-2xs overflow-hidden">
-            {/* Section Breakdown & Filter Tabs */}
+            {/* Sequential Operations Header */}
             <div className="px-4 py-3 bg-[#F9F7F4] border-b border-[#E6DDCE] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] font-black uppercase text-[#221912] mr-1">Sections:</span>
-                <button
-                  type="button"
-                  onClick={() => setActiveSectionFilter("ALL")}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    activeSectionFilter === "ALL"
-                      ? "bg-[#221912] text-white shadow-2xs"
-                      : "bg-white text-[#8C7E6E] border border-[#E6DDCE] hover:text-[#221912]"
-                  }`}
-                >
-                  All ({bulletin.lines?.length || 0})
-                </button>
-                {GARMENT_SECTIONS.map(s => {
-                  const count = metrics.sectionMetrics[s.id]?.count || 0;
-                  if (count === 0 && activeSectionFilter !== s.id) return null;
-                  const isSelected = activeSectionFilter === s.id;
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setActiveSectionFilter(s.id)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                        isSelected
-                          ? "bg-[#9C5B3C] text-white shadow-2xs"
-                          : "bg-white text-[#8C7E6E] border border-[#E6DDCE] hover:text-[#221912]"
-                      }`}
-                    >
-                      <span>{s.label}</span>
-                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
-                        isSelected ? "bg-white/30 text-white" : "bg-[#F6F1E8] text-[#8C7E6E]"
-                      }`}>
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-[#221912]">Sequential Operations</span>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#F6F1E8] text-[#8C7E6E] border border-[#E6DDCE]">
+                  {bulletin.lines?.length || 0} steps
+                </span>
               </div>
 
               <span className="text-xs font-mono font-bold text-[#9C5B3C] bg-white px-2.5 py-1 rounded-lg border border-[#E6DDCE] shrink-0 self-start sm:self-auto">
@@ -445,7 +369,6 @@ export function BulletinDetailModal({
                     <th className="py-3 px-4 w-44 min-w-[150px]">Machine Type</th>
                     <th className="py-3 px-3.5 w-28 text-right whitespace-nowrap">SMV (sec)</th>
                     <th className="py-3 px-3 w-28 text-center whitespace-nowrap">% Work</th>
-                    <th className="py-3 px-3 w-24 text-center whitespace-nowrap">Predecessors</th>
                     <th className="py-3 px-3.5 w-28 text-center whitespace-nowrap">WIP Buffer</th>
                     <th className="py-3 px-3 w-20 text-center whitespace-nowrap">Skill</th>
                     <th className="py-3 px-4 min-w-[130px]">Notes / Quality</th>
@@ -473,25 +396,6 @@ export function BulletinDetailModal({
                           <div className="font-bold text-sm text-[#221912] leading-snug">
                             {line.operationName || `Operation ${line.operationId}`}
                           </div>
-                          {(line.stitchType || line.seamType || line.attachmentType) && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {line.stitchType && (
-                                <span className="text-[10px] font-medium px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md border border-slate-200 whitespace-nowrap">
-                                  {line.stitchType}
-                                </span>
-                              )}
-                              {line.seamType && (
-                                <span className="text-[10px] font-medium px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md border border-slate-200 whitespace-nowrap">
-                                  {line.seamType}
-                                </span>
-                              )}
-                              {line.attachmentType && (
-                                <span className="text-[10px] font-medium px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200 whitespace-nowrap">
-                                  {line.attachmentType}
-                                </span>
-                              )}
-                            </div>
-                          )}
                         </td>
                         <td className="py-3 px-4 font-semibold text-slate-800 text-xs">
                           {line.machineType || "Single Needle"}
@@ -512,15 +416,6 @@ export function BulletinDetailModal({
                             </span>
                           </div>
                         </td>
-                        <td className="py-3 px-3 text-center whitespace-nowrap">
-                          {line.predecessorIds && line.predecessorIds.trim() ? (
-                            <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs whitespace-nowrap inline-block">
-                              #{line.predecessorIds}
-                            </span>
-                          ) : (
-                            <span className="text-[#8C7E6E] text-xs font-medium">—</span>
-                          )}
-                        </td>
                         <td className="py-3 px-3.5 text-center whitespace-nowrap">
                           <span className="font-mono font-bold text-xs px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg shadow-2xs whitespace-nowrap inline-flex items-center justify-center">
                             {line.wipThreshold ?? 20} pcs
@@ -539,8 +434,8 @@ export function BulletinDetailModal({
                   })}
                   {filteredLines.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-xs text-[#8C7E6E]">
-                        No operations found in this section.
+                      <td colSpan={9} className="py-8 text-center text-xs text-[#8C7E6E]">
+                        No operations found in this bulletin.
                       </td>
                     </tr>
                   )}

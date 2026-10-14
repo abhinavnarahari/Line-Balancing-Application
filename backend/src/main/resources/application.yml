@@ -52,6 +52,9 @@ management:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173}
+  demo-data:
+    # Re-creates today's sample attendance/production rows daily (demo deployments only)
+    daily-refresh: ${DEMO_DATA_DAILY_REFRESH:false}
 
 # Optional External LLM Integration (Zero configuration required by default)
 llm:

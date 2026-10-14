@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -259,6 +260,16 @@ public class OperationBulletinService {
 
     private void validateLinePrecedence(List<BulletinLineRequest> lineRequests) {
         if (lineRequests == null || lineRequests.isEmpty()) return;
+
+        Map<Long, Long> seqToOpId = new HashMap<>();
+        Set<Long> opIds = new HashSet<>();
+        for (BulletinLineRequest lr : lineRequests) {
+            if (lr.getSequence() != null && lr.getOperationId() != null) {
+                seqToOpId.put((long) lr.getSequence(), lr.getOperationId());
+                opIds.add(lr.getOperationId());
+            }
+        }
+
         List<com.qtech.linebalancing.engine.PrecedenceValidationService.OperationNode> nodes = new ArrayList<>();
         for (BulletinLineRequest lr : lineRequests) {
             List<Long> preds = new ArrayList<>();
@@ -266,7 +277,13 @@ public class OperationBulletinService {
                 for (String p : lr.getPredecessorIds().split(",")) {
                     try {
                         long pId = Long.parseLong(p.trim());
-                        preds.add(pId);
+                        if (opIds.contains(pId)) {
+                            preds.add(pId);
+                        } else if (seqToOpId.containsKey(pId)) {
+                            preds.add(seqToOpId.get(pId));
+                        } else {
+                            preds.add(pId);
+                        }
                     } catch (Exception ignored) {}
                 }
             }

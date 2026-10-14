@@ -14,46 +14,18 @@ import {
   GitBranch,
   ShieldCheck,
   Tag,
-  Sliders
+  Sliders,
+  Upload,
+  Download
 } from "lucide-react";
 import { Button } from "../../components/ui/Button";
 import type { CreateBulletinDTO, BulletinLine, OperationBulletin, BulletinStatus } from "./api";
 import type { Style } from "../styles/api";
 import type { Operation } from "../operations/api";
 import { machinesApi, type Machine } from "../machines/api";
+import { parseLinesForBulletinForm, exportBulletinsDetailed } from "./bulletinExcel";
 
-export const GARMENT_SECTIONS = [
-  { id: "FRONT_PREP", label: "Front Preparation", color: "bg-blue-50 text-blue-800 border-blue-200" },
-  { id: "BACK_PREP", label: "Back Preparation", color: "bg-indigo-50 text-indigo-800 border-indigo-200" },
-  { id: "COLLAR_CUFF", label: "Collar & Cuff / Sleeves", color: "bg-purple-50 text-purple-800 border-purple-200" },
-  { id: "MAIN_ASSEMBLY", label: "Main Body Assembly", color: "bg-emerald-50 text-emerald-800 border-emerald-200" },
-  { id: "WAISTBAND", label: "Waistband & Bottom", color: "bg-amber-50 text-amber-800 border-amber-200" },
-  { id: "FINISHING", label: "Finishing & Trimming", color: "bg-rose-50 text-rose-800 border-rose-200" },
-  { id: "QUALITY", label: "Quality Inspection Check", color: "bg-slate-100 text-slate-800 border-slate-300" },
-];
-
-export const STITCH_TYPES = [
-  "301 - Single Needle Lockstitch (SNLS)",
-  "401 - Multi-Needle Chainstitch",
-  "504 - 3-Thread Overlock",
-  "514 - 4-Thread Overlock (Safety Stitch)",
-  "516 - 5-Thread Safety Stitch",
-  "602 - 2-Needle 4-Thread Coverstitch",
-  "605 - 3-Needle 5-Thread Flatlock",
-  "Buttonhole Automatic Indexer",
-  "Button Attach Auto-Feed",
-  "Bartack Programmable",
-  "Manual Ironing / Pressing",
-  "Manual Hand Trimming / QC",
-];
-
-export const SEAM_TYPES = [
-  "SSa-1 (Superimposed Seam)",
-  "LSc-2 (Lapped Seam / Denim Felled)",
-  "BSa-1 (Bound Seam / Binding)",
-  "EFa-1 (Edge Finishing / Hemming)",
-  "OSa-1 (Ornamental Stitching)",
-];
+export const GARMENT_SECTIONS: { id: string; label: string; color: string }[] = [];
 
 interface BulletinFormProps {
   styles: Style[];
@@ -188,7 +160,6 @@ export function BulletinForm({
   const [bulkSearch, setBulkSearch] = useState("");
   const [selectedBulkOpIds, setSelectedBulkOpIds] = useState<string[]>([]);
   const [expandedLineIndex, setExpandedLineIndex] = useState<number | null>(null);
-  const [activeSectionFilter, setActiveSectionFilter] = useState<string>("ALL");
 
   // Calculations
   const totalSmvMinutes = useMemo(() => {
@@ -198,21 +169,6 @@ export function BulletinForm({
   const totalSmvSeconds = useMemo(() => {
     return totalSmvMinutes * 60;
   }, [totalSmvMinutes]);
-
-  const sectionMetrics = useMemo(() => {
-    const map: Record<string, { count: number; smvMin: number; smvSec: number }> = {};
-    GARMENT_SECTIONS.forEach(s => {
-      map[s.id] = { count: 0, smvMin: 0, smvSec: 0 };
-    });
-    lines.forEach(l => {
-      const sec = l.section || "MAIN_ASSEMBLY";
-      if (!map[sec]) map[sec] = { count: 0, smvMin: 0, smvSec: 0 };
-      map[sec].count += 1;
-      map[sec].smvMin += Number(l.smv) || 0;
-      map[sec].smvSec += (Number(l.smv) || 0) * 60;
-    });
-    return map;
-  }, [lines]);
 
   // Bulk add operations
   const handleAddBulkOperations = () => {
@@ -268,6 +224,43 @@ export function BulletinForm({
     setExpandedLineIndex(lines.length);
   };
 
+  const handleImportLines = async (file: File) => {
+    try {
+      const res = await parseLinesForBulletinForm(file, operations);
+      if (res.lines.length > 0) {
+        const nextLines = lines.length === 0 ? res.lines : [...lines, ...res.lines].map((l, i) => ({ ...l, sequence: i + 1 }));
+        setLines(nextLines);
+        if (res.errors.length > 0) {
+          setError(`Imported ${res.lines.length} lines with notices: ${res.errors.slice(0, 2).join("; ")}`);
+        } else {
+          setError(null);
+        }
+      } else if (res.errors.length > 0) {
+        setError(`Failed to import lines: ${res.errors.join("; ")}`);
+      }
+    } catch (e: any) {
+      setError(`Excel import failed: ${e.message}`);
+    }
+  };
+
+  const handleExportCurrentLines = () => {
+    if (lines.length === 0) return;
+    const currentBulletin: OperationBulletin = {
+      bulletinCode: formData.bulletinCode || "BULLETIN",
+      name: formData.name || "Operation Bulletin",
+      description: formData.description,
+      version: formData.version,
+      revisionNumber: formData.revisionNumber,
+      status: formData.status as any,
+      effectiveFrom: formData.effectiveFrom,
+      effectiveTo: formData.effectiveTo,
+      styles: styles.filter(s => formData.styleIds.includes(String(s.id))),
+      lines: lines,
+      totalSmv: totalSmvMinutes,
+    };
+    exportBulletinsDetailed([currentBulletin], `${formData.bulletinCode || "Bulletin"}_Operations`);
+  };
+
   const handleUpdateLine = (index: number, updates: Partial<BulletinLine>) => {
     const updated = [...lines];
     const current = updated[index];
@@ -315,22 +308,6 @@ export function BulletinForm({
     if (expandedLineIndex === index) setExpandedLineIndex(targetIdx);
   };
 
-  // Precedence validation
-  const validatePrecedences = (): string | null => {
-    // Check if predecessors are higher sequence numbers (forward references)
-    for (let i = 0; i < lines.length; i++) {
-      const l = lines[i];
-      if (l.predecessorIds && l.predecessorIds.trim()) {
-        const preds = l.predecessorIds.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
-        for (const p of preds) {
-          if (p >= l.sequence) {
-            return `Sequence #${l.sequence} (${l.operationName}) cannot depend on sequence #${p} (must precede it).`;
-          }
-        }
-      }
-    }
-    return null;
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -349,12 +326,6 @@ export function BulletinForm({
       return;
     }
 
-    const precError = validatePrecedences();
-    if (precError) {
-      setError(`Precedence Constraint Error: ${precError}`);
-      return;
-    }
-
     setLoading(true);
     try {
       const payload: CreateBulletinDTO = {
@@ -365,14 +336,14 @@ export function BulletinForm({
           smv: Number(l.smv) || 0.1,
           machineType: l.machineType || "SNLS",
           skillRatingRequired: Number(l.skillRatingRequired) || 3,
-          section: l.section || "MAIN_ASSEMBLY",
-          predecessorIds: l.predecessorIds || "",
+          section: "MAIN_ASSEMBLY",
+          predecessorIds: "",
           isParallelizable: l.isParallelizable ?? false,
           splitAllowed: l.splitAllowed ?? true,
           splitType: l.splitType || "RATIO",
-          stitchType: l.stitchType || "",
-          seamType: l.seamType || "",
-          attachmentType: l.attachmentType || "",
+          stitchType: "",
+          seamType: "",
+          attachmentType: "",
           wipThreshold: Number(l.wipThreshold) >= 0 ? Number(l.wipThreshold) : 20,
           notes: l.notes || "",
         })),
@@ -386,10 +357,7 @@ export function BulletinForm({
     }
   };
 
-  const filteredLines = useMemo(() => {
-    if (activeSectionFilter === "ALL") return lines;
-    return lines.filter(l => (l.section || "MAIN_ASSEMBLY") === activeSectionFilter);
-  }, [lines, activeSectionFilter]);
+  const filteredLines = lines;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -556,43 +524,44 @@ export function BulletinForm({
       {/* ── 3. Operation Lines Management Toolbar ────────────────────── */}
       <div className="bg-white border border-[#E6DDCE] rounded-2xl p-4 shadow-2xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E6DDCE] pb-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-extrabold text-[#221912] uppercase tracking-wider">Sections:</span>
-            <button
-              type="button"
-              onClick={() => setActiveSectionFilter("ALL")}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeSectionFilter === "ALL"
-                  ? "bg-[#221912] text-white shadow-2xs"
-                  : "bg-[#F6F1E8] text-[#8C7E6E] hover:text-[#221912]"
-              }`}
-            >
-              All ({lines.length})
-            </button>
-            {GARMENT_SECTIONS.map(s => {
-              const count = sectionMetrics[s.id]?.count || 0;
-              if (count === 0 && activeSectionFilter !== s.id) return null;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setActiveSectionFilter(s.id)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    activeSectionFilter === s.id
-                      ? "bg-[#9C5B3C] text-white shadow-2xs"
-                      : "bg-[#F6F1E8] text-[#8C7E6E] hover:text-[#221912]"
-                  }`}
-                >
-                  <span>{s.label}</span>
-                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/30 text-current font-black">
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-extrabold text-[#221912] uppercase tracking-wider">
+              Sequential Operations
+            </span>
+            <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE]">
+              {lines.length} {lines.length === 1 ? 'step' : 'steps'}
+            </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="h-8 px-2.5 rounded-lg border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1 cursor-pointer">
+              <Upload className="w-3.5 h-3.5 text-[#9C5B3C]" />
+              <span>Import Lines</span>
+              <input 
+                type="file" 
+                accept=".xlsx,.xls" 
+                className="hidden" 
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    await handleImportLines(file);
+                  }
+                  e.target.value = "";
+                }} 
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={handleExportCurrentLines}
+              disabled={lines.length === 0}
+              className="h-8 px-2.5 rounded-lg border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Export current bulletin lines to Excel"
+            >
+              <Download className="w-3.5 h-3.5 text-[#9C5B3C]" />
+              <span>Export</span>
+            </button>
+
             <Button
               type="button"
               variant="outline"
@@ -914,113 +883,10 @@ export function BulletinForm({
                 {/* Expanded Engineering Attributes Drawer */}
                 {isExpanded && (
                   <div className="px-4 py-3 bg-[#FDFCFB] border-t border-[#E6DDCE] space-y-3 animate-in fade-in duration-100 text-xs">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      {/* Section Selector */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Garment Section</label>
-                        <select
-                          value={line.section}
-                          onChange={(e) => handleUpdateLine(index, { section: e.target.value })}
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl font-bold text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 cursor-pointer transition-colors"
-                        >
-                          {GARMENT_SECTIONS.map(s => (
-                            <option key={s.id} value={s.id}>{s.label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Predecessors (Dependency Constraint) */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase text-[#8C7E6E] flex items-center gap-1">
-                          <GitBranch className="w-3 h-3 text-[#9C5B3C]" /> Predecessor Sequences
-                        </label>
-                        <input
-                          type="text"
-                          value={line.predecessorIds || ""}
-                          onChange={(e) => handleUpdateLine(index, { predecessorIds: e.target.value })}
-                          placeholder="e.g. 1, 2, 4"
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl font-mono text-xs text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 transition-colors"
-                          title="Comma-separated sequence numbers of prior operations that must be completed before this step"
-                        />
-                      </div>
-
-                      {/* Stitch Type */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Stitch Classification</label>
-                        <select
-                          value={line.stitchType || ""}
-                          onChange={(e) => handleUpdateLine(index, { stitchType: e.target.value })}
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs font-semibold text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 cursor-pointer transition-colors"
-                        >
-                          <option value="">Select Stitch Type (Optional)</option>
-                          {STITCH_TYPES.map(st => (
-                            <option key={st} value={st}>{st}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Seam Type */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Seam Classification</label>
-                        <select
-                          value={line.seamType || ""}
-                          onChange={(e) => handleUpdateLine(index, { seamType: e.target.value })}
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs font-semibold text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 cursor-pointer transition-colors"
-                        >
-                          <option value="">Select Seam Type (Optional)</option>
-                          {SEAM_TYPES.map(st => (
-                            <option key={st} value={st}>{st}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-[#E6DDCE]">
-                      {/* Attachment / Folder */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Attachment / Work Aid</label>
-                        <input
-                          type="text"
-                          value={line.attachmentType || ""}
-                          onChange={(e) => handleUpdateLine(index, { attachmentType: e.target.value })}
-                          placeholder="e.g. 1/4 inch Hemmer Folder, Edge Guide"
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 transition-colors"
-                        />
-                      </div>
-
-                      {/* WIP Buffer Threshold (Bottleneck Control) */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold uppercase text-[#8C7E6E] flex items-center gap-1">
-                          <Layers className="w-3 h-3 text-[#9C5B3C]" /> WIP Queue Limit (pcs)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={line.wipThreshold !== undefined ? line.wipThreshold : 20}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === "") {
-                              handleUpdateLine(index, { wipThreshold: "" as any });
-                            } else {
-                              const parsed = parseInt(val, 10);
-                              handleUpdateLine(index, { wipThreshold: isNaN(parsed) ? 0 : Math.max(0, parsed) });
-                            }
-                          }}
-                          onBlur={() => {
-                            if (line.wipThreshold == null || (line.wipThreshold as any) === "" || isNaN(Number(line.wipThreshold))) {
-                              handleUpdateLine(index, { wipThreshold: 0 });
-                            }
-                          }}
-                          placeholder="0 or higher (e.g. 20)"
-                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl font-mono font-bold text-xs text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 transition-colors"
-                          title="Maximum queue pieces before triggering a bottleneck alert on the sewing line (can be set to 0 or any positive integer)"
-                        />
-                      </div>
-
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {/* Line Balancing Constraints */}
-                      <div className="space-y-1 sm:col-span-2">
-                        <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Balancing Constraints</label>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Line Balancing Constraints</label>
                         <div className="flex flex-wrap items-center gap-4 pt-1">
                           <label className="flex items-center gap-2 cursor-pointer">
                             <input
@@ -1053,6 +919,18 @@ export function BulletinForm({
                             </select>
                           )}
                         </div>
+                      </div>
+
+                      {/* Operation Notes / Quality Points */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Operation Notes / Quality Guidelines</label>
+                        <input
+                          type="text"
+                          value={line.notes || ""}
+                          onChange={(e) => handleUpdateLine(index, { notes: e.target.value })}
+                          placeholder="e.g. Critical tolerance, special folder setup, QC checkpoint..."
+                          className="w-full px-2.5 py-1.5 bg-white border border-[#E6DDCE] rounded-xl text-xs text-[#221912] hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 transition-colors"
+                        />
                       </div>
                     </div>
                   </div>

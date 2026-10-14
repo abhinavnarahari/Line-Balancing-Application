@@ -14,7 +14,11 @@ import {
   Trash2, 
   Eye, 
   Sliders,
-  X
+  X,
+  Download,
+  Upload,
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
 import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
@@ -23,6 +27,13 @@ import { Button } from "../../components/ui/Button";
 import { PageHeader, DataCard, EmptyState, SkeletonTable } from "../../components/ui/PremiumUI";
 import { CustomSelect } from "../../components/ui/CustomSelect";
 import { Modal } from "../../components/ui/Modal";
+
+import { 
+  exportBulletinsDetailed, 
+  importBulletinsFromExcel, 
+  downloadBulletinTemplate, 
+  type ImportResult 
+} from "../../features/bulletins/bulletinExcel";
 
 import { bulletinsApi, type OperationBulletin, type CreateBulletinDTO, type BulletinStatus } from "../../features/bulletins/api";
 import { BulletinForm } from "../../features/bulletins/BulletinForm";
@@ -51,6 +62,9 @@ export function BulletinsPage() {
   const [cloneCode, setCloneCode] = useState("");
   const [cloneName, setCloneName] = useState("");
   const [deletingBulletin, setDeletingBulletin] = useState<OperationBulletin | null>(null);
+
+  const [isImporting, setIsImporting] = useState(false);
+  const [importSummaryModal, setImportSummaryModal] = useState<ImportResult | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -212,7 +226,40 @@ export function BulletinsPage() {
     }
   };
 
-  // Export Entire Bulletin Library to Excel
+  // 1. Export All Detailed (All 25 fields across bulletin header & lines, SMV in seconds)
+  const handleExportAllDetailed = () => {
+    const listToExport = filteredBulletins.length > 0 ? filteredBulletins : bulletins;
+    exportBulletinsDetailed(listToExport, `Operation_Bulletins_Full_${new Date().toISOString().split("T")[0]}`);
+    showToast(`✓ Exported ${listToExport.length} bulletin(s) with all 25 fields`);
+  };
+
+  // 2. Download Pre-configured Sample Template
+  const handleDownloadTemplate = () => {
+    downloadBulletinTemplate("Operation_Bulletin_Import_Template");
+    showToast("✓ Downloaded Operation Bulletin Excel import template");
+  };
+
+  // 3. Import Bulletins from Excel with All Fields
+  const handleImportExcel = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const result = await importBulletinsFromExcel(file, bulletins, operations, styles);
+      await loadData();
+      setImportSummaryModal(result);
+      if (result.success) {
+        showToast(`✓ Successfully imported ${result.bulletinsCreated + result.bulletinsUpdated} bulletins (${result.totalLinesProcessed} operations)`);
+      } else {
+        showToast("⚠️ Bulletin import completed with issues. Review diagnostics.");
+      }
+    } catch (err: any) {
+      console.error("Import failed:", err);
+      showToast(`❌ Import error: ${err?.message || "Failed to process Excel file"}`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // 4. Export Summary List
   const handleExportAllExcel = () => {
     const rows = filteredBulletins.map(b => ({
       "Bulletin Code": b.bulletinCode,
@@ -246,16 +293,29 @@ export function BulletinsPage() {
       <PageHeader
         eyebrow="Industrial Engineering"
         title="Operation Bulletins"
-
+        showImportExport={true}
+        onExport={handleExportAllDetailed}
+        onImport={handleImportExcel}
         action={
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadTemplate}
+              className="h-9 px-3 rounded-xl border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Download standard Excel import template with all 25 fields"
+            >
+              <Download className="w-3.5 h-3.5 text-[#9C5B3C]" />
+              <span>Template</span>
+            </button>
+
             <button
               type="button"
               onClick={handleExportAllExcel}
-              className="h-9 px-3.5 rounded-xl border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+              className="h-9 px-3 rounded-xl border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+              title="Export high-level summary overview"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-[#9C5B3C]" />
-              <span>Export Library</span>
+              <span>Summary</span>
             </button>
 
             <Button 
@@ -757,6 +817,106 @@ export function BulletinsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Import Summary & Diagnostics Modal */}
+      <Modal
+        isOpen={!!importSummaryModal}
+        onClose={() => setImportSummaryModal(null)}
+        title={importSummaryModal?.success ? "Operation Bulletin Import Complete" : "Import Diagnostics & Results"}
+        subtitle="Summary of imported bulletins and engineering line data"
+        className="max-w-lg"
+      >
+        {importSummaryModal && (
+          <div className="space-y-4">
+            <div className={`p-4 rounded-2xl border flex items-start gap-3 ${
+              importSummaryModal.success 
+                ? "bg-emerald-50 border-emerald-200 text-emerald-900" 
+                : "bg-amber-50 border-amber-200 text-amber-900"
+            }`}>
+              {importSummaryModal.success ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              )}
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider">
+                  {importSummaryModal.success ? "Import Succeeded" : "Processed with Alerts"}
+                </h4>
+                <p className="text-xs mt-1 leading-relaxed">
+                  {importSummaryModal.success 
+                    ? "Operation bulletins and associated sequence lines have been validated and imported into the library." 
+                    : "Some bulletins were imported, but several rows generated notices."}
+                </p>
+              </div>
+            </div>
+
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-[#FAF7F2] p-3 rounded-xl border border-[#E6DDCE]">
+                <span className="text-[10px] font-bold uppercase text-[#8C7E6E] block">Bulletins Created</span>
+                <span className="text-xl font-black font-mono text-emerald-700">{importSummaryModal.bulletinsCreated}</span>
+              </div>
+              <div className="bg-[#FAF7F2] p-3 rounded-xl border border-[#E6DDCE]">
+                <span className="text-[10px] font-bold uppercase text-[#8C7E6E] block">Bulletins Updated</span>
+                <span className="text-xl font-black font-mono text-[#9C5B3C]">{importSummaryModal.bulletinsUpdated}</span>
+              </div>
+              <div className="bg-[#FAF7F2] p-3 rounded-xl border border-[#E6DDCE]">
+                <span className="text-[10px] font-bold uppercase text-[#8C7E6E] block">Operations Processed</span>
+                <span className="text-xl font-black font-mono text-[#221912]">{importSummaryModal.totalLinesProcessed}</span>
+              </div>
+              <div className="bg-[#FAF7F2] p-3 rounded-xl border border-[#E6DDCE]">
+                <span className="text-[10px] font-bold uppercase text-[#8C7E6E] block">New Catalog Ops</span>
+                <span className="text-xl font-black font-mono text-indigo-700">+{importSummaryModal.newOperationsCreated}</span>
+              </div>
+            </div>
+
+            {importSummaryModal.newStylesCreated > 0 && (
+              <p className="text-[11px] text-[#8C7E6E]">
+                Auto-registered <strong className="text-[#221912]">{importSummaryModal.newStylesCreated} new styles</strong> into the style catalog.
+              </p>
+            )}
+
+            {/* Errors / Warnings List */}
+            {importSummaryModal.errors.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold uppercase text-rose-700 block">Notices / Warnings</span>
+                <div className="max-h-36 overflow-y-auto p-2.5 bg-rose-50/50 border border-rose-200 rounded-xl space-y-1 text-[11px] text-rose-800">
+                  {importSummaryModal.errors.map((err, i) => (
+                    <div key={i} className="flex items-start gap-1.5">
+                      <span className="font-mono text-rose-500 font-bold">•</span>
+                      <span>{err}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end pt-3 border-t border-[#E6DDCE]">
+              <Button 
+                type="button" 
+                variant="primary" 
+                onClick={() => setImportSummaryModal(null)}
+                className="bg-[#9C5B3C] hover:bg-[#B06C49] text-white"
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Import in-progress loading indicator */}
+      {isImporting && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-2xl border border-[#E6DDCE] max-w-sm w-full flex flex-col items-center text-center space-y-3">
+            <RefreshCw className="w-8 h-8 text-[#9C5B3C] animate-spin" />
+            <div>
+              <h3 className="text-sm font-bold text-[#221912]">Importing Operation Bulletins</h3>
+              <p className="text-xs text-[#8C7E6E] mt-1">Parsing all 25 fields, validating operations, and updating library...</p>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
