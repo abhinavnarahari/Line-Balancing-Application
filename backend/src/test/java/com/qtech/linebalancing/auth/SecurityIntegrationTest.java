@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,10 +27,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * End-to-end checks of the real login flow (CSRF cookie → login → session) and the role policy.
  * Requires the local PostgreSQL used by the other integration tests; all changes are rolled back.
+ *
+ * Runs on a fresh application context: other tests use spring-security-test's {@code .with(csrf())}, which
+ * permanently swaps the cached context's cookie CSRF repository for a session-based test one. Sharing that
+ * context made this class fail whenever it ran after them (test order differs between Windows and CI's Linux).
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 class SecurityIntegrationTest {
 
     private static final String PASSWORD = "Factory2026";
