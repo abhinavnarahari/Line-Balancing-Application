@@ -37,6 +37,12 @@ public class ShiftAssignmentController {
                 .body(ApiResponse.success("Shift assignment created", assignmentService.assign(request)));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<ShiftAssignmentResponse>> update(
+            @PathVariable Long id, @Valid @RequestBody ShiftAssignmentRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Shift assignment updated", assignmentService.update(id, request)));
+    }
+
     @PatchMapping("/{id}/end")
     public ResponseEntity<ApiResponse<ShiftAssignmentResponse>> endAssignment(
             @PathVariable Long id,

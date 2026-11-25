@@ -27,6 +27,13 @@ public class LinePlanRequest {
 
     private List<LinePlanAssignmentRequest> assignments;
 
+    /**
+     * true = approve and release the plan to the floor (status "active").
+     * false/blank = just save: a new plan stays "draft", an existing plan keeps its status.
+     * Old clients that don't send it keep the previous behaviour (released).
+     */
+    private Boolean release;
+
     @Data
     public static class LinePlanAssignmentRequest {
         private Long bulletinLineId; // Optional if plan created from Master Operations

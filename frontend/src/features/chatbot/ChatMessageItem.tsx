@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Copy, Check, ThumbsUp, ThumbsDown, Database, Sparkles, User, AlertCircle, ArrowRight, Download, ExternalLink } from "lucide-react";
+import { Copy, Check, ThumbsUp, ThumbsDown, Database, Sparkles, AlertCircle, CornerDownRight, Download, ExternalLink, ArrowRight } from "lucide-react";
 import type { ChatMessage } from "./types";
 import { DataTableResponse } from "./DataTableResponse";
 import { ChartResponse } from "./ChartResponse";
@@ -122,14 +122,14 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
                   window.open(linkUrl, "_blank", "noopener,noreferrer");
                 }
               }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 mx-1 my-0.5 rounded-lg text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 hover:border-amber-300 transition-all cursor-pointer shadow-2xs hover:shadow-xs group"
+              className="inline-flex items-center gap-1 font-medium text-[#9C5B3C] hover:text-[#723E28] underline underline-offset-2 decoration-[#9C5B3C]/40 hover:decoration-[#723E28] cursor-pointer group"
               title={`Navigate to ${linkUrl}`}
             >
               <span>{linkText}</span>
               {isInternal ? (
-                <ArrowRight className="h-3 w-3 text-amber-700 group-hover:translate-x-0.5 transition-transform" />
+                <ArrowRight className="h-3 w-3" />
               ) : (
-                <ExternalLink className="h-3 w-3 text-amber-700" />
+                <ExternalLink className="h-3 w-3" />
               )}
             </button>
           );
@@ -139,7 +139,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
       // 2. Bold text
       if (part.startsWith("**") && part.endsWith("**")) {
         return (
-          <strong key={idx} className="font-bold text-slate-950">
+          <strong key={idx} className="font-semibold text-slate-900">
             {part.slice(2, -2)}
           </strong>
         );
@@ -158,7 +158,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
       if (part.startsWith("*") && part.endsWith("*") && !part.startsWith("**")) {
         return (
           <em key={idx} className="text-slate-600 italic">
-            {part.slice(1, -1)}
+            {/* italic notes can contain links, e.g. "*… open [Line Balancing](/line-balance) …*" */}
+            {renderInlineFormatting(part.slice(1, -1))}
           </em>
         );
       }
@@ -224,7 +225,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
       // 2. Headings (###, ####, ##)
       if (trimmed.startsWith("### ")) {
         elements.push(
-          <div key={`h3-${i}`} className="text-xs font-bold text-slate-900 mt-3 mb-1.5 flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+          <div key={`h3-${i}`} className="text-[13px] font-semibold text-slate-900 mt-3 mb-1">
             <span>{renderInlineFormatting(trimmed.substring(4))}</span>
           </div>
         );
@@ -233,7 +234,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
       }
       if (trimmed.startsWith("#### ")) {
         elements.push(
-          <div key={`h4-${i}`} className="text-xs font-bold text-slate-600 uppercase tracking-wider mt-2.5 mb-1">
+          <div key={`h4-${i}`} className="text-xs font-semibold text-slate-500 mt-2.5 mb-1">
             {renderInlineFormatting(trimmed.substring(5))}
           </div>
         );
@@ -244,7 +245,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
       // 3. Bullet Lists (- , * , • )
       if (trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("• ")) {
         elements.push(
-          <li key={`li-${i}`} className="ml-4 list-disc text-xs text-slate-700 leading-relaxed marker:text-amber-600 my-1">
+          <li key={`li-${i}`} className="ml-4 list-disc text-[13px] text-slate-700 leading-relaxed marker:text-slate-400 my-0.5">
             {renderInlineFormatting(trimmed.substring(2))}
           </li>
         );
@@ -258,8 +259,8 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
         const num = trimmed.substring(0, dotIdx + 1);
         const content = trimmed.substring(dotIdx + 1).trim();
         elements.push(
-          <div key={`num-${i}`} className="flex items-start gap-1.5 text-xs text-slate-700 leading-relaxed my-1">
-            <span className="font-bold text-amber-700 shrink-0 font-mono">{num}</span>
+          <div key={`num-${i}`} className="flex items-start gap-1.5 text-[13px] text-slate-700 leading-relaxed my-0.5">
+            <span className="text-slate-500 shrink-0 tabular-nums">{num}</span>
             <span>{renderInlineFormatting(content)}</span>
           </div>
         );
@@ -276,7 +277,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
 
       // 6. Regular Paragraph
       elements.push(
-        <p key={`p-${i}`} className="text-xs text-slate-700 leading-relaxed my-1">
+        <p key={`p-${i}`} className="text-[13px] text-slate-700 leading-relaxed my-1">
           {renderInlineFormatting(line)}
         </p>
       );
@@ -286,32 +287,30 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
     return elements;
   };
 
+  // Every assistant answer ends with "*Source: … · as of HH:mm*"; show it as a caption under any table or chart.
+  const sourceMatch = isUser ? null : message.messageText.match(/\n*\*Source: ([^\n]+)\*\s*$/);
+  const source = sourceMatch?.[1];
+  const body = sourceMatch ? message.messageText.slice(0, sourceMatch.index) : message.messageText;
+
+  if (isUser) {
+    return (
+      <div className="flex justify-end my-4">
+        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-[#F3EEE6] px-3.5 py-2 text-[13px] text-slate-900 whitespace-pre-wrap break-words">
+          {message.messageText}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex gap-3 my-3.5 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
-      {/* Avatar */}
-      <div
-        className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 shadow-xs mt-0.5 ${
-          isUser
-            ? "bg-[#221912] text-white"
-            : "bg-gradient-to-br from-[#9C5B3C] to-[#723E28] text-white ring-2 ring-[#9C5B3C]/20 shadow-xs"
-        }`}
-      >
-        {isUser ? <User className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+    <div className="flex gap-2.5 my-4">
+      <div className="h-7 w-7 rounded-lg bg-[#9C5B3C] text-white flex items-center justify-center shrink-0 mt-0.5" aria-hidden="true">
+        <Sparkles className="h-3.5 w-3.5" />
       </div>
 
-      {/* Message Content Container */}
-      <div className={`flex flex-col ${isUser ? "max-w-[85%] sm:max-w-[75%] items-end" : "w-full max-w-full items-start min-w-0"}`}>
-        <div
-          className={`rounded-2xl px-4 py-3.5 shadow-2xs border w-full ${
-            isUser
-              ? "bg-[#221912] text-white border-[#3A2B20] rounded-tr-xs"
-              : "bg-white text-[#221912] border-[#E6DDCE] rounded-tl-xs"
-          }`}
-        >
-          {/* Text Content */}
-          <div className={`space-y-0.5 leading-normal ${isUser ? "[&_*]:!text-white" : ""}`}>
-            {renderMarkdownBlocks(message.messageText)}
-          </div>
+      <div className="flex flex-col flex-1 min-w-0 items-start">
+        <div className="w-full rounded-xl rounded-tl-md bg-white border border-slate-200 px-4 py-3">
+          <div className="space-y-0.5">{renderMarkdownBlocks(body)}</div>
 
           {/* Structured Payload Metrics Card */}
           {message.structuredPayload?.metrics && (
@@ -352,70 +351,40 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
               </div>
             </div>
           )}
+          {source && (
+            <p className="mt-3 pt-2 border-t border-slate-100 text-[11px] text-slate-500 flex items-center gap-1.5">
+              <Database className="h-3 w-3 shrink-0" />
+              <span>Source: {source}</span>
+            </p>
+          )}
         </div>
 
-        {/* Footer Meta & Controls for Assistant */}
-        {!isUser && (
-          <div className="mt-1.5 flex items-center gap-3 px-1">
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700">
-              <Database className="h-3 w-3 text-emerald-600" />
-              <span>SewNexa Verified</span>
-            </div>
+        <div className="mt-1 flex items-center gap-0.5 text-slate-400">
+          <ActionButton label={copied ? "Copied" : "Copy answer"} onClick={handleCopy}>
+            {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+          </ActionButton>
+          <ActionButton label={downloaded ? "Downloaded" : "Download answer (.md)"} onClick={handleDownload}>
+            {downloaded ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Download className="h-3.5 w-3.5" />}
+          </ActionButton>
+          <ActionButton label="Helpful" active={feedback === "up"} onClick={() => handleFeedback(true)}>
+            <ThumbsUp className="h-3.5 w-3.5" />
+          </ActionButton>
+          <ActionButton label="Not helpful" active={feedback === "down"} onClick={() => handleFeedback(false)}>
+            <ThumbsDown className="h-3.5 w-3.5" />
+          </ActionButton>
+        </div>
 
-            <div className="h-2.5 w-px bg-slate-200" />
-
-            <button
-              onClick={handleCopy}
-              className="text-[10px] text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors cursor-pointer"
-              title="Copy answer"
-            >
-              {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-              <span>{copied ? "Copied" : "Copy"}</span>
-            </button>
-
-            <button
-              onClick={handleDownload}
-              className="text-[10px] text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors cursor-pointer"
-              title="Download response report (.md)"
-            >
-              {downloaded ? <Check className="h-3 w-3 text-emerald-600" /> : <Download className="h-3 w-3" />}
-              <span>{downloaded ? "Exported" : "Export"}</span>
-            </button>
-
-            <div className="flex items-center gap-1">
+        {message.suggestedQuestions && message.suggestedQuestions.length > 0 && onSelectPrompt && (
+          <div className="mt-1.5 flex flex-col items-start gap-1">
+            {message.suggestedQuestions.map((q) => (
               <button
-                onClick={() => handleFeedback(true)}
-                className={`p-1 rounded-md hover:bg-slate-100 transition-colors cursor-pointer ${
-                  feedback === "up" ? "text-emerald-700 bg-emerald-50" : "text-slate-400 hover:text-slate-700"
-                }`}
-                title="Helpful"
-              >
-                <ThumbsUp className="h-3 w-3" />
-              </button>
-              <button
-                onClick={() => handleFeedback(false)}
-                className={`p-1 rounded-md hover:bg-slate-100 transition-colors cursor-pointer ${
-                  feedback === "down" ? "text-red-700 bg-red-50" : "text-slate-400 hover:text-slate-700"
-                }`}
-                title="Not helpful"
-              >
-                <ThumbsDown className="h-3 w-3" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Suggested Next Questions Follow-up Chips */}
-        {!isUser && message.suggestedQuestions && message.suggestedQuestions.length > 0 && onSelectPrompt && (
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {message.suggestedQuestions.map((q, qIdx) => (
-              <button
-                key={qIdx}
+                key={q}
+                type="button"
                 onClick={() => onSelectPrompt(q)}
-                className="px-3 py-1.5 text-xs font-semibold text-[#8B4E32] bg-white hover:bg-[#F6F1E8] border border-[#E6DDCE] hover:border-[#9C5B3C] rounded-full transition-all shadow-2xs hover:shadow-xs cursor-pointer flex items-center gap-1.5 group text-left"
+                className="px-2.5 py-1 text-xs text-slate-600 hover:text-[#9C5B3C] bg-white border border-slate-200 hover:border-[#9C5B3C]/50 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 text-left"
               >
+                <CornerDownRight className="h-3 w-3 shrink-0 text-slate-400" />
                 <span>{q}</span>
-                <ArrowRight className="h-3 w-3 text-[#9C5B3C] group-hover:translate-x-0.5 transition-transform" />
               </button>
             ))}
           </div>
@@ -424,3 +393,23 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({ message, onSel
     </div>
   );
 };
+
+const ActionButton: React.FC<{ label: string; onClick: () => void; active?: boolean; children: React.ReactNode }> = ({
+  label,
+  onClick,
+  active,
+  children,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={label}
+    aria-label={label}
+    aria-pressed={active}
+    className={`h-7 w-7 flex items-center justify-center rounded-md transition-colors cursor-pointer ${
+      active ? "text-[#9C5B3C] bg-[#F6F1E8]" : "hover:text-slate-700 hover:bg-slate-100"
+    }`}
+  >
+    {children}
+  </button>
+);

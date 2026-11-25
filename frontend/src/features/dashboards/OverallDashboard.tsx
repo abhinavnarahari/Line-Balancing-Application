@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
+import { SkillLevelIcon } from "../../components/ui/SkillLevelIcon";
+import { SKILL_LEVELS, clampRating } from "../skill-matrix/skillScale";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
+import { saveWorkbook } from "../../utils/excel";
 import {
   Package,
   Users,
@@ -41,6 +44,7 @@ import {
   computeLiveProductionSnapshot,
   type LineStatusSummary,
 } from "./overallDashboardMetrics";
+import { toLocalDateString } from "../../utils/date";
 
 interface OverallDashboardProps {
   orders: Order[];
@@ -208,7 +212,7 @@ export function OverallDashboard({
       result = result.filter(
         (o) =>
           o.orderNo.toLowerCase().includes(q) ||
-          o.buyer.toLowerCase().includes(q) ||
+          (o.buyer || "").toLowerCase().includes(q) ||
           o.styleNo.toLowerCase().includes(q) ||
           (o.bulletinCode && o.bulletinCode.toLowerCase().includes(q)) ||
           (o.assignedLineName && o.assignedLineName.toLowerCase().includes(q))
@@ -309,8 +313,8 @@ export function OverallDashboard({
     const wsMachines = XLSX.utils.json_to_sheet(machineData);
     XLSX.utils.book_append_sheet(wb, wsMachines, "Machine Fleet");
 
-    const todayStr = new Date().toISOString().split("T")[0];
-    XLSX.writeFile(wb, `Factory_Overview_Report_${todayStr}.xlsx`);
+    const todayStr = toLocalDateString();
+    void saveWorkbook(wb, `Factory_Overview_Report_${todayStr}.xlsx`);
   };
 
   return (
@@ -1045,7 +1049,7 @@ export function OverallDashboard({
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { label: "Total Active", value: workforce.totalActive, color: "text-[#221912]" },
-                  { label: "Avg Skill Rating", value: `⭐ ${workforce.avgSkillRating}`, color: "text-[#8B5E3C]" },
+                  { label: "Avg Skill Level", value: `L${workforce.avgSkillRating} / 4`, color: "text-[#8B5E3C]" },
                   { label: "Floater Pool", value: workforce.floaterPoolCount, color: "text-amber-700" },
                 ].map((m) => (
                   <div key={m.label} className="bg-[#FAF8F5] rounded-xl p-2.5 border border-[#E6DDCE] text-center">
@@ -1055,7 +1059,7 @@ export function OverallDashboard({
                 ))}
               </div>
 
-              {/* Skill Matrix L1–L5 Distribution */}
+              {/* Skill level distribution (4-level scale) */}
               <div className="space-y-2 pt-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-[#8C7E6E]">
@@ -1066,11 +1070,11 @@ export function OverallDashboard({
                   </span>
                 </div>
                 {workforce.skillDistribution.map((s) => {
-                  const barColors = ["bg-[#77876F]", "bg-[#9C5B3C]", "bg-[#B48259]", "bg-amber-400", "bg-slate-400"];
                   return (
                     <div key={s.rating}>
                       <div className="flex items-center justify-between text-[10.5px] mb-0.5">
                         <span className="text-[#8C7E6E] font-medium flex items-center gap-1">
+                          <SkillLevelIcon rating={s.rating} size={12} decorative />
                           <strong className="text-[#221912]">L{s.rating}</strong>
                           <span className="text-[9.5px] text-[#A89A8A]">{s.label}</span>
                         </span>
@@ -1080,8 +1084,8 @@ export function OverallDashboard({
                       </div>
                       <div className="h-1.5 bg-[#F0EAE0] rounded-full overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${barColors[5 - s.rating]}`}
-                          style={{ width: `${s.percentage}%` }}
+                          className="h-full rounded-full"
+                          style={{ width: `${s.percentage}%`, backgroundColor: SKILL_LEVELS[clampRating(s.rating)].color }}
                         />
                       </div>
                     </div>

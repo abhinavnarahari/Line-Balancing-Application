@@ -13,6 +13,7 @@ import {
 } from "../../features/production-logs/api";
 import { useMasterDataSubscription } from "../../utils/masterDataEvents";
 import { LineLevelDashboard } from "../../features/dashboards/LineLevelDashboard";
+import { toLocalDateString } from "../../utils/date";
 
 export function LineDashboardPage() {
   const [lines, setLines] = useState<SewingLine[]>([]);
@@ -29,7 +30,7 @@ export function LineDashboardPage() {
   const loadData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = toLocalDateString();
       const [lns, ords, bulls, plans, oprs, shfs, tms, logs, att] = await Promise.allSettled([
         linesApi.getLines(true),
         ordersApi.getOrders(),

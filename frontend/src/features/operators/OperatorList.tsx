@@ -166,7 +166,7 @@ export function OperatorList({ operators, onEdit, onToggleActive, loading }: Ope
 
                   {/* Age */}
                   <TableCell className="text-center align-middle font-mono text-xs font-semibold text-[#221912] whitespace-nowrap">
-                    {op.age || "—"} yrs
+                    {op.age ? `${op.age} yrs` : "—"}
                   </TableCell>
 
                   {/* Gender */}

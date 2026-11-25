@@ -11,13 +11,20 @@ import com.qtech.linebalancing.allocation.service.OperatorPoolService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.transaction.annotation.Transactional;
+import com.qtech.linebalancing.line.repository.SewingLineRepository;
+import com.qtech.linebalancing.shift.repository.ShiftRepository;
 
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
+/** Requires the local PostgreSQL; the persisted run is rolled back (no test data left in the dev database). */
 @SpringBootTest
+@Transactional
 public class PersistRunIntegrationTest {
 
     @Autowired
@@ -32,13 +39,21 @@ public class PersistRunIntegrationTest {
     private AllocationScenarioService scenarioService;
     @Autowired
     private AllocationAuditService auditService;
+    @Autowired
+    private SewingLineRepository sewingLineRepository;
+    @Autowired
+    private ShiftRepository shiftRepository;
 
     @Test
-    public void testOptimizeAndPersistAll6Lines() {
+    public void testOptimizeAndPersistAllLines() {
+        List<Long> lineIds = sewingLineRepository.findAll().stream().map(l -> l.getId()).toList();
+        assumeFalse(lineIds.isEmpty(), "needs seeded sewing lines");
+        Long shiftId = shiftRepository.findAll().stream().map(s -> s.getId()).findFirst().orElse(1L);
+
         OptimizationRequestDTO req = OptimizationRequestDTO.builder()
                 .planningDate(LocalDate.now())
-                .shiftId(1L)
-                .lineIds(List.of(1L, 7L, 8L, 9L, 10L, 11L))
+                .shiftId(shiftId)
+                .lineIds(lineIds)
                 .primaryScenario("MAX_OUTPUT")
                 .allowCrossLineTransfers(true)
                 .allowTraineesOnSimpleOps(true)
@@ -49,6 +64,7 @@ public class PersistRunIntegrationTest {
         var pool = operatorPoolService.getOperatorPool(req.getPlanningDate(), req.getShiftId());
 
         var solverResult = optimizationEngine.solve(req, lineReqs, pool);
+        assertFalse(solverResult.getAssignments().isEmpty(), "solver should assign stations for the seeded lines");
 
         var matrix = solverResult.getAssignments().stream().map(a ->
                 OptimizationResponseDTO.AllocationAssignmentDTO.builder()
@@ -80,13 +96,8 @@ public class PersistRunIntegrationTest {
         var bottlenecks = resultService.generateBottlenecks(lineReqs, matrix);
         var scenarios = scenarioService.generateScenarios(summary, lineResults, pool.size());
 
-        try {
-            var savedRun = auditService.persistRun(req, solverResult, summary, bottlenecks, scenarios, lineReqs);
-            assertNotNull(savedRun);
-            System.out.println("SUCCESSFULLY PERSISTED RUN ID: " + savedRun.getId());
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw e;
-        }
+        var savedRun = auditService.persistRun(req, solverResult, summary, bottlenecks, scenarios, lineReqs);
+        assertNotNull(savedRun);
+        assertNotNull(savedRun.getId());
     }
 }

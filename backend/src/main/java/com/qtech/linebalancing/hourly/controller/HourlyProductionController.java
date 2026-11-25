@@ -28,6 +28,17 @@ public class HourlyProductionController {
         return ResponseEntity.ok(hourlyProductionService.buildBoard(linePlanId, orderId, shiftId, effectiveDate));
     }
 
+    /** Explicitly create the line plan for an order (the board GET never creates or changes plans). */
+    @PostMapping("/board/init")
+    public ResponseEntity<HourlyBoardResponse> initBoard(
+            @RequestParam Long orderId,
+            @RequestParam(required = false) Long shiftId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        Long planId = hourlyProductionService.initLinePlan(orderId, shiftId).getId();
+        LocalDate effectiveDate = date != null ? date : LocalDate.now();
+        return ResponseEntity.ok(hourlyProductionService.buildBoard(planId, null, null, effectiveDate));
+    }
+
     @PatchMapping("/assign")
     public ResponseEntity<Void> assignOperator(
             @RequestParam Long linePlanId,

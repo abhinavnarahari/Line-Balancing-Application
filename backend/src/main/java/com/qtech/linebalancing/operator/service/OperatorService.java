@@ -31,6 +31,26 @@ public class OperatorService {
         return toResponse(findOrThrow(id));
     }
 
+    /** All-or-nothing import; duplicate IDs inside the file or already in the system abort the whole batch. */
+    @Transactional
+    public List<OperatorResponse> createBatch(List<OperatorRequest> requests) {
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        List<OperatorResponse> created = new java.util.ArrayList<>();
+        for (int i = 0; i < requests.size(); i++) {
+            OperatorRequest r = requests.get(i);
+            int row = i + 2; // spreadsheet row (header is row 1)
+            if (!seen.add(r.getEmployeeId().trim().toUpperCase())) {
+                throw new BusinessRuleException("Row " + row + ": Employee ID '" + r.getEmployeeId() + "' appears more than once in the file.");
+            }
+            try {
+                created.add(create(r));
+            } catch (BusinessRuleException e) {
+                throw new BusinessRuleException("Row " + row + ": " + e.getMessage());
+            }
+        }
+        return created;
+    }
+
     @Transactional
     public OperatorResponse create(OperatorRequest request) {
         if (operatorRepository.existsByEmployeeIdIgnoreCase(request.getEmployeeId())) {

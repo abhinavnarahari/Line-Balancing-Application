@@ -19,7 +19,8 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
 # Stage 2: Nginx Web Server
-FROM nginx:1.27-alpine AS runner
+# 1.30 stable branch: patched for CVE-2026-123007 / CVE-2026-123633 (fixed in 1.30.7). Rebuild with --pull to get new patches.
+FROM nginx:1.30-alpine AS runner
 
 # Remove default nginx static assets
 RUN rm -rf /usr/share/nginx/html/*

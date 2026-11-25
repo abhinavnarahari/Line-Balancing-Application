@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx";
-import { readFromExcel } from "../../utils/excel";
+import { readFromExcel, saveWorkbook } from "../../utils/excel";
 import { 
   bulletinsApi, 
   type OperationBulletin, 
@@ -10,6 +10,8 @@ import {
 import { operationsApi, type Operation } from "../operations/api";
 import { stylesApi, type Style } from "../styles/api";
 import { notifyMasterDataUpdated } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
+import { clampRating, DEFAULT_REQUIRED_RATING } from "../skill-matrix/skillScale";
 
 /**
  * Supported fields across Operation Bulletin Header and Lines
@@ -73,7 +75,7 @@ const BULLETIN_EXCEL_COL_WIDTHS = [
 export function exportBulletinsDetailed(
   bulletins: OperationBulletin[], 
   fileName?: string
-): void {
+): Promise<boolean> {
   const rows: any[] = [];
 
   bulletins.forEach(b => {
@@ -126,7 +128,7 @@ export function exportBulletinsDetailed(
         "Operation Name": l.operationName || "",
         "Machine Type": l.machineType || "Single Needle Lockstitch",
         "SMV (sec)": smvSec,
-        "Skill Rating Required": l.skillRatingRequired || 3,
+        "Skill Rating Required": l.skillRatingRequired ? clampRating(l.skillRatingRequired) : DEFAULT_REQUIRED_RATING,
         "Parallelizable": l.isParallelizable ? "Yes" : "No",
         "Split Allowed": l.splitAllowed ? "Yes" : "No",
         "Split Type": l.splitType || "NONE",
@@ -142,8 +144,8 @@ export function exportBulletinsDetailed(
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Operation Bulletins");
 
-  const resolvedName = fileName || `Operation_Bulletins_Full_${new Date().toISOString().split("T")[0]}`;
-  XLSX.writeFile(wb, `${resolvedName}.xlsx`);
+  const resolvedName = fileName || `Operation_Bulletins_Full_${toLocalDateString()}`;
+  return saveWorkbook(wb, `${resolvedName}.xlsx`);
 }
 
 /**
@@ -188,7 +190,7 @@ export function downloadBulletinTemplate(fileName?: string): void {
       "Operation Name": "Placket Box Runstitch",
       "Machine Type": "Single Needle Lockstitch (SNLS)",
       "SMV (sec)": 45.0,
-      "Skill Rating Required": 4,
+      "Skill Rating Required": 3,
       "Parallelizable": "Yes",
       "Split Allowed": "Yes",
       "Split Type": "RATIO",
@@ -232,7 +234,7 @@ export function downloadBulletinTemplate(fileName?: string): void {
       "Operation Name": "Attach Ribbed Collar & Trim",
       "Machine Type": "Single Needle Lockstitch (SNLS)",
       "SMV (sec)": 52.0,
-      "Skill Rating Required": 5,
+      "Skill Rating Required": 4,
       "Parallelizable": "No",
       "Split Allowed": "Yes",
       "Split Type": "RATIO",
@@ -298,7 +300,7 @@ export function downloadBulletinTemplate(fileName?: string): void {
       "Operation Name": "Attach Rib Neckband",
       "Machine Type": "4-Thread Overlock",
       "SMV (sec)": 32.5,
-      "Skill Rating Required": 4,
+      "Skill Rating Required": 3,
       "Parallelizable": "Yes",
       "Split Allowed": "Yes",
       "Split Type": "RATIO",
@@ -555,11 +557,11 @@ export async function importBulletinsFromExcel(
         const validSec = !isNaN(parsedSec) && parsedSec > 0 ? parsedSec : 30;
         const smvMinutes = validSec / 60;
 
-        // Skill Rating Required (1 to 5)
+        // Skill Rating Required: factory 4-level scale (1 in training … 4 expert); blank = 3
         const rawSkill = parseInt(getRowValue(row, [
           "Skill Rating Required", "Skill Rating", "Skill Level", "Skill Required", "Rating"
         ]) || "3", 10);
-        const skillRatingRequired = Math.max(1, Math.min(5, isNaN(rawSkill) ? 3 : rawSkill));
+        const skillRatingRequired = clampRating(isNaN(rawSkill) ? DEFAULT_REQUIRED_RATING : rawSkill);
 
         // Parallelizable
         const rawParallel = getRowValue(row, ["Parallelizable", "Is Parallelizable", "Parallel"]);
@@ -720,7 +722,7 @@ export async function parseLinesForBulletinForm(
     const smvMinutes = validSec / 60;
 
     const rawSkill = parseInt(getRowValue(row, ["Skill Rating Required", "Skill Rating", "Skill Level"]) || "3", 10);
-    const skillRatingRequired = Math.max(1, Math.min(5, isNaN(rawSkill) ? 3 : rawSkill)) as 1 | 2 | 3 | 4 | 5;
+    const skillRatingRequired = clampRating(isNaN(rawSkill) ? DEFAULT_REQUIRED_RATING : rawSkill);
 
     const isParallelizable = normalizeBoolean(getRowValue(row, ["Parallelizable", "Is Parallelizable"]), true);
     const splitAllowed = normalizeBoolean(getRowValue(row, ["Split Allowed", "Can Split"]), false);

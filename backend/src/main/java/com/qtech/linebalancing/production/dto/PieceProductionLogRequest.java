@@ -1,6 +1,7 @@
 package com.qtech.linebalancing.production.dto;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,14 +25,18 @@ public class PieceProductionLogRequest {
     private Long orderId;
 
     @NotNull(message = "Target quantity is required")
+    @PositiveOrZero(message = "must not be negative")
     private Integer targetQty;
 
     @NotNull(message = "Completed quantity is required")
+    @PositiveOrZero(message = "must not be negative")
     private Integer completedQty;
 
     @NotNull(message = "Good quantity is required")
+    @PositiveOrZero(message = "must not be negative")
     private Integer goodQty;
 
+    @PositiveOrZero(message = "must not be negative")
     private Integer rejectQty;
 
     @NotNull(message = "Start time is required")

@@ -8,7 +8,9 @@ import { linesApi, type SewingLine } from "../../features/lines/api";
 import { MachineList } from "../../features/machines/MachineList";
 import { MachineForm } from "../../features/machines/MachineForm";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { MACHINES_TEMPLATE } from "../../utils/importTemplates";
 import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
 
 export function MachinesPage() {
   const [machines, setMachines] = useState<Machine[]>([]);
@@ -61,6 +63,7 @@ export function MachinesPage() {
       loadData();
     } catch (err) {
       console.error("Failed to save machine:", err);
+      throw err; // shown inside the form (useSubmitGuard)
     }
   };
 
@@ -84,7 +87,7 @@ export function MachinesPage() {
       "Assigned Line": m.lineName || m.lineCode || "Unassigned",
       "Status": m.status || (m.active ? "AVAILABLE" : "IDLE"),
     }));
-    exportToExcel(data, `Sewing_Machines_Inventory_${new Date().toISOString().split("T")[0]}`);
+    exportToExcel(data, `Sewing_Machines_Inventory_${toLocalDateString()}`);
   };
 
   const handleImport = async (file: File) => {
@@ -116,6 +119,7 @@ export function MachinesPage() {
         showImportExport={true}
         onExport={handleExport}
         onImport={handleImport}
+        importTemplate={MACHINES_TEMPLATE}
         eyebrow="Equipment & Assets"
         title="Machine Master Inventory"
         action={

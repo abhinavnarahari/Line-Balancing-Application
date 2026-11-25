@@ -50,7 +50,7 @@ export interface QualifiedOperationItem {
   operationId: number;
   operationCode: string;
   operationName: string;
-  rating: number; // 1 to 5
+  rating: number; // 1 to 4 (factory skill scale: 1 in training … 4 expert)
   cycleTimeSeconds?: number;
 }
 

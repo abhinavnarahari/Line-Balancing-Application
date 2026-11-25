@@ -6,7 +6,10 @@ import { skillApi, cycleTimeToRating, type PerformanceLog, type PerformanceLogIn
 import type { Operation } from "../../features/operations/api";
 import type { Operator } from "../../features/operators/api";
 
-import { getBenchmarkForOperation, getRatingRangeLabel, subscribeToBenchmarkChanges } from "../../features/operations/ratingBenchmarks";
+import { getBenchmarkForOperation, getRatingRangeLabel, subscribeToBenchmarkChanges, tierKey } from "../../features/operations/ratingBenchmarks";
+import { SKILL_LEVELS, SKILL_RATINGS } from "../../features/skill-matrix/skillScale";
+import { SkillLevelIcon } from "../../components/ui/SkillLevelIcon";
+import { toLocalDateString } from "../../utils/date";
 
 interface RecordPerformanceTestModalProps {
   isOpen: boolean;
@@ -26,7 +29,7 @@ export function RecordPerformanceTestModal({
   onSuccess,
 }: RecordPerformanceTestModalProps) {
   const [operationId, setOperationId] = useState<string>(operations[0]?.id ? String(operations[0].id) : "");
-  const [logDate, setLogDate] = useState<string>(new Date().toISOString().split("T")[0]);
+  const [logDate, setLogDate] = useState<string>(toLocalDateString());
   const [recordedBy, setRecordedBy] = useState<string>("Manager");
   const [notes, setNotes] = useState<string>("");
   const [testRuns, setTestRuns] = useState<string[]>(["", "", ""]);
@@ -181,14 +184,19 @@ export function RecordPerformanceTestModal({
           />
 
           {/* Operation Benchmark Tier Reference Pill */}
-          {benchmark && benchmark.rating5 && (
+          {benchmark && benchmark.rating4 && (
             <div className="flex items-center gap-1.5 flex-wrap text-[10px] bg-slate-50 border border-slate-200 p-2 rounded-xl font-mono mt-1.5 shadow-2xs">
-              <span className="font-bold text-slate-700">Tiers:</span>
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md font-bold">⭐5: {benchmark.rating5.label}</span>
-              <span className="px-2 py-0.5 bg-[#FAF7F2] text-[#9C5B3C] border border-[#E6DDCE] rounded-md font-bold">⭐4: {benchmark.rating4?.label}</span>
-              <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-md font-bold">⭐3: {benchmark.rating3?.label}</span>
-              <span className="px-2 py-0.5 bg-orange-50 text-orange-700 border border-orange-200 rounded-md font-bold">⭐2: {benchmark.rating2?.label}</span>
-              <span className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md font-bold">⭐1: {benchmark.rating1?.label}</span>
+              <span className="font-bold text-slate-700">Levels:</span>
+              {SKILL_RATINGS.map((r) => (
+                <span
+                  key={r}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 border rounded-md font-bold ${SKILL_LEVELS[r].badge}`}
+                  title={`${SKILL_LEVELS[r].name} (${SKILL_LEVELS[r].band}) — ${SKILL_LEVELS[r].description}`}
+                >
+                  <SkillLevelIcon rating={r} size={12} decorative />
+                  {r} {SKILL_LEVELS[r].name}: {benchmark[tierKey(r)]?.label ?? "—"}
+                </span>
+              ))}
             </div>
           )}
         </div>
@@ -220,7 +228,10 @@ export function RecordPerformanceTestModal({
             
             <div className="flex items-center justify-between text-[11px] text-amber-900 pt-1 border-t border-amber-200">
               <span>Daily Draft Avg: <strong>{draftAvg.toFixed(1)}s</strong></span>
-              <span className="font-bold">Pending Rating {draftRating} ({getRatingRangeLabel(draftRating || 1, selectedOp?.name)})</span>
+              <span className="font-bold inline-flex items-center gap-1">
+                <SkillLevelIcon rating={draftRating} size={13} decorative />
+                Pending Level {draftRating} {draftRating ? `· ${SKILL_LEVELS[draftRating].name}` : ""} ({getRatingRangeLabel(draftRating || 1, selectedOp?.name, selectedOp?.standardSmv)})
+              </span>
             </div>
           </div>
         )}
@@ -315,8 +326,9 @@ export function RecordPerformanceTestModal({
 
               <div className="flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-[#9C5B3C]" />
-                <span className="text-xs font-bold text-white bg-[#221912] px-2.5 py-1 rounded-md shadow-2xs">
-                  ⭐ Rating {derivedRating} &mdash; {getRatingRangeLabel(derivedRating, selectedOp?.name)}
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-[#221912] px-2.5 py-1 rounded-md shadow-2xs">
+                  <SkillLevelIcon rating={derivedRating} size={14} mono decorative />
+                  Level {derivedRating} · {SKILL_LEVELS[derivedRating].name} &mdash; {getRatingRangeLabel(derivedRating, selectedOp?.name, selectedOp?.standardSmv)}
                 </span>
               </div>
             </div>
@@ -363,7 +375,7 @@ export function RecordPerformanceTestModal({
               className="px-5 h-9 text-xs font-bold text-white bg-[#9C5B3C] hover:bg-[#854D33] rounded-lg disabled:opacity-50 flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
               <Check className="w-3.5 h-3.5" />
-              {saving ? "Submitting..." : `Submit & Reflect Rating ${derivedRating ? `(${derivedRating})` : ""}`}
+              {saving ? "Submitting..." : `Submit & Reflect Level ${derivedRating ? `(${derivedRating})` : ""}`}
             </button>
           </div>
         </div>

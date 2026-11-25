@@ -34,11 +34,12 @@ import { OptimizationResultsStep } from "../../features/allocation/components/Op
 import { ManualOverrideModal } from "../../features/allocation/components/ManualOverrideModal";
 import { ApprovalApplyModal } from "../../features/allocation/components/ApprovalApplyModal";
 import { AllocationAuditHistory } from "../../features/allocation/components/AllocationAuditHistory";
+import { toLocalDateString } from "../../utils/date";
 
 export function OperatorAllocationPage() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [planningDate, setPlanningDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
+    toLocalDateString()
   );
   const [selectedLineIds, setSelectedLineIds] = useState<number[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);

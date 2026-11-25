@@ -5,7 +5,6 @@ import com.qtech.linebalancing.allocation.entity.OperatorMachineQualification;
 import com.qtech.linebalancing.allocation.repository.OperatorMachineQualificationRepository;
 import com.qtech.linebalancing.attendance.entity.AttendanceRecord;
 import com.qtech.linebalancing.attendance.repository.AttendanceRepository;
-import com.qtech.linebalancing.attendance.service.AttendanceService;
 import com.qtech.linebalancing.line.entity.SewingLine;
 import com.qtech.linebalancing.line.repository.SewingLineRepository;
 import com.qtech.linebalancing.operator.entity.Operator;
@@ -36,14 +35,13 @@ public class OperatorPoolService {
     private final OperatorPerformanceLogRepository performanceLogRepository;
     private final OperatorMachineQualificationRepository machineQualificationRepository;
     private final AttendanceRepository attendanceRepository;
-    private final AttendanceService attendanceService;
     private final ShiftAssignmentRepository shiftAssignmentRepository;
     private final SewingLineRepository sewingLineRepository;
 
     /**
      * Retrieves the comprehensive operator pool for a specific planning date and shift.
      */
-    @Transactional
+    @Transactional(readOnly = true)
     public List<OperatorPoolDTO> getOperatorPool(LocalDate planningDate, Long shiftId) {
         LocalDate date = planningDate != null ? planningDate : LocalDate.now();
         List<Operator> operators = operatorRepository.findByActiveOrderByNameAsc(true);
@@ -51,9 +49,9 @@ public class OperatorPoolService {
         // Load attendances for this date
         Map<Long, AttendanceRecord> attendanceMap = new HashMap<>();
         List<AttendanceRecord> attendances = attendanceRepository.findByAttendanceDateOrderByOperatorId(date);
-        if (attendances.isEmpty()) {
-            attendances = attendanceService.initializeBaselineAttendanceForDate(date, shiftId);
-        }
+        // Planning for today/a future day before attendance is taken: project active operators as available
+        // (in memory only — nothing is written to attendance).
+        boolean projectAvailability = attendances.isEmpty() && !date.isBefore(LocalDate.now());
         for (AttendanceRecord att : attendances) {
             if (shiftId == null || att.getShift() == null || (att.getShift() != null && att.getShift().getId().equals(shiftId))) {
                 attendanceMap.put(att.getOperator().getId(), att);
@@ -62,10 +60,10 @@ public class OperatorPoolService {
 
         // Load shift assignments
         Map<Long, ShiftAssignment> shiftAssignmentMap = new HashMap<>();
-        List<ShiftAssignment> assignments = shiftAssignmentRepository.findAllByOrderByCreatedAtDesc();
-        for (ShiftAssignment sa : assignments) {
-            if (sa.getStatus() == ShiftAssignment.Status.ACTIVE && (shiftId == null || (sa.getShift() != null && sa.getShift().getId().equals(shiftId)))) {
-                shiftAssignmentMap.put(sa.getOperator().getId(), sa);
+        // Assignment in force on the planning date (by effective dates); most recently started wins
+        for (ShiftAssignment sa : shiftAssignmentRepository.findAllCovering(date)) {
+            if (shiftId == null || (sa.getShift() != null && sa.getShift().getId().equals(shiftId))) {
+                shiftAssignmentMap.putIfAbsent(sa.getOperator().getId(), sa);
             }
         }
 
@@ -82,8 +80,8 @@ public class OperatorPoolService {
             if (att != null && att.getStatus() != null) {
                 attendanceStatus = att.getStatus().name();
             } else {
-                // If shift assigned, default to PRESENT for simulation if no negative mark
-                if (shiftAssignmentMap.containsKey(op.getId())) {
+                // No mark yet: shift-assigned operators, or everyone when planning ahead, count as available
+                if (shiftAssignmentMap.containsKey(op.getId()) || projectAvailability) {
                     attendanceStatus = "PRESENT";
                 }
             }

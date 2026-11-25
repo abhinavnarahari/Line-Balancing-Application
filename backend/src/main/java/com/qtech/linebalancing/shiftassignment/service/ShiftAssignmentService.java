@@ -49,15 +49,11 @@ public class ShiftAssignmentService {
                     "Operator '" + operator.getEmployeeId() + "' is inactive and cannot be assigned to a shift.");
         }
 
-        // Business Rule 2: Prevent overlapping active (open-ended) assignments
-        List<ShiftAssignment> activeAssignments =
-                assignmentRepository.findActiveAssignmentsByOperator(operator.getId());
-        if (!activeAssignments.isEmpty() && request.getEffectiveTo() == null) {
-            throw new BusinessRuleException(
-                    "Operator '" + operator.getEmployeeId() +
-                    "' already has an active open-ended shift assignment. " +
-                    "Please end the current assignment before creating a new indefinite one.");
+        // Business Rule 2: an operator works one shift at a time — assignment periods must not overlap
+        if (request.getEffectiveTo() != null && request.getEffectiveTo().isBefore(request.getEffectiveFrom())) {
+            throw new BusinessRuleException("End date cannot be before the effective from date.");
         }
+        assertNoOverlap(operator, request.getEffectiveFrom(), request.getEffectiveTo(), null);
 
         Shift shift = shiftRepository.findById(request.getShiftId())
                 .orElseThrow(() -> new ResourceNotFoundException("Shift", "id", request.getShiftId()));
@@ -71,6 +67,35 @@ public class ShiftAssignmentService {
                 .build();
 
         log.info("Assigning operator {} to shift {} from {}", operator.getEmployeeId(), shift.getShiftCode(), request.getEffectiveFrom());
+        return toResponse(assignmentRepository.save(assignment));
+    }
+
+    @Transactional
+    public ShiftAssignmentResponse update(Long id, ShiftAssignmentRequest request) {
+        ShiftAssignment assignment = findOrThrow(id);
+        Operator operator = operatorService.findEntityById(request.getOperatorId());
+
+        if (!operator.isActive()) {
+            throw new BusinessRuleException(
+                    "Operator '" + operator.getEmployeeId() + "' is inactive and cannot be assigned to a shift.");
+        }
+        if (request.getEffectiveTo() != null && request.getEffectiveTo().isBefore(request.getEffectiveFrom())) {
+            throw new BusinessRuleException("End date cannot be before the effective from date.");
+        }
+
+        assertNoOverlap(operator, request.getEffectiveFrom(), request.getEffectiveTo(), id);
+
+        Shift shift = shiftRepository.findById(request.getShiftId())
+                .orElseThrow(() -> new ResourceNotFoundException("Shift", "id", request.getShiftId()));
+
+        assignment.setOperator(operator);
+        assignment.setShift(shift);
+        assignment.setEffectiveFrom(request.getEffectiveFrom());
+        assignment.setEffectiveTo(request.getEffectiveTo());
+        boolean ended = request.getEffectiveTo() != null && request.getEffectiveTo().isBefore(LocalDate.now());
+        assignment.setStatus(ended ? ShiftAssignment.Status.COMPLETED : ShiftAssignment.Status.ACTIVE);
+
+        log.info("Updated shift assignment {} for operator {}", id, operator.getEmployeeId());
         return toResponse(assignmentRepository.save(assignment));
     }
 
@@ -92,6 +117,23 @@ public class ShiftAssignmentService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Rejects a period that overlaps any other assignment of the operator (null end = open-ended). */
+    private void assertNoOverlap(Operator operator, LocalDate from, LocalDate to, Long ignoreId) {
+        for (ShiftAssignment other : assignmentRepository.findByOperatorIdOrderByEffectiveFromDesc(operator.getId())) {
+            if (ignoreId != null && other.getId().equals(ignoreId)) {
+                continue;
+            }
+            boolean startsBeforeOtherEnds = other.getEffectiveTo() == null || !from.isAfter(other.getEffectiveTo());
+            boolean endsAfterOtherStarts = to == null || !to.isBefore(other.getEffectiveFrom());
+            if (startsBeforeOtherEnds && endsAfterOtherStarts) {
+                throw new BusinessRuleException("Operator '" + operator.getEmployeeId() + "' is already assigned to shift "
+                        + other.getShift().getShiftCode() + " from " + other.getEffectiveFrom()
+                        + (other.getEffectiveTo() != null ? " to " + other.getEffectiveTo() : " (open-ended)")
+                        + ". End or adjust that assignment first.");
+            }
+        }
+    }
 
     private ShiftAssignment findOrThrow(Long id) {
         return assignmentRepository.findById(id)

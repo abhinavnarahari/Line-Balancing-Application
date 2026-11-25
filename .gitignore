@@ -27,3 +27,19 @@ replay_pid*.log
 FixFlyway.java
 FixFlyway.class
 
+# Playwright output
+test-results/
+playwright-report/
+
+# Factory data files (employee names/IDs): keep them out of the repository
+/*.xlsx
+/*.xls
+/*.csv
+
+# Database dumps / backups
+*.dump
+*.backup
+db-backups/
+
+# Stray screenshot output from local test runs
+frontend/undefined/

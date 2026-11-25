@@ -11,6 +11,7 @@ import type { Shift } from "../../features/shifts/types";
 import { shiftAssignmentApi, type ShiftAssignment } from "../../features/shift-assignments/api";
 import { cn } from "../../utils/cn";
 import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
 
 // Utility for status styling
 // Utility for status styling
@@ -43,7 +44,7 @@ export function AttendancePage() {
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
 
   // Roster/Tool State
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(toLocalDateString());
   const [roster, setRoster] = useState<Operator[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [pendingAttendance, setPendingAttendance] = useState<Record<string | number, AttendanceStatus>>({});

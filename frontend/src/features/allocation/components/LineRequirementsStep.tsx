@@ -10,6 +10,8 @@ import {
   Activity,
 } from "lucide-react";
 import type { LineRequirementItem, PreflightValidationResponse } from "../types";
+import { skillLevelName } from "../../skill-matrix/skillScale";
+import { SkillLevelIcon } from "../../../components/ui/SkillLevelIcon";
 
 
 interface LineRequirementsStepProps {
@@ -333,8 +335,9 @@ export function LineRequirementsStep({
                                     </div>
                                   </td>
                                   <td className="py-2.5 px-3 text-center">
-                                    <span className="px-2 py-0.5 rounded-full bg-[#B48259]/15 text-[#B48259] font-bold font-mono text-[10px]">
-                                      R{st.requiredSkillLevel}+
+                                    <span className="px-2 py-0.5 rounded-full bg-[#B48259]/15 text-[#B48259] font-bold font-mono text-[10px] inline-flex items-center gap-1" title={`${skillLevelName(st.requiredSkillLevel)} or better`}>
+                                      <SkillLevelIcon rating={st.requiredSkillLevel} size={11} decorative />
+                                      L{st.requiredSkillLevel}+
                                     </span>
                                   </td>
                                 </tr>
@@ -366,7 +369,7 @@ export function LineRequirementsStep({
         <button
           type="button"
           onClick={onNext}
-          disabled={hasErrors}
+          disabled={!!hasErrors}
           className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#9C5B3C] hover:bg-[#854B31] text-white text-xs font-bold shadow-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <span>Continue to Configure Solver Strategy</span>

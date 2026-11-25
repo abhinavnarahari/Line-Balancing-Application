@@ -12,6 +12,7 @@ import { operatorsApi, type Operator } from "../../features/operators/api";
 import { shiftsApi } from "../../features/shifts/api";
 import type { Shift } from "../../features/shifts/types";
 import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
+import { getErrorMessage } from "../../lib/api";
 
 export function ShiftAssignmentPage() {
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
@@ -57,8 +58,9 @@ export function ShiftAssignmentPage() {
       setIsFormOpen(false);
       notifyMasterDataUpdated("attendance");
       loadData();
-    } catch (err: any) {
-      setError(err.message || "Failed to assign shifts");
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to assign shifts"));
+      throw err; // keeps the form open with the message
     }
   };
 

@@ -2,11 +2,35 @@ import { api } from "../../lib/api";
 
 export type OperatorRole = "OPERATOR" | "HELPER" | "FLOATER" | "LINE_SUPERVISOR" | "QUALITY_CHECKER";
 
+export interface OperatorAttachment {
+  id: string | number;
+  fileName: string;
+  fileType?: string;
+  uploadedAt?: string;
+}
+
+export interface LinePlacement {
+  lineId: number | null;
+  lineCode: string | null;
+  lineName: string | null;
+  orderId: number;
+  orderNo: string;
+  orderStatus: string;
+  planShift: string | null;
+  operations: string[];
+}
+
+export interface OperatorPlacement {
+  lines: LinePlacement[];
+  currentShift: string | null;
+}
+
 export interface Operator {
   id: string;
   employeeId: string;
   name: string;
-  age: number;
+  /** Optional */
+  age?: number | null;
   gender: "Male" | "Female" | "Other";
   department: string;
   joiningDate: string;
@@ -22,6 +46,11 @@ export const operatorsApi = {
     return await api.get("/operators", { params });
   },
 
+  /** All-or-nothing import (backend validates every row in one transaction). */
+  createOperatorsBatch: async (ops: Omit<Operator, "id" | "createdAt" | "updatedAt">[]): Promise<Operator[]> => {
+    return await api.post("/operators/batch", ops);
+  },
+
   createOperator: async (op: Omit<Operator, "id" | "createdAt" | "updatedAt">): Promise<Operator> => {
     return await api.post("/operators", op);
   },
@@ -34,7 +63,12 @@ export const operatorsApi = {
     return await api.patch(`/operators/${id}/toggle-status`);
   },
 
-  getAttachments: async (id: string): Promise<any[]> => {
+  /** Lines the operator is placed on (saved line plans of open orders) and their current shift. */
+  getPlacement: async (id: string | number): Promise<OperatorPlacement> => {
+    return await api.get(`/operators/${id}/placement`);
+  },
+
+  getAttachments: async (id: string): Promise<OperatorAttachment[]> => {
     return await api.get(`/operators/${id}/attachments`);
   },
 

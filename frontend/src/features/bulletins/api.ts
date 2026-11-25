@@ -1,4 +1,5 @@
 import { api } from "../../lib/api";
+import type { SkillRating } from "../skill-matrix/skillScale";
 
 export interface BulletinLine {
   id?: string | number;
@@ -8,7 +9,8 @@ export interface BulletinLine {
   operationName?: string;
   smv: number;
   machineType: string;
-  skillRatingRequired: 1 | 2 | 3 | 4 | 5;
+  /** Factory 4-level skill scale (1 in training … 4 expert). */
+  skillRatingRequired: SkillRating;
   section?: string;
   predecessorIds?: string;
   isParallelizable?: boolean;
@@ -23,10 +25,14 @@ export interface BulletinLine {
 
 export type BulletinStatus = "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "RELEASED" | "PUBLISHED" | "ARCHIVED" | "OBSOLETE";
 
+/** Mirrors backend change control: only DRAFT / UNDER_REVIEW bulletins can be edited; others need a revision. */
+export const isBulletinEditable = (status?: BulletinStatus | string) =>
+  status === "DRAFT" || status === "UNDER_REVIEW";
+
 export interface BulletinStyleSummary {
   id: string | number;
   styleNo: string;
-  buyer?: string;
+  buyer?: string | null;
 }
 
 export interface OperationBulletin {
@@ -37,6 +43,8 @@ export interface OperationBulletin {
   styles?: BulletinStyleSummary[];
   version: number;
   revisionNumber?: number;
+  /** Optimistic-lock token from the server; send it back on update. */
+  rowVersion?: number;
   parentBulletinId?: string | number;
   status: BulletinStatus;
   approvedBy?: string;
@@ -57,6 +65,8 @@ export interface CreateBulletinDTO {
   description?: string;
   version?: number;
   revisionNumber?: number;
+  /** Optimistic-lock token from the server; send it back on update. */
+  rowVersion?: number;
   parentBulletinId?: string | number;
   status?: BulletinStatus;
   effectiveFrom?: string;

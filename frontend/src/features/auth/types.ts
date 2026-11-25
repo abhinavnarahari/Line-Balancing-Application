@@ -1,11 +1,11 @@
-export type UserRole = 
-  | "INDUSTRIAL_ENGINEER" 
-  | "LINE_SUPERVISOR" 
+/** Roles issued by the backend (`auth.entity.UserRole`). */
+export type UserRole =
+  | "SYSTEM_ADMIN"
+  | "INDUSTRIAL_ENGINEER"
   | "PRODUCTION_MANAGER"
-  | "PLANT_MANAGER" 
-  | "QUALITY_MANAGER" 
-  | "SYSTEM_ADMIN";
+  | "LINE_SUPERVISOR";
 
+/** Signed-in user as returned by `GET /api/auth/me`. */
 export interface AuthUser {
   id: string;
   name: string;
@@ -20,59 +20,27 @@ export interface AuthUser {
 
 export interface LoginCredentials {
   email: string;
-  password?: string;
-  rememberMe?: boolean;
+  password: string;
 }
 
-export interface DemoProfile {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  roleTitle: string;
-  department: string;
-  badgeColor: string;
-  initials: string;
-  description: string;
-  defaultRoute: string;
+export const ROLE_TITLES: Record<UserRole, string> = {
+  SYSTEM_ADMIN: "System Administrator",
+  INDUSTRIAL_ENGINEER: "Industrial Engineer (IE)",
+  PRODUCTION_MANAGER: "Production Manager",
+  LINE_SUPERVISOR: "Line Supervisor",
+};
+
+/** Landing page after sign-in for each role. */
+export function defaultRouteFor(role: UserRole): string {
+  switch (role) {
+    case "LINE_SUPERVISOR":
+      return "/monitoring";
+    case "PRODUCTION_MANAGER":
+      return "/overall-dashboard";
+    default:
+      return "/line-balance";
+  }
 }
 
-export const DEMO_PROFILES: DemoProfile[] = [
-  {
-    id: "ie",
-    name: "Priya Sharma",
-    email: "ie@sewnexa.com",
-    role: "INDUSTRIAL_ENGINEER",
-    roleTitle: "Industrial Engineer (IE)",
-    department: "IE & Operations Planning",
-    badgeColor: "bg-[#9C5B3C] text-white",
-    initials: "IE",
-    description: "Line Balancing, SMVs, Bulletins & Workstation Architecture",
-    defaultRoute: "/line-balance",
-  },
-  {
-    id: "line-supervisor",
-    name: "Rahim Khan",
-    email: "supervisor@sewnexa.com",
-    role: "LINE_SUPERVISOR",
-    roleTitle: "Line Supervisor",
-    department: "Sewing Floor Operations",
-    badgeColor: "bg-blue-600 text-white",
-    initials: "LS",
-    description: "Operator Placement, WIP Bottleneck Warnings & Hourly Boards",
-    defaultRoute: "/monitoring",
-  },
-  {
-    id: "production-manager",
-    name: "Vikramaditya Rao",
-    email: "manager@sewnexa.com",
-    role: "PRODUCTION_MANAGER",
-    roleTitle: "Production Manager",
-    department: "Production & Plant Operations",
-    badgeColor: "bg-emerald-600 text-white",
-    initials: "PM",
-    description: "Factory Overview, Daily Output, OEE & Target Governance",
-    defaultRoute: "/overall-dashboard",
-  },
-];
-
+/** Roles allowed to change plans and master data (mirrors backend SecurityConfig). */
+export const PLANNER_ROLES: UserRole[] = ["SYSTEM_ADMIN", "INDUSTRIAL_ENGINEER", "PRODUCTION_MANAGER"];

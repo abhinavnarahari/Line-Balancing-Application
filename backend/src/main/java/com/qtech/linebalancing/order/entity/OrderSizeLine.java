@@ -23,4 +23,8 @@ public class OrderSizeLine {
 
     @Column(nullable = false)
     private Integer quantity;
+
+    /** Colour of this size line (an order may have several colours). */
+    @Column(nullable = false, length = 100)
+    private String color;
 }

@@ -9,7 +9,9 @@ import { Modal } from "../../components/ui/Modal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../components/ui/Table";
 import { sizesApi, type Size } from "../../features/sizes/api";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { SIZES_TEMPLATE } from "../../utils/importTemplates";
 import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
 
 export function SizesPage() {
   const [sizes, setSizes] = useState<Size[]>([]);
@@ -81,7 +83,7 @@ export function SizesPage() {
       "Label": s.label,
       "Status": s.active ? "Active" : "Inactive"
     }));
-    exportToExcel(data, `Size_Definitions_${new Date().toISOString().split("T")[0]}`);
+    exportToExcel(data, `Size_Definitions_${toLocalDateString()}`);
   };
 
   const handleImport = async (file: File) => {
@@ -92,7 +94,7 @@ export function SizesPage() {
           sequence: row["Sequence"] || 1,
           code: row["Code"],
           label: row["Label"],
-          active: row["Status"] === "Active"
+          active: String(row["Status"] ?? "Active").trim().toLowerCase() !== "inactive"
         });
       }
       await loadSizes();
@@ -113,6 +115,7 @@ export function SizesPage() {
         showImportExport={true}
         onExport={handleExport}
         onImport={handleImport}
+        importTemplate={SIZES_TEMPLATE}
         eyebrow="Master Data Configuration"
         title="Apparel Size Definitions"
         action={

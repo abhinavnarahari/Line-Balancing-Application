@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface ChatConversationRepository extends JpaRepository<ChatConversation, Long> {
     List<ChatConversation> findByUserIdentifierOrderByUpdatedAtDesc(String userIdentifier);
+
+    java.util.Optional<ChatConversation> findByIdAndUserIdentifier(Long id, String userIdentifier);
 }

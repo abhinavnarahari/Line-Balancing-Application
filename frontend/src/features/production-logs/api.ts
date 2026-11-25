@@ -100,8 +100,20 @@ export const pieceProductionApi = {
     }
   },
 
+  /** Excel import: all runs are recorded together, or none are. */
+  recordBatch: (runs: PieceProductionLogRequest[]): Promise<PieceProductionLog[]> =>
+    api.post("/piece-production/batch", runs),
+
+  /** Days that have production recorded (for date pickers). */
+  getProductionDays: (): Promise<{ date: string; runs: number; goodQty: number }[]> =>
+    api.get("/piece-production/days"),
+
   getLogs: (date?: string): Promise<PieceProductionLog[]> =>
     api.get(`/piece-production/logs${date ? `?date=${date}` : ""}`),
+
+  /** All logs (every date) recorded against one order. */
+  getLogsByOrder: (orderId: string | number): Promise<PieceProductionLog[]> =>
+    api.get(`/piece-production/order/${orderId}`),
 
   get24hTimesheet: (date?: string): Promise<OperatorTimesheet24h[]> =>
     api.get(`/piece-production/timesheet-24h${date ? `?date=${date}` : ""}`),

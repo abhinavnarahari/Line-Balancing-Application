@@ -10,7 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { stylesApi, type Style, type CreateStyleDTO, type UpdateStyleDTO } from "../../features/styles/api";
 import { StyleForm } from "../../features/styles/StyleForm";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { STYLES_TEMPLATE } from "../../utils/importTemplates";
 import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
 
 export function StylesPage() {
   const [styles, setStyles] = useState<Style[]>([]);
@@ -41,7 +43,7 @@ export function StylesPage() {
 
   // Distinct buyers
   const distinctBuyers = useMemo(() => {
-    return Array.from(new Set(styles.map(s => s.buyer).filter(Boolean))).sort();
+    return Array.from(new Set(styles.map(s => s.buyer).filter((b): b is string => !!b))).sort();
   }, [styles]);
 
   const handleSubmit = async (data: CreateStyleDTO | UpdateStyleDTO) => {
@@ -71,7 +73,7 @@ export function StylesPage() {
       "Season": s.season,
       "Status": s.active ? "Active" : "Inactive"
     }));
-    exportToExcel(data, `Style_Catalog_${new Date().toISOString().split("T")[0]}`);
+    exportToExcel(data, `Style_Catalog_${toLocalDateString()}`);
   };
 
   const handleImport = async (file: File) => {
@@ -80,11 +82,11 @@ export function StylesPage() {
       for (const row of data) {
         await stylesApi.createStyle({
           styleNo: row["Style No"],
-          buyer: row["Buyer"],
+          buyer: String(row["Buyer"] ?? "").trim() || null,
           description: row["Description"] || "",
           productType: row["Product Type"] || "",
           season: row["Season"] || "",
-          active: row["Status"] === "Active"
+          active: String(row["Status"] ?? "Active").trim().toLowerCase() !== "inactive"
         });
       }
       await loadStyles();
@@ -118,6 +120,7 @@ export function StylesPage() {
         showImportExport={true}
         onExport={handleExport}
         onImport={handleImport}
+        importTemplate={STYLES_TEMPLATE}
         eyebrow="Commercial Catalog"
         title="Style & Garment Catalog"
 

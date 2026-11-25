@@ -1,0 +1,28 @@
+# Production profile (activated by the Docker image: SPRING_PROFILES_ACTIVE=prod).
+# Overrides only what must differ from development; everything else comes from application.yml.
+
+server:
+  error:
+    # Never expose stack traces or exception messages in Spring's fallback error responses
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+
+spring:
+  jpa:
+    show-sql: false
+  devtools:
+    restart:
+      enabled: false
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    com.qtech.linebalancing: ${LOGGING_LEVEL_APP:INFO}
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN

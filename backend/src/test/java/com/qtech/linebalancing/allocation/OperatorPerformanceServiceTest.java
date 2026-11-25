@@ -83,16 +83,16 @@ class OperatorPerformanceServiceTest {
         when(performanceLogRepository.findByOperatorIdAndOperationIdOrderByLogDateDesc(operatorId, operationId))
                 .thenReturn(List.of());
 
-        // Rating 5 in assessment -> Calibrated efficiency ~ 110%
+        // Level 4 (expert) in the assessment, operation needs level 3 -> above requirement
         when(skillAssessmentRepository.findCurrentByOperatorAndOperation(operatorId, operationId))
                 .thenReturn(Optional.of(
                         SkillAssessment.builder()
-                                .rating(5)
+                                .rating(4)
                                 .cycleTimeSeconds(27)
                                 .build()
                 ));
 
-        var eval = performanceService.evaluate(operatorId, operationId, machineType, 0.5, 4);
+        var eval = performanceService.evaluate(operatorId, operationId, machineType, 0.5, 3);
 
         assertEquals("CALIBRATED", eval.getPerformanceSource());
         assertEquals(27.0, eval.getEffectiveCycleTimeSecs());

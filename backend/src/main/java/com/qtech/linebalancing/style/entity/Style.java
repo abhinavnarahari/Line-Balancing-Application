@@ -16,7 +16,8 @@ public class Style extends AuditableEntity {
     @Column(name = "style_no", nullable = false, unique = true, length = 50)
     private String styleNo;
 
-    @Column(nullable = false, length = 150)
+    /** Optional. */
+    @Column(length = 150)
     private String buyer;
 
     @Column(columnDefinition = "TEXT")

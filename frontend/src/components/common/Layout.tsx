@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Sparkles } from "lucide-react";
 import { Sidebar } from "./Sidebar";
@@ -6,6 +6,7 @@ import { NotificationBell } from "./NotificationBell";
 import { TodayImmediateActionsNavButton } from "../../features/immediate-actions/TodayImmediateActionsNavButton";
 import { ChatbotDrawer, ChatbotFloatingButton } from "../../features/chatbot";
 import { UserMenu } from "./UserMenu";
+import { ExportColumnsDialogHost } from "../ui/ExportColumnsDialog";
 import { useAuth } from "../../features/auth/AuthContext";
 
 const routeLabels: Record<string, string> = {
@@ -91,8 +92,8 @@ export function Layout() {
                 <span className="whitespace-nowrap">SewNexa AI</span>
               </button>
 
-              {/* Today's Immediate Actions (Hidden for Production Manager & Plant Manager) */}
-              {user?.role !== "PRODUCTION_MANAGER" && user?.role !== "PLANT_MANAGER" && (
+              {/* Today's Immediate Actions (hidden for Production Manager) */}
+              {user?.role !== "PRODUCTION_MANAGER" && (
                 <TodayImmediateActionsNavButton />
               )}
 
@@ -127,7 +128,15 @@ export function Layout() {
         {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto bg-[#F6F1E8] custom-scrollbar">
           <div className="min-h-full">
-            <Outlet />
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center py-24" role="status" aria-label="Loading page">
+                  <div className="w-8 h-8 border-3 border-[#9C5B3C] border-t-transparent rounded-full animate-spin" />
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
           </div>
         </main>
       </div>
@@ -141,6 +150,9 @@ export function Layout() {
         onClose={() => setIsChatOpen(false)}
         context={chatContext}
       />
+
+      {/* Column picker shown by every Excel export */}
+      <ExportColumnsDialogHost />
     </div>
   );
 }

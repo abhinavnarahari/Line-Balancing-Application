@@ -38,7 +38,7 @@ public class StyleService {
         }
         Style style = Style.builder()
                 .styleNo(request.getStyleNo().toUpperCase())
-                .buyer(request.getBuyer())
+                .buyer(blankToNull(request.getBuyer()))
                 .description(request.getDescription())
                 .season(request.getSeason())
                 .productType(request.getProductType())
@@ -54,7 +54,7 @@ public class StyleService {
             throw new BusinessRuleException("Style number '" + request.getStyleNo() + "' already exists.");
         }
         style.setStyleNo(request.getStyleNo().toUpperCase());
-        style.setBuyer(request.getBuyer());
+        style.setBuyer(blankToNull(request.getBuyer()));
         style.setDescription(request.getDescription());
         style.setSeason(request.getSeason());
         style.setProductType(request.getProductType());
@@ -76,6 +76,10 @@ public class StyleService {
     private Style findOrThrow(Long id) {
         return styleRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Style", "id", id));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private StyleResponse toResponse(Style s) {

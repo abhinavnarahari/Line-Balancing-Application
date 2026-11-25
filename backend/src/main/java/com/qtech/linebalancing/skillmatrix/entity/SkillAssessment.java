@@ -26,7 +26,7 @@ public class SkillAssessment extends AuditableEntity {
     private Operation operation;
 
     /**
-     * Skill rating: 1=Beginner, 2=Basic, 3=Standard, 4=Good, 5=Expert.
+     * Skill level on the 4-level scale (SkillScale): 1 in training, 2 needs supervisor help, 3 independent, 4 expert.
      * Scale is subject to business confirmation — stored as-is for flexibility.
      */
     @Column(nullable = false)

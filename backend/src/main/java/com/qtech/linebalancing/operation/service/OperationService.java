@@ -124,7 +124,13 @@ public class OperationService {
     @Transactional
     public void delete(Long id) {
         Operation op = findOrThrow(id);
-        operationRepository.delete(op);
+        try {
+            operationRepository.delete(op);
+            operationRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new BusinessRuleException("Operation '" + op.getName()
+                    + "' is used by bulletins, skill records or production history and cannot be deleted. Deactivate it instead.");
+        }
     }
 
     public Operation findEntityById(Long id) {

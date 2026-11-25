@@ -4,6 +4,8 @@ import { operatorsApi, type Operator } from "../operators/api";
 import { shiftsApi as shiftApi } from "../shifts/api";
 import { shiftAssignmentApi, type ShiftAssignment } from "../shift-assignments/api";
 import { attendanceApi, type AttendanceRecord } from "../attendance/api";
+import { toLocalDateString } from "../../utils/date";
+import { usePolling } from "../../utils/usePolling";
 
 export function TodayImmediateActionsNavButton() {
   const location = useLocation();
@@ -21,7 +23,7 @@ export function TodayImmediateActionsNavButton() {
 
   const loadNavData = async () => {
     try {
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = toLocalDateString();
       const [opsData, shiftsData, assignmentsData, attData] = await Promise.allSettled([
         operatorsApi.getOperators(),
         shiftApi.getShifts(true),
@@ -40,13 +42,13 @@ export function TodayImmediateActionsNavButton() {
 
   useEffect(() => {
     loadNavData();
-    const interval = setInterval(loadNavData, 10000); // 10s live poll
-    return () => clearInterval(interval);
   }, []);
+  // Shown on every page: roster/shift data changes rarely, so poll gently (paused while hidden)
+  usePolling(loadNavData, 60000);
 
   // Compute overdue count (>5 mins past shift start and unmarked)
   const criticalCount = useMemo(() => {
-    const todayStr = currentTime.toISOString().split("T")[0];
+    const todayStr = toLocalDateString(currentTime);
     const activeOps = operators.filter(o => o.active !== false);
     const activeShifts = shifts.filter(s => s.active !== false);
     if (activeOps.length === 0 || activeShifts.length === 0) return 0;

@@ -10,5 +10,5 @@ import java.util.List;
 public interface OperationBulletinRepository extends JpaRepository<OperationBulletin, Long> {
     List<OperationBulletin> findAllByOrderByCreatedAtDesc();
     boolean existsByBulletinCodeIgnoreCaseAndVersion(String bulletinCode, Integer version);
-    boolean existsByBulletinCodeIgnoreCaseAndVersionAndIdNot(String bulletinCode, Integer version, Long id);
+    boolean existsByBulletinCodeIgnoreCaseAndVersionAndRevisionNumberAndIdNot(String bulletinCode, Integer version, Integer revisionNumber, Long id);
 }

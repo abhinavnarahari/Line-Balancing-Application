@@ -43,4 +43,7 @@ public class BulletinRequest {
     @NotEmpty(message = "At least one operation line is required")
     @Valid
     private List<BulletinLineRequest> lines;
+
+    /** rowVersion the client loaded; a mismatch means someone else saved first (409). Optional. */
+    private Long rowVersion;
 }

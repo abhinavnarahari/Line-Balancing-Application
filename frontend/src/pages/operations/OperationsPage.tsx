@@ -10,7 +10,10 @@ import { OperationRatingModal } from "../../features/operations/OperationRatingM
 import { OperationAffinityModal } from "../../features/operations/OperationAffinityModal";
 import { operationsApi, type Operation, type OperationAffinity } from "../../features/operations/api";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { OPERATIONS_TEMPLATE } from "../../utils/importTemplates";
 import { notifyMasterDataUpdated } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
+import { loadFailed } from "../../components/common/GlobalErrorToaster";
 
 export function OperationsPage() {
   const [operations, setOperations] = useState<Operation[]>([]);
@@ -26,7 +29,7 @@ export function OperationsPage() {
     try {
       const [ops, affs] = await Promise.all([
         operationsApi.getOperations(),
-        operationsApi.getAllAffinities().catch(() => [])
+        operationsApi.getAllAffinities().catch(loadFailed([]))
       ]);
       setOperations(ops);
       setAffinities(affs);
@@ -104,14 +107,17 @@ export function OperationsPage() {
       "Sequence": op.sequence,
       "Status": op.active ? "Active" : "Inactive"
     }));
-    exportToExcel(data, `Operations_Master_${new Date().toISOString().split("T")[0]}`);
+    exportToExcel(data, `Operations_Master_${toLocalDateString()}`);
   };
 
   const handleImport = async (file: File) => {
     try {
       const data = await readFromExcel<any>(file);
       for (const row of data) {
-        const opCode = (row["Operation Code"] || "").trim().toUpperCase();
+        const opCode = String(row["Operation Code"] ?? "").trim().toUpperCase();
+        const existing = operations.find(o => o.operationCode.toUpperCase() === opCode || o.name.toLowerCase() === String(row["Name"] || "").toLowerCase());
+        // A column left out of the file (or a blank cell) keeps the existing value on update
+        const has = (key: string) => row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== "";
         const rawSec = row["Standard SMV (sec)"] ?? row["Standard SMV (Sec)"] ?? row["Standard SMV"] ?? row["SMV (sec)"] ?? row["SMV (Sec)"] ?? row["SMV"];
         const parsedSec = rawSec !== undefined && rawSec !== null && rawSec !== "" ? parseFloat(rawSec) : 30;
         const validSec = !isNaN(parsedSec) && parsedSec > 0 ? parsedSec : 30;
@@ -120,14 +126,15 @@ export function OperationsPage() {
         const payload = {
           operationCode: opCode,
           name: row["Name"],
-          machineType: row["Machine Type"] || "Single Needle Lockstitch",
-          description: row["Description"] || "",
-          standardSmv: standardSmvMinutes,
-          sequence: parseInt(row["Sequence"]) || 0,
-          active: row["Status"] === "Active" || row["Status"] === true || row["Status"] === "active"
+          machineType: row["Machine Type"] || existing?.machineType || "Single Needle Lockstitch",
+          description: has("Description") ? row["Description"] : (existing?.description ?? ""),
+          standardSmv: (rawSec === undefined || rawSec === null || rawSec === "") && existing ? Number(existing.standardSmv) : standardSmvMinutes,
+          sequence: has("Sequence") ? (parseInt(row["Sequence"]) || 0) : (existing?.sequence ?? 0),
+          active: has("Status")
+            ? row["Status"] === true || String(row["Status"]).trim().toLowerCase() !== "inactive"
+            : (existing?.active ?? true)
         };
 
-        const existing = operations.find(o => o.operationCode.toUpperCase() === opCode || o.name.toLowerCase() === (row["Name"] || "").toLowerCase());
         if (existing) {
           await operationsApi.updateOperation(existing.id, payload);
         } else {
@@ -150,6 +157,7 @@ export function OperationsPage() {
         showImportExport={true}
         onExport={handleExport}
         onImport={handleImport}
+        importTemplate={OPERATIONS_TEMPLATE}
         eyebrow="Industrial Engineering"
         title="Operation Master & SMV Benchmark"
 

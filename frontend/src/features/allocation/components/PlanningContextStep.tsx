@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { PlanningContextResponse } from "../types";
 import type { Shift } from "../../shifts/types";
+import { toLocalDateString } from "../../../utils/date";
 
 interface PlanningContextStepProps {
   context: PlanningContextResponse | null;
@@ -46,18 +47,18 @@ export function PlanningContextStep({
 }: PlanningContextStepProps) {
   const [lineTypeFilter, setLineTypeFilter] = useState<string>("ALL");
 
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const todayStr = useMemo(() => toLocalDateString(), []);
   const tomorrowStr = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    return d.toISOString().split("T")[0];
+    return toLocalDateString(d);
   }, []);
   const nextMondayStr = useMemo(() => {
     const d = new Date();
     const day = d.getDay();
     const diff = d.getDate() + (day === 0 ? 1 : 8 - day);
     d.setDate(diff);
-    return d.toISOString().split("T")[0];
+    return toLocalDateString(d);
   }, []);
 
   const allSelected = useMemo(() => {

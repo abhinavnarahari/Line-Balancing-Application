@@ -24,9 +24,10 @@ export function SkillMatrixLogsPage() {
   const [filterRating, setFilterRating] = useState<string>("all");
 
   useEffect(() => {
-    api.get<{ data: HistoryLog[] }>("/skill-matrix/history/logs")
-      .then(res => {
-        setLogs(res.data.data);
+    // The api interceptor already unwraps ApiResponse.data, so the resolved value is the array itself.
+    api.get<HistoryLog[], HistoryLog[]>("/skill-matrix/history/logs")
+      .then(data => {
+        setLogs(Array.isArray(data) ? data : []);
       })
       .catch(console.error)
       .finally(() => setLoading(false));

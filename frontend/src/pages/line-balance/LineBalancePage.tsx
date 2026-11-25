@@ -1,13 +1,22 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Link, useSearchParams, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { PlanSetupChain } from "../../features/line-balance/PlanSetupChain";
+import { YamazumiChart } from "../../features/line-balance/YamazumiChart";
+import { flowThroughStations } from "../../features/line-balance/stationFlow";
+import { ExcelImportDialog } from "../../components/ui/ExcelImportDialog";
+import { LINE_PLAN_TEMPLATE, applyLinePlanRows, pickPlanBlock } from "../../features/line-balance/linePlanImport";
+import { readFromExcel } from "../../utils/excel";
+import * as XLSX from "xlsx";
+import { lineRunsStyle, lineStyleNo } from "../../features/lines/lineStyle";
+import { ordersForLine, bestOrderForLine, orderFitForLine, checkPlanSave, type SelectionContext } from "../../features/line-balance/planSelection";
 import {
   CheckCircle2, ChevronDown, Sparkles,
   Plus, Minus, X, Activity, Clock, ShieldAlert,
   Check, RefreshCw, Zap, Users, Cpu, Download, RotateCcw,
   Filter, Calendar, CalendarClock,
   Gauge, TrendingUp, Layers, AlertTriangle,
-  Network
+  Network, Upload, Save
 } from "lucide-react";
 import { operationsApi, type Operation, type OperationAffinity } from "../../features/operations/api";
 import { operatorsApi, type Operator } from "../../features/operators/api";
@@ -31,8 +40,14 @@ import {
   getAppliedBulletinScenarioForLine, 
   SCENARIO_APPLIED_EVENT 
 } from "../../features/bulletins/bulletinScenarioStore";
-import { runGlobalPoolOptimization, RATING_EFFICIENCY_MULTIPLIERS } from "../../features/line-balance/globalPoolOptimizer";
+import { runGlobalPoolOptimization, relativeSkillSpeed } from "../../features/line-balance/globalPoolOptimizer";
+import { clampRating, INDEPENDENT_RATING, MAX_SKILL_RATING, MIN_SKILL_RATING, SKILL_LEVELS, SKILL_RATINGS } from "../../features/skill-matrix/skillScale";
+import { SkillLevelIcon } from "../../components/ui/SkillLevelIcon";
 import { useMasterDataSubscription } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
+import { loadFailed } from "../../components/common/GlobalErrorToaster";
+import { usePolling } from "../../utils/usePolling";
+import { toAllocationCounts } from "../../features/line-balance/allocations";
 
 
 // ─── Station Row Interface ───────────────────────────────────────────────────
@@ -49,462 +64,6 @@ interface StationRow {
   requiredSkillRating?: number | string;
   wipThreshold?: number;
   actualOutput?: number;
-}
-
-// ─── Yamazumi / Pitch Line Balance Chart (Clean & Mathematically Calibrated) ──
-interface YamazumiPitchChartProps {
-  data: Array<{
-    stationNum: number;
-    operationName: string;
-    operationCode: string;
-    machineType: string;
-    smvSeconds: number;
-    effectiveTimeSecs: number;
-    allocatedOps: number;
-    capacityPerHour: number;
-    capacityPerShift: number;
-    isBottleneck: boolean;
-    deficitPerHour: number;
-    requiredOps: number;
-    gap: number;
-    loadPercent: number;
-  }>;
-  taktTimeSecs: number;
-  designedPitchTimeSecs: number;
-  requiredHourlyTarget: number;
-  requiredDesignCapacity: number;
-  plannedEfficiency: number;
-  lineBalanceEfficiency: number;
-  totalLineSMVSecs: number;
-  onAddOperator: (stationIndex: number) => void;
-}
-
-function YamazumiPitchChart({
-  data,
-  taktTimeSecs,
-  designedPitchTimeSecs,
-  requiredHourlyTarget,
-  requiredDesignCapacity,
-  plannedEfficiency,
-  lineBalanceEfficiency,
-  totalLineSMVSecs,
-  onAddOperator,
-}: YamazumiPitchChartProps) {
-  const [viewMode, setViewMode] = useState<"time" | "capacity" | "load">("time");
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
-  const averagePitchSecs = data.length > 0 ? totalLineSMVSecs / data.length : 0;
-  const bottleneckCount = data.filter(d => d.isBottleneck).length;
-
-  // Calculate clean, rounded dynamic maximum for Y-axis
-  let maxVal = 60;
-  if (viewMode === "time") {
-    const maxData = Math.max(...data.map(d => d.effectiveTimeSecs), taktTimeSecs, designedPitchTimeSecs, 1);
-    maxVal = Math.max(10, Math.ceil((maxData * 1.2) / 10) * 10);
-  } else if (viewMode === "capacity") {
-    const maxData = Math.max(...data.map(d => d.capacityPerHour), requiredDesignCapacity, requiredHourlyTarget, 1);
-    maxVal = Math.max(20, Math.ceil((maxData * 1.2) / 20) * 20);
-  } else {
-    const maxData = Math.max(...data.map(d => d.loadPercent), 100);
-    maxVal = Math.max(100, Math.ceil((maxData * 1.2) / 25) * 25);
-  }
-
-  // 5 evenly spaced ticks [100%, 75%, 50%, 25%, 0%]
-  const yTicks = [
-    { pct: 100, label: `${Math.round(maxVal)}${viewMode === "time" ? "s" : viewMode === "load" ? "%" : ""}` },
-    { pct: 75, label: `${Math.round(maxVal * 0.75)}${viewMode === "time" ? "s" : viewMode === "load" ? "%" : ""}` },
-    { pct: 50, label: `${Math.round(maxVal * 0.5)}${viewMode === "time" ? "s" : viewMode === "load" ? "%" : ""}` },
-    { pct: 25, label: `${Math.round(maxVal * 0.25)}${viewMode === "time" ? "s" : viewMode === "load" ? "%" : ""}` },
-    { pct: 0, label: `0${viewMode === "time" ? "s" : viewMode === "load" ? "%" : ""}` },
-  ];
-
-  return (
-    <div className="bg-white border border-[#E6DDCE] rounded-2xl shadow-[0_1px_3px_rgba(34,25,18,0.05)] overflow-hidden">
-      {/* Chart Header */}
-      <div className="p-4 sm:p-5 border-b border-[#E6DDCE] bg-[#FDFBF7] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-[#221912]">
-              Yamazumi / Pitch Line Balance Chart
-            </h3>
-            <span
-              className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold font-mono ${
-                bottleneckCount === 0
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-rose-50 text-rose-700 border border-rose-200"
-              }`}
-            >
-              {bottleneckCount === 0 ? "Line Balanced" : `${bottleneckCount} Bottlenecks`}
-            </span>
-          </div>
-          <p className="text-xs text-[#8C7E6E] mt-0.5">
-            Designed Pitch Target: <strong className="text-[#9C5B3C] font-mono">{designedPitchTimeSecs.toFixed(1)}s</strong> ({requiredDesignCapacity.toFixed(1)} pcs/hr @ {plannedEfficiency}% Eff) · Customer Takt: <strong className="text-[#221912] font-mono">{taktTimeSecs.toFixed(1)}s</strong> ({requiredHourlyTarget.toFixed(0)} pcs/hr)
-          </p>
-        </div>
-
-        {/* View Mode Switcher */}
-        <div className="flex items-center bg-[#F6F1E8] p-1 rounded-xl border border-[#E6DDCE] shadow-2xs">
-          <button
-            type="button"
-            onClick={() => setViewMode("time")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              viewMode === "time"
-                ? "bg-[#9C5B3C] text-white shadow-xs"
-                : "text-[#8C7E6E] hover:text-[#221912]"
-            }`}
-          >
-            Cycle Time (s)
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("capacity")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              viewMode === "capacity"
-                ? "bg-[#9C5B3C] text-white shadow-xs"
-                : "text-[#8C7E6E] hover:text-[#221912]"
-            }`}
-          >
-            Capacity (pcs/hr)
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("load")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              viewMode === "load"
-                ? "bg-[#9C5B3C] text-white shadow-xs"
-                : "text-[#8C7E6E] hover:text-[#221912]"
-            }`}
-          >
-            Workload (%)
-          </button>
-        </div>
-      </div>
-
-      {/* Chart Canvas Area */}
-      <div className="p-6 bg-white space-y-3">
-        <div className="flex gap-2">
-          {/* Y-Axis Column */}
-          <div className="w-10 shrink-0 relative h-60 select-none pointer-events-none">
-            {yTicks.map((tick, i) => (
-              <span
-                key={i}
-                className="absolute right-1 text-[11px] font-mono font-semibold text-[#8C7E6E] -translate-y-1/2"
-                style={{ bottom: `${tick.pct}%` }}
-              >
-                {tick.label}
-              </span>
-            ))}
-          </div>
-
-          {/* Plot Area */}
-          <div className="flex-1 relative h-60 border-l border-b border-[#E6DDCE] bg-slate-50/30 rounded-r-lg">
-            {/* Horizontal Gridlines */}
-            {yTicks.map((tick, i) => (
-              <div
-                key={i}
-                className="absolute left-0 right-0 border-b border-[#E6DDCE]/50 pointer-events-none"
-                style={{ bottom: `${tick.pct}%` }}
-              />
-            ))}
-
-            {/* Designed Pitch Line (Terracotta Primary Target) */}
-            {viewMode === "time" && designedPitchTimeSecs > 0 && (
-              <div
-                className="absolute left-0 right-0 z-20 pointer-events-none transition-all duration-200"
-                style={{ bottom: `${Math.min(98, (designedPitchTimeSecs / maxVal) * 100)}%` }}
-              >
-                <div className="relative border-t-2 border-dashed border-[#9C5B3C]">
-                  <span className="absolute -top-3 right-2 text-[10px] font-bold text-white bg-[#9C5B3C] px-2 py-0.5 rounded shadow-xs">
-                    DESIGN PITCH {designedPitchTimeSecs.toFixed(1)}s ({requiredDesignCapacity.toFixed(1)} pcs/h @ {plannedEfficiency}%)
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Customer Takt Line (Secondary Reference) */}
-            {viewMode === "time" && taktTimeSecs > 0 && Math.abs(taktTimeSecs - designedPitchTimeSecs) > 1 && (
-              <div
-                className="absolute left-0 right-0 z-20 pointer-events-none transition-all duration-200"
-                style={{ bottom: `${Math.min(98, (taktTimeSecs / maxVal) * 100)}%` }}
-              >
-                <div className="relative border-t border-dashed border-slate-400">
-                  <span className="absolute -top-2.5 left-2 text-[9.5px] font-bold text-slate-700 bg-white/95 px-1.5 py-0.5 rounded border border-slate-300 shadow-2xs">
-                    CUSTOMER TAKT {taktTimeSecs.toFixed(1)}s ({requiredHourlyTarget.toFixed(0)} pcs/h)
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Average Pitch Line (Exact Alignment) */}
-            {viewMode === "time" && averagePitchSecs > 0 && (
-              <div
-                className="absolute left-0 right-0 z-10 pointer-events-none transition-all duration-200"
-                style={{ bottom: `${Math.min(98, (averagePitchSecs / maxVal) * 100)}%` }}
-              >
-                <div className="relative border-t border-dotted border-[#8C7E6E]">
-                  <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[9.5px] font-bold text-[#8C7E6E] bg-white px-1.5 py-0.5 rounded border border-[#E6DDCE] shadow-2xs">
-                    AVG {averagePitchSecs.toFixed(1)}s
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Required Design Capacity Line */}
-            {viewMode === "capacity" && requiredDesignCapacity > 0 && (
-              <div
-                className="absolute left-0 right-0 z-20 pointer-events-none transition-all duration-200"
-                style={{ bottom: `${Math.min(98, (requiredDesignCapacity / maxVal) * 100)}%` }}
-              >
-                <div className="relative border-t-2 border-dashed border-[#9C5B3C]">
-                  <span className="absolute -top-3 right-2 text-[10px] font-bold text-white bg-[#9C5B3C] px-2 py-0.5 rounded shadow-xs">
-                    DESIGN CAP {requiredDesignCapacity.toFixed(1)} pcs/h (@ {plannedEfficiency}%)
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Customer Target Capacity Line */}
-            {viewMode === "capacity" && requiredHourlyTarget > 0 && Math.abs(requiredDesignCapacity - requiredHourlyTarget) > 1 && (
-              <div
-                className="absolute left-0 right-0 z-20 pointer-events-none transition-all duration-200"
-                style={{ bottom: `${Math.min(98, (requiredHourlyTarget / maxVal) * 100)}%` }}
-              >
-                <div className="relative border-t border-dashed border-slate-400">
-                  <span className="absolute -top-2.5 left-2 text-[9.5px] font-bold text-slate-700 bg-white/95 px-1.5 py-0.5 rounded border border-slate-300 shadow-2xs">
-                    CUSTOMER TARGET {requiredHourlyTarget.toFixed(0)} pcs/h
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* 100% Workload Line */}
-            {viewMode === "load" && (
-              <div
-                className="absolute left-0 right-0 z-20 pointer-events-none transition-all duration-200"
-                style={{ bottom: `${Math.min(98, (100 / maxVal) * 100)}%` }}
-              >
-                <div className="relative border-t-2 border-dashed border-[#9C5B3C]">
-                  <span className="absolute -top-3 right-2 text-[10px] font-bold text-white bg-[#9C5B3C] px-2 py-0.5 rounded shadow-xs">
-                    100% DESIGN PACE
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Bars Flex Row */}
-            <div className="absolute inset-0 flex items-end gap-3 px-4 overflow-x-auto custom-scrollbar z-10">
-              {data.map((station, idx) => {
-                let currentVal = station.effectiveTimeSecs;
-                if (viewMode === "capacity") {
-                  currentVal = station.capacityPerHour;
-                } else if (viewMode === "load") {
-                  currentVal = station.loadPercent;
-                }
-
-                // Bar height % of plot area
-                const barHeightPct = Math.min(100, Math.max(3, (currentVal / maxVal) * 100));
-
-                const isOverTakt = viewMode === "time"
-                  ? station.effectiveTimeSecs > designedPitchTimeSecs && designedPitchTimeSecs > 0
-                  : viewMode === "capacity"
-                  ? station.capacityPerHour < requiredDesignCapacity
-                  : station.loadPercent > 100;
-
-                // Portion of bar below Designed Pitch
-                const basePortionPct = isOverTakt && viewMode === "time"
-                  ? Math.min(100, (designedPitchTimeSecs / station.effectiveTimeSecs) * 100)
-                  : 100;
-
-                const isHovered = hoveredIndex === idx;
-
-                return (
-                  <div
-                    key={station.stationNum || idx}
-                    className="flex flex-col items-center justify-end h-full relative min-w-[52px] max-w-[70px] flex-1 group"
-                    onMouseEnter={() => setHoveredIndex(idx)}
-                    onMouseLeave={() => setHoveredIndex(null)}
-                  >
-                    {/* Tooltip */}
-                    <AnimatePresence>
-                      {isHovered && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 4, scale: 0.96 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.96 }}
-                          transition={{ duration: 0.12 }}
-                          className="absolute bottom-full mb-2 z-50 bg-[#06202B] text-white p-3 rounded-xl shadow-xl border border-[#0A2947] w-60 text-xs pointer-events-auto"
-                        >
-                          <div className="flex items-center justify-between border-b border-[#0A2947] pb-1.5 mb-2">
-                            <span className="font-mono text-xs font-bold text-[#9C5B3C]">
-                              Station #{station.stationNum}
-                            </span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0A2947] text-white font-mono">
-                              {station.operationCode}
-                            </span>
-                          </div>
-
-                          <p className="font-semibold text-white text-xs leading-tight mb-2 truncate">
-                            {station.operationName}
-                          </p>
-
-                          <div className="space-y-1 text-[11px] text-[#8C7E6E]">
-                            <div className="flex justify-between">
-                              <span>SMV:</span>
-                              <span className="text-white font-mono">{station.smvSeconds.toFixed(1)}s</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Cycle Time:</span>
-                              <span className="text-white font-mono font-bold">{station.effectiveTimeSecs.toFixed(1)}s</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Design Pitch:</span>
-                              <span className="text-white font-mono">{designedPitchTimeSecs.toFixed(1)}s (@ {plannedEfficiency}%)</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Capacity vs Req:</span>
-                              <span className={`font-mono font-bold ${station.capacityPerHour < requiredDesignCapacity ? "text-rose-400" : "text-emerald-400"}`}>
-                                {station.capacityPerHour} / {requiredDesignCapacity.toFixed(1)} pcs/h
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Operators:</span>
-                              <span className="text-white font-mono">{station.allocatedOps}</span>
-                            </div>
-                          </div>
-
-                          <div className="mt-2.5 pt-2 border-t border-[#0A2947] flex items-center justify-between">
-                            <span className={`font-bold text-[10.5px] ${station.isBottleneck ? "text-rose-400" : "text-[#10B981]"}`}>
-                              {station.isBottleneck ? `⚠️ Over Pitch (+${(station.effectiveTimeSecs - designedPitchTimeSecs).toFixed(1)}s)` : "✓ Balanced"}
-                            </span>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onAddOperator(idx);
-                              }}
-                              className="px-2 py-0.5 bg-[#9C5B3C] hover:bg-[#B06C49] text-white text-[10px] font-bold rounded transition-colors cursor-pointer"
-                              title="Allocate extra operator"
-                            >
-                              +1 Op
-                            </button>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Bar Cylinder */}
-                    <div
-                      className={`w-full relative overflow-hidden rounded-t-md transition-all cursor-pointer ${
-                        isHovered ? "ring-2 ring-[#9C5B3C]" : ""
-                      }`}
-                      style={{ height: `${barHeightPct}%` }}
-                    >
-                      {viewMode === "time" ? (
-                        <>
-                          {/* Below Takt Base (Green/Teal) */}
-                          <div
-                            className="absolute bottom-0 left-0 right-0 bg-[#10B981] transition-all"
-                            style={{ height: `${basePortionPct}%` }}
-                          />
-                          {/* Above Takt Excess (Red/Crimson) */}
-                          {isOverTakt && (
-                            <div
-                              className="absolute top-0 left-0 right-0 bg-[#E11D48] transition-all"
-                              style={{ height: `${100 - basePortionPct}%` }}
-                            />
-                          )}
-                        </>
-                      ) : viewMode === "capacity" ? (
-                        <div
-                          className={`absolute inset-0 ${
-                            station.capacityPerHour >= requiredHourlyTarget
-                              ? "bg-[#10B981]"
-                              : "bg-[#E11D48]"
-                          }`}
-                        />
-                      ) : (
-                        <div
-                          className={`absolute inset-0 ${
-                            station.loadPercent > 100 ? "bg-[#E11D48]" : "bg-[#10B981]"
-                          }`}
-                        />
-                      )}
-
-                      {/* Bar Value Label */}
-                      <span className="absolute bottom-1.5 left-0 right-0 text-center font-mono font-bold text-[10px] text-white drop-shadow-xs">
-                        {viewMode === "time"
-                          ? `${station.effectiveTimeSecs.toFixed(0)}s`
-                          : viewMode === "capacity"
-                          ? `${station.capacityPerHour}`
-                          : `${station.loadPercent}%`}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* X-Axis Labels Row */}
-        <div className="flex gap-2">
-          <div className="w-10 shrink-0" />
-          <div className="flex-1 flex gap-3 px-4 overflow-x-auto custom-scrollbar">
-            {data.map((station, idx) => (
-              <div
-                key={station.stationNum || idx}
-                className="min-w-[52px] max-w-[70px] flex-1 text-center select-none"
-              >
-                <span
-                  className={`text-[11px] font-mono block font-bold leading-tight ${
-                    station.isBottleneck ? "text-[#E11D48]" : "text-[#221912]"
-                  }`}
-                >
-                  #{station.stationNum}
-                </span>
-                <span className="text-[9.5px] text-[#8C7E6E] truncate max-w-[48px] block font-mono font-medium">
-                  {station.operationCode}
-                </span>
-                {station.allocatedOps > 1 && (
-                  <span className="text-[8.5px] text-[#9C5B3C] font-mono font-bold block">
-                    👥{station.allocatedOps}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Legend Ribbon */}
-        <div className="flex flex-wrap items-center justify-between gap-4 px-2 pt-3 mt-1 border-t border-[#E6DDCE] text-xs">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm bg-[#10B981]" />
-              <span className="font-medium text-[#221912]">Balanced Station (≤ Takt)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm bg-[#E11D48]" />
-              <span className="font-medium text-[#E11D48]">Bottleneck (&gt; Takt)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-0.5 border-t-2 border-dashed border-[#9C5B3C]" />
-              <span className="font-medium text-[#8C7E6E]">Takt Target Line</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-0.5 border-t border-dotted border-[#8C7E6E]" />
-              <span className="font-medium text-[#8C7E6E]">Pitch Average Line</span>
-            </div>
-          </div>
-
-          <span className="text-xs text-[#8C7E6E] font-mono">
-            Pitch Efficiency: <strong className="text-[#221912]">{lineBalanceEfficiency}%</strong> · Avg Pitch:{" "}
-            <strong className="text-[#221912]">{averagePitchSecs.toFixed(1)}s</strong>
-          </span>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 interface LineBalancePageProps {
@@ -561,32 +120,32 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     return "DELIVERY";
   });
 
+  // A design opened from the URL (?lineDesignId=) sets the selections once; the user can then change them freely.
   useEffect(() => {
-    if (paramLineDesignId) {
-      lineDesignApi.getDesignById(paramLineDesignId).then(design => {
-        if (design) {
-          setActiveLineDesign(design);
-          if (design.orderId) setSelectedOrderId(String(design.orderId));
-          if (design.lineId) setSelectedLineId(String(design.lineId));
-          if (design.shiftId) setSelectedShiftId(String(design.shiftId));
-          if (design.bulletinId) setSelectedBulletinId(String(design.bulletinId));
-          const eff = Number(design.plannedEfficiency || 80);
-          setPlannedEfficiency(eff);
-        }
-      }).catch(err => console.warn("Failed to load line design:", err));
-    } else if (selectedOrderId && allLineDesigns.length > 0) {
-      const match = allLineDesigns.find(d => 
-        String(d.orderId) === String(selectedOrderId) && 
-        (!selectedLineId || String(d.lineId) === String(selectedLineId))
-      ) || allLineDesigns.find(d => String(d.orderId) === String(selectedOrderId));
-
-      if (match) {
-        setActiveLineDesign(match);
-        const eff = Number(match.plannedEfficiency || 80);
-        setPlannedEfficiency(eff);
+    if (!paramLineDesignId) return;
+    lineDesignApi.getDesignById(paramLineDesignId).then(design => {
+      if (design) {
+        setActiveLineDesign(design);
+        if (design.orderId) setSelectedOrderId(String(design.orderId));
+        if (design.lineId) setSelectedLineId(String(design.lineId));
+        if (design.shiftId) setSelectedShiftId(String(design.shiftId));
+        if (design.bulletinId) setSelectedBulletinId(String(design.bulletinId));
+        setPlannedEfficiency(Number(design.plannedEfficiency || 80));
       }
-    }
-  }, [paramLineDesignId, selectedOrderId, selectedLineId, allLineDesigns]);
+    }).catch(err => console.warn("Failed to load line design:", err));
+  }, [paramLineDesignId]);
+
+  // The active design must belong to the selected order AND line (a design without a line fits any line).
+  // Never fall back to another line's design: its pitch and allocations would drive this line, and saving would overwrite it.
+  useEffect(() => {
+    const fits = (d: LineDesign) =>
+      String(d.orderId) === String(selectedOrderId) && (!d.lineId || !selectedLineId || String(d.lineId) === String(selectedLineId));
+    if (activeLineDesign && fits(activeLineDesign)) return;
+    const match = selectedOrderId ? allLineDesigns.find(fits) ?? null : null;
+    if (match?.id === activeLineDesign?.id) return;
+    setActiveLineDesign(match);
+    setPlannedEfficiency(Number(match?.plannedEfficiency || 80));
+  }, [selectedOrderId, selectedLineId, allLineDesigns, activeLineDesign]);
 
   useEffect(() => {
     if (fixedMode) {
@@ -622,29 +181,38 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   const [lines, setLines] = useState<SewingLine[]>([]);
   const [timesheetData, setTimesheetData] = useState<OperatorTimesheet24h[]>([]);
   const [allPieceLogs, setAllPieceLogs] = useState<PieceProductionLog[]>([]);
+  /** Runs recorded without an order (from the full load): they don't count toward any order, so they are reported */
+  const [orderlessLogs, setOrderlessLogs] = useState<PieceProductionLog[]>([]);
   const [allLinePlans, setAllLinePlans] = useState<LinePlan[]>([]);
 
   // Station Rows
-  const [stations, setStations] = useState<StationRow[]>([]);
+  const [stations, setStationRows] = useState<StationRow[]>([]);
+  // True once the user edits stations; cleared when stations are rebuilt, saved or reset
+  const stationsDirtyRef = useRef(false);
+  const builtSelectionKeyRef = useRef("");
+  const setStations: typeof setStationRows = (update) => {
+    stationsDirtyRef.current = true;
+    setStationRows(update);
+  };
 
   const fetchAll = useCallback(async () => {
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = toLocalDateString();
       const [ops, oprs, shfts, ords, bulls, skills, lns, atts, ts, logs, plans, affs, designs, perfLogs] = await Promise.all([
-        operationsApi.getOperations().catch(() => []),
-        operatorsApi.getOperators().catch(() => []),
-        shiftsApi.getShifts().catch(() => []),
-        ordersApi.getOrders().catch(() => []),
-        bulletinsApi.getBulletins().catch(() => []),
-        skillApi.getCurrentMatrix().catch(() => []),
-        linesApi.getLines(true).catch(() => []),
-        attendanceApi.getAttendanceByDate(today).catch(() => []),
-        pieceProductionApi.get24hTimesheet(today).catch(() => []),
-        pieceProductionApi.getLogs().catch(() => []),
-        linePlanApi.getAllPlans().catch(() => []),
-        operationsApi.getAllAffinities().catch(() => []),
-        lineDesignApi.getDesigns().catch(() => []),
-        skillApi.getPerformanceLogs().catch(() => []),
+        operationsApi.getOperations().catch(loadFailed([])),
+        operatorsApi.getOperators().catch(loadFailed([])),
+        shiftsApi.getShifts().catch(loadFailed([])),
+        ordersApi.getOrders().catch(loadFailed([])),
+        bulletinsApi.getBulletins().catch(loadFailed([])),
+        skillApi.getCurrentMatrix().catch(loadFailed([])),
+        linesApi.getLines(true).catch(loadFailed([])),
+        attendanceApi.getAttendanceByDate(today).catch(loadFailed([])),
+        pieceProductionApi.get24hTimesheet(today).catch(loadFailed([])),
+        pieceProductionApi.getLogs().catch(loadFailed([])),
+        linePlanApi.getAllPlans().catch(loadFailed([])),
+        operationsApi.getAllAffinities().catch(loadFailed([])),
+        lineDesignApi.getDesigns().catch(loadFailed([])),
+        skillApi.getPerformanceLogs().catch(loadFailed([])),
       ]);
       setOperations(ops || []);
       // Only machine operators (dedicated sewers and floaters) can be assigned to operations
@@ -657,6 +225,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       setAttendanceRecords(atts || []);
       setTimesheetData(ts || []);
       setAllPieceLogs(logs || []);
+      setOrderlessLogs((logs || []).filter(l => !l.orderId));
       setAllLinePlans(plans || []);
       setAllLineDesigns(designs || []);
 
@@ -698,26 +267,22 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
   useEffect(() => {
     fetchAll();
-
-    // ── Live Background Polling (Every 8s) to stream floor piece completions & timesheet logs in real-time ──
-    const pollTimer = setInterval(async () => {
-      try {
-        const today = new Date().toISOString().split("T")[0];
-        const [logs, ts, atts] = await Promise.all([
-          pieceProductionApi.getLogs().catch(() => null),
-          pieceProductionApi.get24hTimesheet(today).catch(() => null),
-          attendanceApi.getAttendanceByDate(today).catch(() => null),
-        ]);
-        if (logs) setAllPieceLogs(logs);
-        if (ts) setTimesheetData(ts);
-        if (atts) setAttendanceRecords(atts);
-      } catch (pollErr) {
-        // Silent background poll
-      }
-    }, 8000);
-
-    return () => clearInterval(pollTimer);
   }, [fetchAll]);
+
+  // Live floor refresh (paused while hidden). With an order selected only that order's logs are fetched —
+  // cumulative progress needs every date, but not every order's history on each tick.
+  usePolling(async (isCurrent) => {
+    const today = toLocalDateString();
+    const [logs, ts, atts] = await Promise.all([
+      (selectedOrderId ? pieceProductionApi.getLogsByOrder(selectedOrderId) : pieceProductionApi.getLogs()).catch(() => null),
+      pieceProductionApi.get24hTimesheet(today).catch(() => null),
+      attendanceApi.getAttendanceByDate(today).catch(() => null),
+    ]);
+    if (!isCurrent()) return;
+    if (logs) setAllPieceLogs(logs);
+    if (ts) setTimesheetData(ts);
+    if (atts) setAttendanceRecords(atts);
+  }, 15000, [selectedOrderId]);
 
   // App-wide Master Data sync
   useMasterDataSubscription(["shift", "operation", "operator", "line", "bulletin", "order", "attendance", "all"], fetchAll);
@@ -740,6 +305,86 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     if (byStyleNo) return byStyleNo;
     return null;
   }, [bulletins, selectedOrder, selectedBulletinId]);
+
+  // Bulletins linked to the selected order's style: the only link from an order to its operations
+  const bulletinsForOrderStyle = useMemo(() => {
+    if (!selectedOrder) return [];
+    return bulletins.filter(b => (b.styles || []).some(s =>
+      String(s.id) === String(selectedOrder.styleId) ||
+      (s.styleNo && selectedOrder.styleNo && s.styleNo.toLowerCase() === selectedOrder.styleNo.toLowerCase())));
+  }, [bulletins, selectedOrder]);
+
+  // How many open orders are already planned on each line (completed orders don't count)
+  const planCountByLine = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of allLinePlans) {
+      if (!p.lineId) continue;
+      const o = orders.find(x => String(x.id) === String(p.orderId));
+      if (o?.status === "COMPLETED") continue;
+      counts.set(String(p.lineId), (counts.get(String(p.lineId)) ?? 0) + 1);
+    }
+    return counts;
+  }, [allLinePlans, orders]);
+
+  /** Lines set up for a style, least loaded first (then by line code). */
+  const linesForStyle = useCallback((styleNo?: string | null) =>
+    lines
+      .filter(l => lineRunsStyle(l, styleNo))
+      .sort((a, b) => (planCountByLine.get(String(a.id)) ?? 0) - (planCountByLine.get(String(b.id)) ?? 0)
+        || String(a.lineCode).localeCompare(String(b.lineCode), undefined, { numeric: true })),
+  [lines, planCountByLine]);
+
+  const selectedOrderPlan = useMemo(
+    () => allLinePlans.find(p => String(p.orderId) === String(selectedOrderId) && p.lineId) ?? null,
+    [allLinePlans, selectedOrderId]);
+
+  // ── Line ↔ order validation (style is the link; one plan per order) ──
+  const selectionCtx: SelectionContext = useMemo(() => ({
+    plans: allLinePlans,
+    lines: lines.map(l => ({ id: l.id, lineCode: String(l.lineCode), currentStyle: l.currentStyle })),
+    styleHasBulletin: (styleId, styleNo) => bulletins.some(b => (b.styles || []).some(st =>
+      String(st.id) === String(styleId) || (!!styleNo && st.styleNo?.toLowerCase() === styleNo.toLowerCase()))),
+  }), [allLinePlans, lines, bulletins]);
+
+  /** Orders offered for the selected line (its style's orders; the ones that can't be picked are greyed out with a reason). */
+  const orderChoicesForLine = useMemo(
+    () => ordersForLine(orders.map(o => ({ ...o, id: o.id, styleNo: o.styleNo, styleId: o.styleId })), selectedLine ? { id: selectedLine.id, lineCode: String(selectedLine.lineCode), currentStyle: selectedLine.currentStyle } : undefined, selectionCtx),
+    [orders, selectedLine, selectionCtx]);
+
+  /** Picking a line: keep the order if it belongs on that line, otherwise show the line's planned / most urgent order. */
+  const handleLineChange = (lineId: string) => {
+    const line = lines.find(l => String(l.id) === String(lineId));
+    const selLine = line ? { id: line.id, lineCode: String(line.lineCode), currentStyle: line.currentStyle } : undefined;
+    setSelectedLineId(lineId);
+    const current = orders.find(o => String(o.id) === String(selectedOrderId));
+    if (current && orderFitForLine(current, selLine, selectionCtx).selectable) return;
+    const best = bestOrderForLine(orders, selLine, selectionCtx);
+    const nextId = best?.id !== undefined ? String(best.id) : "";
+    lineFollowedOrderRef.current = nextId; // the line was chosen by the user: don't move it to follow the order
+    setSelectedOrderId(nextId);
+  };
+
+  // The line follows the order: when an order with a saved plan is picked, show the line it was planned on
+  const lineFollowedOrderRef = useRef<string>("");
+  useEffect(() => {
+    if (!selectedOrderId || lineFollowedOrderRef.current === selectedOrderId) return;
+    const plan = allLinePlans.find(p => String(p.orderId) === String(selectedOrderId) && p.lineId);
+    if (loading || lines.length === 0) return; // wait until orders, lines and plans are loaded
+    lineFollowedOrderRef.current = selectedOrderId;
+    const isFirstFromUrl = paramOrderId && paramLineId && String(paramOrderId) === String(selectedOrderId);
+    if (isFirstFromUrl) return;
+    if (plan?.lineId && lines.some(l => String(l.id) === String(plan.lineId))) {
+      setSelectedLineId(String(plan.lineId));
+      return;
+    }
+    // Not planned yet: stay on the current line if it runs the order's style; otherwise suggest the least-loaded
+    // line set up for that style (Sewing Lines → Active Style)
+    const order = orders.find(o => String(o.id) === String(selectedOrderId));
+    const current = lines.find(l => String(l.id) === String(selectedLineId));
+    if (order?.styleNo && lineRunsStyle(current, order.styleNo)) return;
+    const best = linesForStyle(order?.styleNo)[0];
+    if (best) setSelectedLineId(String(best.id));
+  }, [selectedOrderId, allLinePlans, lines, orders, loading, paramOrderId, paramLineId, linesForStyle]);
 
   // If paramBulletinId is present, auto-select matching order
   useEffect(() => {
@@ -766,9 +411,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       const b = bulletins.find(x =>
         (x.styles || []).some(s => String(s.id) === String(selectedOrder.styleId) || (s.styleNo && s.styleNo.toLowerCase() === selectedOrder.styleNo?.toLowerCase()))
       );
-      if (b) {
-        setSelectedBulletinId(String(b.id));
-      }
+      // No bulletin for this order's style: clear it rather than keep showing (and saving) the previous style's operations
+      setSelectedBulletinId(b ? String(b.id) : "");
     }
   }, [selectedOrder, bulletins, paramBulletinId]);
 
@@ -791,6 +435,19 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   }, [operators, attendanceRecords]);
 
   useEffect(() => {
+    // Master-data refreshes (any tab, e.g. attendance) re-run this effect with new object references.
+    // Rebuild only when the selection itself changed or there are no unsaved edits, so manual work is not lost.
+    const selectionKey = `${selectedOrder?.id ?? ""}|${selectedBulletin?.id ?? ""}|${selectedLineId}|${activeLineDesign?.id ?? ""}`;
+    if (stationsDirtyRef.current && builtSelectionKeyRef.current === selectionKey) return;
+
+    let cancelled = false;
+    const setStations = (rows: StationRow[]) => {
+      if (cancelled) return; // a newer selection started loading; drop this stale result
+      builtSelectionKeyRef.current = selectionKey;
+      stationsDirtyRef.current = false;
+      setStationRows(rows);
+    };
+
     const initStations = async () => {
       if (!selectedOrder && !selectedBulletin) {
         setStations([]);
@@ -812,6 +469,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       } catch (e) {
         console.warn("No existing plan or error fetching plan for order:", e);
       }
+      if (cancelled) return;
 
       const isPlanForThisLine = existingPlan && (!existingPlan.lineId || String(existingPlan.lineId) === String(selectedLineId));
 
@@ -852,7 +510,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
           .sort((a, b) => a.sequence - b.sequence)
           .map(line => {
             const op = operations.find(o => String(o.id) === String(line.operationId) || (line.operationCode && o.operationCode === line.operationCode));
-            const smvVal = Number(op?.standardSmv !== undefined && op?.standardSmv !== null ? op.standardSmv : (line.smv || 0.5));
+            // The bulletin's SMV is the style-specific time; the operation master's standard SMV is only a fallback
+            const smvVal = Number(line.smv && Number(line.smv) > 0 ? line.smv : (op?.standardSmv || 0.5));
 
             // Multi-index resolution for stationAllocations:
             // Prioritize activeLineDesign, then currentApplied
@@ -860,9 +519,11 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
             let allocSource: Record<string | number, number> | null = null;
             if (activeLineDesign?.stationAllocations) {
               try {
-                allocSource = typeof activeLineDesign.stationAllocations === "string" 
-                  ? JSON.parse(activeLineDesign.stationAllocations) 
-                  : activeLineDesign.stationAllocations;
+                allocSource = toAllocationCounts(
+                  typeof activeLineDesign.stationAllocations === "string"
+                    ? JSON.parse(activeLineDesign.stationAllocations)
+                    : activeLineDesign.stationAllocations
+                );
               } catch (e) {
                 allocSource = currentApplied?.stationAllocations || null;
               }
@@ -951,34 +612,44 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
         return;
       }
 
-      if (operations.length > 0) {
-        const rows: StationRow[] = operations
-          .filter(o => o.active)
-          .sort((a, b) => (a.sequence || 0) - (b.sequence || 0))
-          .map((op, idx) => {
-            const smvVal = Number(op.standardSmv || 0.5);
-            const rawAssigned = existingAssignmentsByOp.get(String(op.id)) || [];
-            const assignedOps = rawAssigned.filter(id => id !== null && id !== undefined && id !== "");
-            const operatorIds = assignedOps.length > 0 ? assignedOps : (rawAssigned.length > 0 ? rawAssigned : [null]);
-
-            return {
-              stationNum: idx + 1,
-              bulletinLineId: null,
-              operationId: op.id,
-              operationCode: op.operationCode,
-              operationName: op.name,
-              machineType: op.machineType || "Single Needle Lockstitch",
-              smvSeconds: Math.round(smvVal * 60 * 10) / 10,
-              operatorIds,
-              isQcCheckpoint: existingQcByOp.get(String(op.id)) || false,
-              requiredSkillRating: (op?.skillLevelRequired || op?.skillLevel || op?.defaultSkillRating) ? String(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) : "3",
-            };
-          });
+      // No bulletin for this order's style. A plan saved earlier still shows its own operations;
+      // otherwise the table stays empty and the setup strip explains what is missing.
+      if (isPlanForThisLine && existingPlan?.assignments && existingPlan.assignments.length > 0) {
+        const byOp = new Map<string, { opId: string | number; operatorIds: (string | number | null)[]; qc: boolean }>();
+        for (const a of existingPlan.assignments) {
+          const key = String(a.operationId);
+          if (!byOp.has(key)) byOp.set(key, { opId: a.operationId, operatorIds: [], qc: false });
+          const entry = byOp.get(key)!;
+          entry.operatorIds.push(a.operatorId ?? null);
+          entry.qc = entry.qc || !!a.isQcCheckpoint;
+        }
+        const rows: StationRow[] = [...byOp.values()].map((entry, idx) => {
+          const op = operations.find(o => String(o.id) === String(entry.opId));
+          const smvVal = Number(op?.standardSmv || 0.5);
+          const assigned = entry.operatorIds.filter(id => id !== null && id !== undefined && id !== "");
+          return {
+            stationNum: idx + 1,
+            bulletinLineId: null,
+            operationId: entry.opId,
+            operationCode: op?.operationCode || "OP",
+            operationName: op?.name || "Operation",
+            machineType: op?.machineType || "Single Needle Lockstitch",
+            smvSeconds: Math.round(smvVal * 60 * 10) / 10,
+            operatorIds: assigned.length > 0 ? assigned : [null],
+            isQcCheckpoint: entry.qc,
+            requiredSkillRating: (op?.skillLevelRequired || op?.skillLevel || op?.defaultSkillRating) ? String(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) : "3",
+          };
+        });
         setStations(rows);
+        return;
       }
+      setStations([]);
     };
 
     initStations();
+    return () => {
+      cancelled = true;
+    };
   }, [selectedOrder, selectedBulletin, operations, selectedLineId, activeLineDesign]);
 
   // Real-time synchronization when a scenario is saved or updated in Operation Bulletins
@@ -1056,106 +727,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       window.removeEventListener(SCENARIO_APPLIED_EVENT, handleScenarioEvent);
     };
   }, [selectedLineId, selectedBulletin, selectedOrder, operations]);
-
-  // ─── Real-Time Delivery Schedule & Working Days Calculation ─────────────────
-  const deliveryScheduleMetrics = useMemo(() => {
-    if (!selectedOrder?.deliveryDate && !selectedOrder?.plannedCompletionDate) {
-      return {
-        calendarDaysRemaining: 1,
-        workingDaysRemaining: 1,
-        liveWorkingDaysExact: 1,
-        isOverdue: false,
-        isDueToday: false,
-        countdownFormatted: "1 Day (Default)",
-        progressPct: 0,
-        deliveryFormatted: "Not Specified",
-        plannedCompletionFormatted: "Not Specified",
-      };
-    }
-
-    // Pacing Target is governed by Planned Completion Date (if set), else Delivery Date
-    const targetCompStr = selectedOrder.plannedCompletionDate || selectedOrder.deliveryDate;
-    const targetDate = new Date(targetCompStr);
-    targetDate.setHours(23, 59, 59, 999);
-
-    const deliveryDateObj = new Date(selectedOrder.deliveryDate || targetCompStr);
-    deliveryDateObj.setHours(23, 59, 59, 999);
-
-    const diffMs = targetDate.getTime() - currentTime.getTime();
-    const isOverdue = diffMs < 0;
-    const isDueToday = !isOverdue && diffMs <= 24 * 60 * 60 * 1000;
-
-    const calendarDaysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
-
-    // Count full remaining working days from tomorrow to planned completion date
-    let futureWorkingDays = 0;
-    const tomorrowCursor = new Date(currentTime);
-    tomorrowCursor.setDate(tomorrowCursor.getDate() + 1);
-    tomorrowCursor.setHours(0, 0, 0, 0);
-    const endCursor = new Date(targetDate);
-    endCursor.setHours(0, 0, 0, 0);
-
-    if (endCursor >= tomorrowCursor) {
-      const cur = new Date(tomorrowCursor);
-      while (cur <= endCursor) {
-        const dayOfWeek = cur.getDay(); // 0 = Sunday
-        if (!workDaysOnly || dayOfWeek !== 0) {
-          futureWorkingDays++;
-        }
-        cur.setDate(cur.getDate() + 1);
-      }
-    }
-
-    // Today's remaining seconds (ticking second-by-second)
-    const nowSecsIntoDay = currentTime.getHours() * 3600 + currentTime.getMinutes() * 60 + currentTime.getSeconds();
-    const todayFractionRemaining = Math.max(0, Math.min(1, (86400 - nowSecsIntoDay) / 86400));
-    const liveWorkingDaysExact = isOverdue ? 1 : Math.max(0.05, futureWorkingDays + todayFractionRemaining);
-    const workingDaysRemaining = Math.max(1, Math.ceil(liveWorkingDaysExact));
-
-    const absMs = Math.abs(diffMs);
-    const d = Math.floor(absMs / (1000 * 60 * 60 * 24));
-    const h = Math.floor((absMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const m = Math.floor((absMs % (1000 * 60 * 60)) / (1000 * 60));
-    const s = Math.floor((absMs % (1000 * 60)) / 1000);
-
-    const countdownFormatted = isOverdue
-      ? `${d}d ${h}h overdue`
-      : `${d}d ${h}h ${m}m ${s}s`;
-
-    let progressPct = 0;
-    if (selectedOrder?.orderDate) {
-      const start = new Date(selectedOrder.orderDate).getTime();
-      const end = targetDate.getTime();
-      const totalLead = end - start;
-      if (totalLead > 0) {
-        progressPct = Math.min(100, Math.max(0, Math.round(((currentTime.getTime() - start) / totalLead) * 100)));
-      }
-    }
-
-    const deliveryFormatted = deliveryDateObj.toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-
-    const plannedCompletionFormatted = targetDate.toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-
-    return {
-      calendarDaysRemaining,
-      workingDaysRemaining,
-      liveWorkingDaysExact,
-      isOverdue,
-      isDueToday,
-      countdownFormatted,
-      progressPct,
-      deliveryFormatted,
-      plannedCompletionFormatted,
-    };
-  }, [selectedOrder, currentTime, workDaysOnly]);
 
   // ─── Shift & Real-Time Second-by-Second Available Time Engine ─────────────────
   const grossShiftMins = useMemo(() => {
@@ -1236,6 +807,116 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     };
   }, [currentTime, selectedShift, grossShiftMins, netWorkingMins, dailyNetWorkingSecs]);
 
+  // ─── Real-Time Delivery Schedule & Working Days Calculation ─────────────────
+  const deliveryScheduleMetrics = useMemo(() => {
+    if (!selectedOrder?.deliveryDate && !selectedOrder?.plannedCompletionDate) {
+      return {
+        calendarDaysRemaining: 1,
+        workingDaysRemaining: 1,
+        liveWorkingDaysExact: 1,
+        noTimeLeft: false,
+        daysOverdue: 0,
+        isOverdue: false,
+        isDueToday: false,
+        countdownFormatted: "1 Day (Default)",
+        progressPct: 0,
+        deliveryFormatted: "Not Specified",
+        plannedCompletionFormatted: "Not Specified",
+      };
+    }
+
+    // Pacing Target is governed by Planned Completion Date (if set), else Delivery Date
+    const targetCompStr = selectedOrder.plannedCompletionDate || selectedOrder.deliveryDate;
+    const targetDate = new Date(targetCompStr);
+    targetDate.setHours(23, 59, 59, 999);
+
+    const deliveryDateObj = new Date(selectedOrder.deliveryDate || targetCompStr);
+    deliveryDateObj.setHours(23, 59, 59, 999);
+
+    const diffMs = targetDate.getTime() - currentTime.getTime();
+    const isOverdue = diffMs < 0;
+    const isDueToday = !isOverdue && diffMs <= 24 * 60 * 60 * 1000;
+
+    const calendarDaysRemaining = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+    // Count full remaining working days from tomorrow to planned completion date
+    let futureWorkingDays = 0;
+    const tomorrowCursor = new Date(currentTime);
+    tomorrowCursor.setDate(tomorrowCursor.getDate() + 1);
+    tomorrowCursor.setHours(0, 0, 0, 0);
+    const endCursor = new Date(targetDate);
+    endCursor.setHours(0, 0, 0, 0);
+
+    if (endCursor >= tomorrowCursor) {
+      const cur = new Date(tomorrowCursor);
+      while (cur <= endCursor) {
+        const dayOfWeek = cur.getDay(); // 0 = Sunday
+        if (!workDaysOnly || dayOfWeek !== 0) {
+          futureWorkingDays++;
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+
+    // Today counts only the production time still left in today's shift (none once it has ended, none on a
+    // Sunday in a 6-day week), not the share of the 24-hour day left.
+    const todayIsWorkingDay = !workDaysOnly || currentTime.getDay() !== 0;
+    const todayShiftFraction = !todayIsWorkingDay || shiftScheduleMetrics.isEnded
+      ? 0
+      : Math.max(0, Math.min(1, shiftScheduleMetrics.liveShiftAvailableSecs / Math.max(1, dailyNetWorkingSecs)));
+    const liveWorkingDaysExact = isOverdue ? 0 : futureWorkingDays + todayShiftFraction;
+    // No working time left before the planned completion date (overdue, or due today after the shift ended)
+    const noTimeLeft = liveWorkingDaysExact <= 0;
+    const workingDaysRemaining = noTimeLeft ? 0 : Math.max(1, Math.ceil(liveWorkingDaysExact));
+    const daysOverdue = isOverdue ? Math.max(1, Math.floor(-diffMs / (1000 * 60 * 60 * 24)) + 1) : 0;
+
+    const absMs = Math.abs(diffMs);
+    const d = Math.floor(absMs / (1000 * 60 * 60 * 24));
+    const h = Math.floor((absMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const m = Math.floor((absMs % (1000 * 60 * 60)) / (1000 * 60));
+    const s = Math.floor((absMs % (1000 * 60)) / 1000);
+
+    const countdownFormatted = isOverdue
+      ? `${d}d ${h}h overdue`
+      : `${d}d ${h}h ${m}m ${s}s`;
+
+    let progressPct = 0;
+    if (selectedOrder?.orderDate) {
+      const start = new Date(selectedOrder.orderDate).getTime();
+      const end = targetDate.getTime();
+      const totalLead = end - start;
+      if (totalLead > 0) {
+        progressPct = Math.min(100, Math.max(0, Math.round(((currentTime.getTime() - start) / totalLead) * 100)));
+      }
+    }
+
+    const deliveryFormatted = deliveryDateObj.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    const plannedCompletionFormatted = targetDate.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+
+    return {
+      calendarDaysRemaining,
+      workingDaysRemaining,
+      liveWorkingDaysExact,
+      noTimeLeft,
+      daysOverdue,
+      isOverdue,
+      isDueToday,
+      countdownFormatted,
+      progressPct,
+      deliveryFormatted,
+      plannedCompletionFormatted,
+    };
+  }, [selectedOrder, currentTime, workDaysOnly, shiftScheduleMetrics, dailyNetWorkingSecs]);
+
   // Total Customer Demand (Order Quantity)
   const totalOrderQuantity = selectedOrder?.totalQuantity && selectedOrder.totalQuantity > 0
     ? selectedOrder.totalQuantity
@@ -1246,15 +927,24 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     return deliveryScheduleMetrics.liveWorkingDaysExact * dailyAvailableTimeSecs;
   }, [deliveryScheduleMetrics.liveWorkingDaysExact, dailyAvailableTimeSecs]);
 
+  // With no working time left before the planned completion date (overdue), a delivery pace cannot be calculated;
+  // the line's configured pace is used instead (line design target/hr × net shift hours, else the line's daily
+  // capacity) and the page asks the planner for a new completion date.
+  const deliveryPaceUnavailable = deliveryScheduleMetrics.noTimeLeft;
+  const configuredDailyTarget = activeLineDesign?.targetHourlyOutput && activeLineDesign.targetHourlyOutput > 0
+    ? Math.round(activeLineDesign.targetHourlyOutput * shiftHours)
+    : (selectedLine?.capacityPerDay && selectedLine.capacityPerDay > 0 ? selectedLine.capacityPerDay : 0);
+
   // Live Required Daily Output to meet delivery on time:
   const liveDeliveryDailyTarget = useMemo(() => {
+    if (deliveryPaceUnavailable) return configuredDailyTarget;
     const days = Math.max(1, deliveryScheduleMetrics.workingDaysRemaining);
     return Math.max(1, Math.ceil(totalOrderQuantity / days));
-  }, [totalOrderQuantity, deliveryScheduleMetrics.workingDaysRemaining]);
+  }, [totalOrderQuantity, deliveryScheduleMetrics.workingDaysRemaining, deliveryPaceUnavailable, configuredDailyTarget]);
 
   // ─── Live Floor Output & End-Line Throughput (Theory of Constraints / Bottleneck Flow) ──
   const { stationActuals, todayStationActuals } = useMemo(() => {
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = toLocalDateString();
 
     // Ensure stations are processed in their true physical sequence (1 -> 2 -> ... -> N)
     const sortedStations = [...stations].sort((a, b) => a.stationNum - b.stationNum);
@@ -1275,7 +965,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
       // Piece logs
       allPieceLogs.forEach(log => {
-        const matchesOrder = !selectedOrderId || !log.orderId || String(log.orderId) === String(selectedOrderId);
+        // Only runs recorded against this order count; runs with no order are reported separately (see orderlessForPlan)
+        const matchesOrder = !selectedOrderId || String(log.orderId ?? "") === String(selectedOrderId);
         const matchesOp = String(log.operationId) === opIdStr || log.operationName === st.operationName;
         const matchesAssignee = assignedOpIds.length === 0 || assignedOpIds.includes(String(log.operatorId));
         
@@ -1301,7 +992,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
             const logId = (log as any).id;
             if (!logId || !countedLogIds.has(logId)) {
               if (logId) countedLogIds.add(logId);
-              if (String(log.operationId) === opIdStr || (!log.operationId && row.department === st.operationName)) {
+              const logForOrder = !selectedOrderId || String(log.orderId ?? "") === String(selectedOrderId);
+              if (logForOrder && (String(log.operationId) === opIdStr || (!log.operationId && row.department === st.operationName))) {
                 cumGood += log.goodQty || 0;
                 cumReject += log.rejectQty || 0;
                 todayGood += log.goodQty || 0;
@@ -1316,53 +1008,39 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       rawTodayMap.set(st.stationNum, { good: todayGood, reject: todayReject });
     });
 
-    // 2. Enforce Progressive Sequential Flow Constraint (Garment Assembly Line Precedence Flow):
-    // In apparel manufacturing, Station k cannot complete and output more units than what Station (k-1) has completed and passed.
-    // FlowBounded(Station 1) = Raw(Station 1)
-    // FlowBounded(Station k) = min(Raw(Station k), FlowBounded(Station k-1))
-    // Queue WIP_k = FlowBounded(Station k-1) - FlowBounded(Station k)
-    let maxPrevCum = Infinity;
-    let maxPrevToday = Infinity;
-
-    const cumActuals: Array<{ stationNum: number; operationId: string | number; actualGood: number; actualReject: number; rawGood: number; queueWip: number }> = [];
-    const todayActuals: Array<{ stationNum: number; operationId: string | number; actualGood: number; actualReject: number; rawGood: number; queueWip: number }> = [];
-
-    sortedStations.forEach((st, idx) => {
-      const rawCum = rawCumMap.get(st.stationNum) || { good: 0, reject: 0 };
-      const rawToday = rawTodayMap.get(st.stationNum) || { good: 0, reject: 0 };
-
-      // Flow bounded output: strictly <= predecessor completed output
-      const boundedCumGood = Math.min(rawCum.good, maxPrevCum);
-      const boundedTodayGood = Math.min(rawToday.good, maxPrevToday);
-
-      // WIP waiting in buffer before this station (from predecessor output)
-      const cumWip = idx > 0 && maxPrevCum !== Infinity ? Math.max(0, maxPrevCum - boundedCumGood) : 0;
-      const todayWip = idx > 0 && maxPrevToday !== Infinity ? Math.max(0, maxPrevToday - boundedTodayGood) : 0;
-
-      maxPrevCum = boundedCumGood;
-      maxPrevToday = boundedTodayGood;
-
-      cumActuals.push({
-        stationNum: st.stationNum,
-        operationId: st.operationId,
-        actualGood: boundedCumGood,
-        actualReject: rawCum.reject,
-        rawGood: rawCum.good,
-        queueWip: cumWip,
-      });
-
-      todayActuals.push({
-        stationNum: st.stationNum,
-        operationId: st.operationId,
-        actualGood: boundedTodayGood,
-        actualReject: rawToday.reject,
-        rawGood: rawToday.good,
-        queueWip: todayWip,
-      });
-    });
+    // 2. Flow through the line in station order; stations with no records at all are "not recorded", not blockages
+    const cumFlow = flowThroughStations(sortedStations.map(st => (rawCumMap.get(st.stationNum) || { good: 0 }).good));
+    const todayFlow = flowThroughStations(sortedStations.map(st => (rawTodayMap.get(st.stationNum) || { good: 0 }).good));
+    const cumActuals = sortedStations.map((st, i) => ({
+      stationNum: st.stationNum,
+      operationId: st.operationId,
+      actualGood: cumFlow.good[i],
+      actualReject: (rawCumMap.get(st.stationNum) || { reject: 0 }).reject,
+      rawGood: (rawCumMap.get(st.stationNum) || { good: 0 }).good,
+      queueWip: cumFlow.wip[i],
+      notRecorded: cumFlow.notRecorded[i],
+    }));
+    const todayActuals = sortedStations.map((st, i) => ({
+      stationNum: st.stationNum,
+      operationId: st.operationId,
+      actualGood: todayFlow.good[i],
+      actualReject: (rawTodayMap.get(st.stationNum) || { reject: 0 }).reject,
+      rawGood: (rawTodayMap.get(st.stationNum) || { good: 0 }).good,
+      queueWip: todayFlow.wip[i],
+      notRecorded: todayFlow.notRecorded[i],
+    }));
 
     return { stationActuals: cumActuals, todayStationActuals: todayActuals };
   }, [stations, timesheetData, allPieceLogs, selectedOrderId]);
+
+  // Production on this plan's stations by its operators that was recorded without an order (not counted above)
+  const orderlessForPlan = useMemo(() => {
+    const opIds = new Set(stations.map(st => String(st.operationId)));
+    const people = new Set(stations.flatMap(st => st.operatorIds.filter(Boolean).map(String)));
+    const runs = orderlessLogs.filter(l => opIds.has(String(l.operationId)) && people.has(String(l.operatorId)));
+    const dates = runs.map(l => l.logDate).sort();
+    return { runs: runs.length, pieces: runs.reduce((n, l) => n + (l.goodQty || 0), 0), from: dates[0] ?? "", to: dates[dates.length - 1] ?? "" };
+  }, [orderlessLogs, stations]);
 
   // Cumulative Completed Finished Output across all days/shifts (Order Level - Overall Delivery Window)
   const cumulativeOrderOutput = useMemo(() => {
@@ -1389,9 +1067,10 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
   // Dynamic Required Daily Output accounting for completed output across remaining working days:
   const dynamicRemainingDeliveryDailyTarget = useMemo(() => {
+    if (deliveryPaceUnavailable) return configuredDailyTarget;
     const days = Math.max(1, deliveryScheduleMetrics.workingDaysRemaining);
-    return Math.max(1, Math.ceil(remainingOrderBalance / days));
-  }, [remainingOrderBalance, deliveryScheduleMetrics.workingDaysRemaining]);
+    return Math.ceil(remainingOrderBalance / days);
+  }, [remainingOrderBalance, deliveryScheduleMetrics.workingDaysRemaining, deliveryPaceUnavailable, configuredDailyTarget]);
 
   // Real-time Planned Pace Required Daily Target
   const plannedPaceDailyTarget = cumulativeOrderOutput > 0 ? dynamicRemainingDeliveryDailyTarget : liveDeliveryDailyTarget;
@@ -1412,11 +1091,12 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   }, [dailyAvailableTimeSecs, liveDeliveryDailyTarget]);
 
   // Dynamic Remaining Delivery Takt Time (Live available production seconds remaining ÷ Remaining pieces):
+  // 0 when nothing is left to make or no time is left, so the base delivery / design takt applies instead of
+  // dividing by a placeholder balance of 1 (which produced takt values of thousands of seconds).
   const dynamicRemainingDeliveryTaktSecs = useMemo(() => {
-    const balance = remainingOrderBalance > 0 ? remainingOrderBalance : 1;
-    if (liveAvailableProductionSecs <= 0) return 0;
-    return Math.round((liveAvailableProductionSecs / balance) * 100) / 100;
-  }, [liveAvailableProductionSecs, remainingOrderBalance]);
+    if (deliveryPaceUnavailable || remainingOrderBalance <= 0 || liveAvailableProductionSecs <= 0) return 0;
+    return Math.round((liveAvailableProductionSecs / remainingOrderBalance) * 100) / 100;
+  }, [liveAvailableProductionSecs, remainingOrderBalance, deliveryPaceUnavailable]);
 
   // Real-Time Live Shift-Driven Takt Time (ticks second-by-second with live available seconds)
   const shiftDrivenTaktSecs = useMemo(() => {
@@ -1427,9 +1107,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
   // Dynamic Remaining Shift-Driven Takt Time (Live available seconds ÷ Remaining Shift Balance):
   const dynamicRemainingShiftTaktSecs = useMemo(() => {
-    const balance = remainingShiftBalance > 0 ? remainingShiftBalance : 1;
-    if (shiftScheduleMetrics.liveShiftAvailableSecs <= 0) return 0;
-    return Math.round((shiftScheduleMetrics.liveShiftAvailableSecs / balance) * 100) / 100;
+    if (remainingShiftBalance <= 0 || shiftScheduleMetrics.liveShiftAvailableSecs <= 0) return 0;
+    return Math.round((shiftScheduleMetrics.liveShiftAvailableSecs / remainingShiftBalance) * 100) / 100;
   }, [shiftScheduleMetrics.liveShiftAvailableSecs, remainingShiftBalance]);
 
   // Industrial Engineering Line Efficiency fraction (default 80.0%, clamped 10% to 100%)
@@ -1520,7 +1199,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       if (assessment.cycleTimeSeconds && assessment.cycleTimeSeconds > 0) {
         return cycleTimeToRating(assessment.cycleTimeSeconds, targetOp?.name || assessment.operationName, targetOp?.standardSmv);
       }
-      return assessment.rating || null;
+      return assessment.rating ? clampRating(assessment.rating) : null;
     }
     return null;
   }, [skillAssessments, performanceLogs, operations]);
@@ -1540,16 +1219,17 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     if (reqRating === "3_PLUS") {
       return baseOps.filter(o => {
         const r = getOperatorSkill(o.id, operationId);
-        return r !== null && r >= 3;
+        return r !== null && r >= INDEPENDENT_RATING;
       });
     }
     if (reqRating === "4_PLUS") {
       return baseOps.filter(o => {
         const r = getOperatorSkill(o.id, operationId);
-        return r !== null && r >= 4;
+        return r !== null && r >= MAX_SKILL_RATING;
       });
     }
-    const numericRating = Number(reqRating);
+    // Legacy 1–5 requirement values (e.g. 5) clamp to the 4-level scale
+    const numericRating = clampRating(Number(reqRating));
     return baseOps.filter(o => {
       const r = getOperatorSkill(o.id, operationId);
       return r !== null && r >= numericRating;
@@ -1636,9 +1316,10 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       const op = operations.find(o => String(o.id) === String(s.operationId));
       const bLine = selectedBulletin?.lines?.find(l => String(l.id) === String(s.bulletinLineId))
         || selectedBulletin?.lines?.find(l => String(l.operationId) === String(s.operationId));
-      const smvMin = op?.standardSmv !== undefined && op?.standardSmv !== null
-        ? Number(op.standardSmv)
-        : (bLine?.smv !== undefined && bLine.smv !== null ? Number(bLine.smv) : (s.smvSeconds > 0 ? s.smvSeconds / 60 : 0.5));
+      // Bulletin SMV (the style's own time) first, then the operation master, then the station's stored value
+      const smvMin = bLine?.smv !== undefined && bLine.smv !== null && Number(bLine.smv) > 0
+        ? Number(bLine.smv)
+        : (op?.standardSmv !== undefined && op?.standardSmv !== null ? Number(op.standardSmv) : (s.smvSeconds > 0 ? s.smvSeconds / 60 : 0.5));
       const smvSeconds = Math.round(smvMin * 60 * 10) / 10;
 
       const allocatedOps = Math.max(1, s.operatorIds.length);
@@ -1654,7 +1335,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
         // Check direct skill rating
         const direct = getOperatorSkill(id, s.operationId);
         if (direct) {
-          totalAssignedEfficiency += (RATING_EFFICIENCY_MULTIPLIERS[direct] || 1.0);
+          // Relative speed vs a standard Independent (level 3) operator = 1.0
+          totalAssignedEfficiency += relativeSkillSpeed(direct);
           return;
         }
         // Check affinitized alternative skills
@@ -1664,7 +1346,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
           const altRating = getOperatorSkill(id, aff.alternativeOperationId);
           if (altRating) {
             const effRating = altRating;
-            const baseMult = RATING_EFFICIENCY_MULTIPLIERS[effRating] || 0.85;
+            const baseMult = relativeSkillSpeed(effRating);
             const affMult = baseMult * ((Number(aff.efficiencyTransferPct) || 85) / 100);
             if (affMult > bestAffEff) bestAffEff = affMult;
           }
@@ -1681,6 +1363,9 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
         a => a.stationNum === s.stationNum && String(a.operationId) === String(s.operationId)
       );
       const actualOutputTillDate = matchedCumulative ? matchedCumulative.actualGood : 0;
+      const outputNotRecorded = taktMode === "SHIFT_TARGET"
+        ? !!todayStationActuals.find(a => a.stationNum === s.stationNum && String(a.operationId) === String(s.operationId))?.notRecorded
+        : !!matchedCumulative?.notRecorded;
 
       const matchedToday = todayStationActuals.find(
         a => a.stationNum === s.stationNum && String(a.operationId) === String(s.operationId)
@@ -1797,6 +1482,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
         operatorNames,
         actualGood,
         actualOutputTillDate,
+        outputNotRecorded,
         todayActualGood,
         rawGood,
         queueWip,
@@ -1934,9 +1620,13 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     const pitchPace = designedPitchTimeSecs > 0 ? designedPitchTimeSecs : taktTimeSecs;
     const needed = Math.max(1, Math.ceil(station.smvSeconds / pitchPace));
     
-    // Sort active operators by their skill rating for this operation, prioritizing matching rating
+    // Best-rated operators for this operation first; never operators marked absent or on leave today
+    const isAvailableToday = (opId: string | number) => {
+      const st = getOperatorAttendance(opId);
+      return st !== "ABSENT" && st !== "ON_LEAVE";
+    };
     const matchingOps = getEligibleOpsForSkill(station.operationId, station.requiredSkillRating);
-    const candidateOps = matchingOps.length > 0 ? matchingOps : operators;
+    const candidateOps = (matchingOps.length > 0 ? matchingOps : operators).filter(op => isAvailableToday(op.id));
     const sortedCandidates = [...candidateOps].sort((a, b) => {
       const rA = getOperatorSkill(a.id, station.operationId) || 0;
       const rB = getOperatorSkill(b.id, station.operationId) || 0;
@@ -1944,26 +1634,43 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     });
 
     const updatedSlots = [...station.operatorIds];
-    while (updatedSlots.length < needed) {
-      const unassigned = sortedCandidates.find(op => {
+    const addedSlots = Math.max(0, needed - updatedSlots.length);
+    while (updatedSlots.length < needed) updatedSlots.push(null);
+
+    // Fill every empty slot (new and existing) with the best free operator
+    let filled = 0;
+    for (let i = 0; i < updatedSlots.length; i++) {
+      if (updatedSlots[i] !== null && updatedSlots[i] !== "") continue;
+      const free = sortedCandidates.find(op => {
         const strId = String(op.id);
-        if (updatedSlots.some(sId => String(sId) === strId)) return false;
-        if (operatorsAssignedInCurrentPlan.has(strId)) return false;
-        if (operatorsAssignedInOtherPlans.has(strId)) return false;
-        return true;
+        return !updatedSlots.some(sId => String(sId) === strId) &&
+          !operatorsAssignedInCurrentPlan.has(strId) &&
+          !operatorsAssignedInOtherPlans.has(strId);
       });
-      if (unassigned) {
-        updatedSlots.push(unassigned.id);
-      } else {
-        updatedSlots.push(null);
-      }
+      if (!free) break;
+      updatedSlots[i] = free.id;
+      filled++;
+    }
+    const stillEmpty = updatedSlots.filter(id => id === null || id === "").length;
+
+    if (addedSlots === 0 && filled === 0) {
+      setErrorMessage(stillEmpty > 0
+        ? `Station #${station.stationNum} (${station.operationName}): no free operator with the required skill is available today.`
+        : `Station #${station.stationNum} (${station.operationName}) already has ${updatedSlots.length} operator${updatedSlots.length === 1 ? "" : "s"}; nothing to change.`);
+      setTimeout(() => setErrorMessage(null), 5000);
+      return;
     }
 
     setStations(prev =>
       prev.map((s, i) => (i === index ? { ...s, operatorIds: updatedSlots } : s))
     );
 
-    setSuccessMessage(`Station #${station.stationNum} (${station.operationName}) auto-balanced with ${needed} operators!`);
+    const parts = [
+      addedSlots > 0 ? `${addedSlots} slot${addedSlots === 1 ? "" : "s"} added` : "",
+      filled > 0 ? `${filled} operator${filled === 1 ? "" : "s"} assigned` : "",
+      stillEmpty > 0 ? `${stillEmpty} still unassigned (no free skilled operator)` : "",
+    ].filter(Boolean);
+    setSuccessMessage(`Station #${station.stationNum} (${station.operationName}): ${parts.join(", ")}.`);
     setTimeout(() => setSuccessMessage(""), 4000);
   };
 
@@ -1976,7 +1683,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
     const getSkillWeight = (ratingStr?: string | number) => {
       const r = String(ratingStr || "ANY").trim();
-      if (r === "5") return 5000;
+      if (r === "5") return 4000; // legacy 1–5 value, treated as Expert (4)
       if (r === "4_PLUS") return 4500;
       if (r === "4") return 4000;
       if (r === "3_PLUS") return 3500;
@@ -2002,14 +1709,19 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
       const reqRatingStr = String(s.requiredSkillRating || "ANY").trim();
       let targetRating: number | null = null;
-      if (reqRatingStr === "3_PLUS") targetRating = 3;
-      else if (reqRatingStr === "4_PLUS") targetRating = 4;
+      if (reqRatingStr === "3_PLUS") targetRating = INDEPENDENT_RATING;
+      else if (reqRatingStr === "4_PLUS") targetRating = MAX_SKILL_RATING;
       else {
         const num = Number(reqRatingStr);
-        if (!isNaN(num) && num >= 1 && num <= 5) targetRating = num;
+        if (!isNaN(num) && num >= MIN_SKILL_RATING) targetRating = clampRating(num);
       }
 
-      const availableOps = operators.filter(o => !assignedOpIds.has(String(o.id)));
+      // Free operators who are not marked absent / on leave today
+      const availableOps = operators.filter(o => {
+        if (assignedOpIds.has(String(o.id))) return false;
+        const st = getOperatorAttendance(o.id);
+        return st !== "ABSENT" && st !== "ON_LEAVE";
+      });
       const sortedCandidates = [...availableOps].sort((a, b) => {
         const rA = getOperatorSkill(a.id, s.operationId) || 0;
         const rB = getOperatorSkill(b.id, s.operationId) || 0;
@@ -2045,7 +1757,10 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
     setStations(balanced);
     setAutoBalancing(false);
-    setSuccessMessage(`Line auto-balanced for ${requiredDesignCapacity.toFixed(1)} pcs/hr design capacity (@ ${plannedEfficiency}% efficiency)! All operations are within Designed Pitch.`);
+    const unfilled = balanced.reduce((n, st) => n + st.operatorIds.filter(id => id === null).length, 0);
+    setSuccessMessage(unfilled === 0
+      ? `Line auto-balanced for ${requiredDesignCapacity.toFixed(1)} pcs/hr at ${plannedEfficiency}% efficiency; every slot has an operator.`
+      : `Line auto-balanced for ${requiredDesignCapacity.toFixed(1)} pcs/hr at ${plannedEfficiency}% efficiency; ${unfilled} slot${unfilled === 1 ? "" : "s"} still need an operator (not enough free operators with the right skill today).`);
     setTimeout(() => setSuccessMessage(""), 5000);
   };
 
@@ -2069,7 +1784,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       attendanceRecords,
       externalAssignedOperatorIds: externalAssignedIds,
       taktTimeSecs,
-      plannedEfficiency,
       shiftHours,
       fillOnlyEmpty,
     });
@@ -2089,16 +1803,24 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
     setTimeout(() => setSuccessMessage(""), 6000);
   };
 
-  const handleSave = async () => {
-    const targetOrder = selectedOrder || orders.find(o => String(o.id) === String(selectedOrderId)) || (orders.length > 0 ? orders[0] : null);
-    if (!targetOrder) {
-      setErrorMessage("Please select an Order before saving the line plan.");
-      setTimeout(() => setErrorMessage(null), 5000);
+  /** release=false: just save (a new plan stays a draft); release=true: save and approve/release it to the floor. */
+  const handleSave = async (release = true) => {
+    // Never fall back to "the first order / line / shift": a plan must be saved for exactly what is selected
+    const check = checkPlanSave({
+      order: selectedOrder,
+      line: selectedLine ? { id: selectedLine.id, lineCode: String(selectedLine.lineCode), currentStyle: selectedLine.currentStyle } : undefined,
+      shiftSelected: !!selectedShift,
+      stationCount: stations.length,
+      ctx: selectionCtx,
+    });
+    if (check.errors.length > 0) {
+      setErrorMessage(`Plan not saved: ${check.errors.join(" ")}`);
       return;
     }
-
-    const shiftIdToUse = selectedShiftId || (activeLineDesign?.shiftId ? String(activeLineDesign.shiftId) : "") || (shifts.length > 0 ? String(shifts[0].id) : "1");
-    const lineIdToUse = selectedLineId ? Number(selectedLineId) : (activeLineDesign?.lineId ? Number(activeLineDesign.lineId) : (lines.length > 0 ? Number(lines[0].id) : 1));
+    if (check.confirm && !window.confirm(check.confirm)) return;
+    const targetOrder = selectedOrder!;
+    const shiftIdToUse = String(selectedShift!.id);
+    const lineIdToUse = Number(selectedLine!.id);
 
     setSaving(true);
     setErrorMessage(null);
@@ -2123,26 +1845,35 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
         targetOutput: activeShiftTarget || requiredHourlyTarget || targetOrder.totalQuantity || 500,
         plannedEfficiency,
         assignments: flatAssignments,
+        release,
       } as any);
 
       // If activeLineDesign exists, also update Line Design with the latest station allocations
       if (activeLineDesign?.id) {
         try {
+          // stationAllocations is a map "bulletin line id (or operation id) → operator count", the format
+          // Line Architecture writes and this page reads back. workstationsJson stays as Line Architecture saved it.
+          const allocationCounts: Record<string, number> = {};
+          for (const s of stations) {
+            allocationCounts[String(s.bulletinLineId ?? s.operationId)] = s.operatorIds.length;
+          }
           await lineDesignApi.updateDesign(activeLineDesign.id, {
             ...activeLineDesign,
             lineId: lineIdToUse || activeLineDesign.lineId,
             shiftId: Number(shiftIdToUse),
-            stationAllocations: JSON.stringify(flatAssignments),
-            workstationsJson: JSON.stringify(stations),
+            stationAllocations: JSON.stringify(allocationCounts),
           } as any);
         } catch (ldErr) {
           console.warn("Could not update line design allocations:", ldErr);
         }
       }
 
-      const refreshedPlans = await linePlanApi.getAllPlans().catch(() => []);
+      const refreshedPlans = await linePlanApi.getAllPlans().catch(loadFailed([]));
       setAllLinePlans(refreshedPlans || []);
-      setSuccessMessage("✓ Line plan saved successfully! Connected with Live Production Monitoring & Hourly Operation Board.");
+      stationsDirtyRef.current = false;
+      setSuccessMessage(release
+        ? "✓ Plan approved and released to the floor. It is connected with Live Production Monitoring & the Hourly Operation Board."
+        : "✓ Plan saved. Approve & Release it when it is ready for the floor.");
       setTimeout(() => setSuccessMessage(""), 5000);
     } catch (e: any) {
       console.error("Failed to save line plan:", e);
@@ -2185,8 +1916,55 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
     exportToExcel(
       exportData,
-      `Line_Plan_${selectedOrder.orderNo}_${new Date().toISOString().split("T")[0]}`
+      `Line_Plan_${selectedOrder.orderNo}_${toLocalDateString()}`
     );
+  };
+
+  // ── Import a line plan (Export Plan layout) into the selected order + line; the user reviews and saves ──
+  const [planImportOpen, setPlanImportOpen] = useState(false);
+
+  /** Template = this plan's stations in the import layout, with the current operators filled in. */
+  const handleDownloadPlanTemplate = () => {
+    const opName = (id: string | number | null) => operators.find(o => String(o.id) === String(id))?.name ?? "";
+    const rows = stations.map(st => ({
+      "Station #": st.stationNum,
+      "Operation Code": st.operationCode,
+      "Operation Name": st.operationName,
+      "Machine Type": st.machineType,
+      "SMV (Sec)": st.smvSeconds,
+      "Assigned Operators": st.operatorIds.map(opName).filter(Boolean).join(" / "),
+      "Allocated Operators": st.operatorIds.length,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [10, 14, 46, 30, 10, 40, 18].map(w => ({ wch: w }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Line Plan");
+    XLSX.writeFile(wb, `Line_Plan_Template_${selectedOrder?.orderNo ?? "plan"}_${selectedLine?.lineCode ?? ""}.xlsx`);
+  };
+
+  const handleImportPlan = async (file: File) => {
+    setErrorMessage(null);
+    let rows: Record<string, unknown>[];
+    try {
+      rows = await readFromExcel<Record<string, unknown>>(file);
+    } catch (err) {
+      setErrorMessage(`Could not read the file: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+    const block = pickPlanBlock(rows, operators, selectedLine?.lineCode);
+    const result = applyLinePlanRows(block.rows, stations, operators, selectedLine?.lineCode, block.offset);
+    if (result.matchedStations === 0) {
+      setErrorMessage(`Nothing was imported: no row matches an operation of ${selectedBulletin?.bulletinCode ?? "this plan's bulletin"}.`
+        + (result.problems.length ? ` ${result.problems.slice(0, 3).join("; ")}` : ""));
+      return;
+    }
+    setStations(result.stations);
+    const fromBlock = block.blockCount > 1 ? ` The file holds ${block.blockCount} plans; used plan ${block.chosen + 1} (its operators are on ${selectedLine?.lineCode}).` : "";
+    setSuccessMessage(`Imported ${result.matchedStations} station${result.matchedStations === 1 ? "" : "s"} and ${result.assignedOperators} operator${result.assignedOperators === 1 ? "" : "s"} for ${selectedOrder?.orderNo} on ${selectedLine?.lineCode}.${fromBlock} Review the table, then save the plan.`);
+    setTimeout(() => setSuccessMessage(""), 8000);
+    if (result.problems.length > 0) {
+      setErrorMessage(`${result.problems.length} item${result.problems.length === 1 ? "" : "s"} could not be imported: ${result.problems.slice(0, 6).join("; ")}${result.problems.length > 6 ? "; …" : ""}`);
+    }
   };
 
   const handleResetPlan = async () => {
@@ -2206,7 +1984,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
           .sort((a, b) => a.sequence - b.sequence)
           .map(line => {
             const op = operations.find(o => String(o.id) === String(line.operationId) || (line.operationCode && o.operationCode === line.operationCode));
-            const smvVal = Number(op?.standardSmv !== undefined && op?.standardSmv !== null ? op.standardSmv : (line.smv || 0.5));
+            // The bulletin's SMV is the style-specific time; the operation master's standard SMV is only a fallback
+            const smvVal = Number(line.smv && Number(line.smv) > 0 ? line.smv : (op?.standardSmv || 0.5));
 
             return {
               stationNum: line.sequence,
@@ -2221,7 +2000,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
               requiredSkillRating: line.skillRatingRequired ? String(line.skillRatingRequired) : (op?.skillLevelRequired || op?.skillLevel || op?.defaultSkillRating ? String(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) : "3"),
             };
           });
-        setStations(rows);
+        setStationRows(rows);
+        stationsDirtyRef.current = false;
       } else if (operations.length > 0) {
         const rows: StationRow[] = operations
           .filter(o => o.active)
@@ -2240,7 +2020,8 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
               requiredSkillRating: (op?.skillLevelRequired || op?.skillLevel || op?.defaultSkillRating) ? String(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) : "3",
             };
           });
-        setStations(rows);
+        setStationRows(rows);
+        stationsDirtyRef.current = false;
       }
     } catch (e) {
       console.error("Failed to reset line plan:", e);
@@ -2261,79 +2042,121 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
   return (
     <div className="space-y-6 w-full p-6 lg:p-8 bg-slate-50 min-h-screen">
       {/* ── Page Header ───────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-md bg-gradient-to-br from-[#9C5B3C] to-[#7A452D] shadow-[#9C5B3C]/20">
-              {taktMode === "SHIFT_TARGET" ? (
-                <Gauge className="w-5 h-5" />
-              ) : (
-                <Activity className="w-5 h-5" />
-              )}
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">
+      <header className="bg-white rounded-2xl border border-[#E6DDCE] shadow-[0_1px_3px_rgba(34,25,18,0.05)] px-5 py-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        {/* Title + context */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 bg-gradient-to-br from-[#9C5B3C] to-[#7A452D] shadow-sm shadow-[#9C5B3C]/20">
+            {taktMode === "SHIFT_TARGET" ? <Gauge className="w-5 h-5" /> : <Activity className="w-5 h-5" />}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-bold tracking-tight text-[#221912]">
                 {taktMode === "SHIFT_TARGET" ? "Fixed Shift Target Balancing" : "Planned Lines & Balancing"}
               </h1>
+              {selectedOrder && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold border ${
+                    !selectedOrderPlan ? "bg-slate-50 text-slate-600 border-slate-200"
+                    : selectedOrderPlan.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-amber-50 text-amber-800 border-amber-200"}`}
+                  title="Status of the saved plan for this order"
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${!selectedOrderPlan ? "bg-slate-400" : selectedOrderPlan.status === "active" ? "bg-emerald-500" : "bg-amber-500"}`} />
+                  {!selectedOrderPlan ? "Not saved" : selectedOrderPlan.status === "active" ? "Released" : selectedOrderPlan.status === "completed" ? "Completed" : "Draft"}
+                </span>
+              )}
             </div>
+            <p className="text-xs text-[#8C7E6E] truncate">
+              {selectedOrder
+                ? [selectedOrder.orderNo, selectedOrder.styleNo, selectedLine?.lineCode, selectedShift?.shiftName].filter(Boolean).join(" · ")
+                : "Select a line and a production order"}
+            </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handleExportPlan}
-            disabled={stations.length === 0}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-            title="Export Line Balancing Sheet to Excel"
-          >
-            <Download className="w-4 h-4 text-slate-500" />
-            Export Plan
-          </button>
+        {/* Actions */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Secondary: file and reset actions, grouped and quiet */}
+          <div className="inline-flex items-stretch rounded-xl border border-[#E6DDCE] bg-white shadow-2xs overflow-hidden" role="group" aria-label="Plan file actions">
+            <button
+              type="button"
+              onClick={() => setPlanImportOpen(true)}
+              disabled={stations.length === 0}
+              className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-semibold text-[#5C4A3A] hover:bg-[#FAF7F2] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title={stations.length === 0 ? "Select an order whose style has a bulletin first" : "Import operators per station from Excel into this plan"}
+            >
+              <Upload className="w-3.5 h-3.5" /> Import
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPlan}
+              disabled={stations.length === 0}
+              className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-semibold text-[#5C4A3A] hover:bg-[#FAF7F2] border-l border-[#E6DDCE] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Export the line balancing sheet to Excel"
+            >
+              <Download className="w-3.5 h-3.5" /> Export
+            </button>
+            <button
+              type="button"
+              onClick={handleResetPlan}
+              disabled={!selectedOrder}
+              className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 border-l border-[#E6DDCE] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Reset the plan back to the bulletin's defaults"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Reset
+            </button>
+          </div>
+          <ExcelImportDialog
+            isOpen={planImportOpen}
+            onClose={() => setPlanImportOpen(false)}
+            title={`Import Line Plan · ${selectedOrder?.orderNo ?? ""} on ${selectedLine?.lineCode ?? ""}`}
+            template={LINE_PLAN_TEMPLATE}
+            onDownloadTemplate={handleDownloadPlanTemplate}
+            onImport={handleImportPlan}
+          />
 
-          <button
-            type="button"
-            onClick={handleResetPlan}
-            disabled={!selectedOrder}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-            title="Reset Line Plan to Defaults"
+          <Link
+            to={`/monitoring?orderId=${selectedOrderId || ""}&lineId=${selectedLineId || ""}&shiftId=${selectedShiftId || ""}&tab=line-monitoring`}
+            className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-semibold text-emerald-800 rounded-xl hover:bg-emerald-50 transition-colors"
+            title="Open live execution tracking and the hourly pitch monitor"
           >
-            <RotateCcw className="w-4 h-4 text-rose-600" />
-            Reset Plan
-          </button>
+            <Activity className="w-3.5 h-3.5 text-emerald-600" /> Live Monitor
+          </Link>
 
+          <span className="hidden sm:block w-px h-6 bg-[#E6DDCE] mx-1" aria-hidden />
+
+          {/* Primary actions */}
           <Button
             variant="outline"
             onClick={handleAutoBalance}
             loading={autoBalancing}
-            size="md"
-            className="flex items-center gap-2 border-[#E6DDCE] bg-[#F6F1E8] text-[#9C5B3C] hover:bg-[#EFE9DF] cursor-pointer font-bold text-xs"
+            size="sm"
+            className="h-9 gap-1.5 border-[#E6DDCE] bg-white text-[#5C4A3A] hover:bg-[#FAF7F2] font-semibold text-xs px-3"
+            title="Fill and balance operators automatically"
           >
-            <Sparkles className="w-4 h-4 text-[#9C5B3C]" />
-            Auto-Balance Line
+            <Sparkles className="w-3.5 h-3.5 text-[#9C5B3C]" /> Auto-Balance
           </Button>
-
           <Button
-            onClick={handleSave}
+            variant="outline"
+            onClick={() => handleSave(false)}
             loading={saving}
-            size="md"
-            className="bg-[#9C5B3C] hover:bg-[#854B30] text-white shadow-sm shadow-[#9C5B3C]/25 cursor-pointer font-bold text-xs px-4"
-            title="Approve & Release balanced line configuration to the sewing shopfloor"
+            size="sm"
+            className="h-9 gap-1.5 border-[#9C5B3C] text-[#9C5B3C] bg-white hover:bg-[#FAF7F2] font-bold text-xs px-3.5"
+            title="Save stations, operators and targets without releasing the plan to the floor"
           >
-            <CheckCircle2 className="w-4 h-4 mr-1.5 text-amber-200" />
-            Approve &amp; Release Plan
+            <Save className="w-3.5 h-3.5" /> Save
           </Button>
-
-          <Link
-            to={`/monitoring?orderId=${selectedOrderId || ""}&lineId=${selectedLineId || ""}&shiftId=${selectedShiftId || ""}&tab=line-monitoring`}
-            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300/80 rounded-xl shadow-xs transition-colors cursor-pointer"
-            title="Open live execution tracking and hourly pitch monitor"
+          <Button
+            onClick={() => handleSave(true)}
+            loading={saving}
+            size="sm"
+            className="h-9 gap-1.5 bg-[#9C5B3C] hover:bg-[#854B30] text-white shadow-sm shadow-[#9C5B3C]/25 font-bold text-xs px-3.5"
+            title="Save and approve & release the line plan to the sewing floor"
           >
-            <Activity className="w-4 h-4 text-emerald-600 animate-pulse" />
-            <span>Live Production Monitor</span>
-          </Link>
+            <CheckCircle2 className="w-3.5 h-3.5" /> Approve &amp; Release
+          </Button>
         </div>
-      </div>
+      </header>
 
       {/* Success & Error Alerts */}
       <AnimatePresence>
@@ -2390,6 +2213,35 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
               Reconfigure Architecture →
             </Link>
           </div>
+        </div>
+      )}
+
+      {/* Overdue / no time left: a delivery pace cannot be calculated, so explain what the page uses instead */}
+      {taktMode === "DELIVERY" && selectedOrder && deliveryScheduleMetrics.noTimeLeft && (
+        <div className="bg-white border border-rose-200 rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 shadow-[0_1px_3px_rgba(34,25,18,0.05)]" role="alert">
+          <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-4.5 h-4.5 text-rose-600" />
+          </div>
+          <div className="flex-1 min-w-0 space-y-0.5">
+            <p className="text-sm font-bold text-[#221912]">
+              {deliveryScheduleMetrics.isOverdue
+                ? `${selectedOrder.orderNo} is ${deliveryScheduleMetrics.daysOverdue} day${deliveryScheduleMetrics.daysOverdue === 1 ? "" : "s"} overdue`
+                : `${selectedOrder.orderNo} is due today and today's shift has ended`}
+              <span className="font-semibold text-rose-700"> · {remainingOrderBalance.toLocaleString()} pcs still open</span>
+            </p>
+            <p className="text-xs text-[#8C7E6E] leading-relaxed">
+              Planned completion was {deliveryScheduleMetrics.plannedCompletionFormatted}.{" "}
+              {configuredDailyTarget > 0
+                ? `Targets below use the line's planned pace (${configuredDailyTarget.toLocaleString()} pcs/day) until a new date is set.`
+                : "No line design or line capacity is set, so no target can be calculated."}
+            </p>
+          </div>
+          <Link
+            to="/orders"
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-xs font-bold text-rose-800 shrink-0"
+          >
+            <CalendarClock className="w-3.5 h-3.5" /> Update dates
+          </Link>
         </div>
       )}
 
@@ -2458,6 +2310,29 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
           </div>
         </div>
 
+        {/* How this plan is connected: Order -> Style -> Bulletin (operations) -> Line -> Shift */}
+        <PlanSetupChain
+          order={selectedOrder}
+          bulletins={bulletinsForOrderStyle}
+          bulletin={selectedBulletin}
+          onPickBulletin={id => setSelectedBulletinId(id)}
+          line={selectedLine}
+          plannedLineName={(() => {
+            const plan = selectedOrderPlan;
+            if (!plan || String(plan.lineId) === String(selectedLineId)) return null;
+            const l = lines.find(x => String(x.id) === String(plan.lineId));
+            return l ? `${l.lineCode} · ${l.lineName}` : null;
+          })()}
+          isPlanned={!!selectedOrderPlan}
+          lineChoices={linesForStyle(selectedOrder?.styleNo)
+            .slice()
+            .sort((a, b) => String(a.lineCode).localeCompare(String(b.lineCode), undefined, { numeric: true }))
+            .map(l => ({ id: String(l.id), code: String(l.lineCode), planned: planCountByLine.get(String(l.id)) ?? 0 }))}
+          onPickLine={handleLineChange}
+          shift={selectedShift}
+          shiftHours={shiftHours}
+        />
+
         {/* Floor Configuration Grid: Render customized panels for Planned Pace vs Fixed Shift Target */}
         {taktMode === "DELIVERY" ? (
           /* ── Mode A: Planned Pace (Master Delivery Plan) ──────────────── */
@@ -2468,11 +2343,21 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Physical Sewing Line</label>
                 <CustomSelect
                   value={selectedLineId}
-                  onChange={val => setSelectedLineId(val)}
-                  options={lines.map(l => ({
-                    value: String(l.id),
-                    label: `${l.lineCode} · ${l.lineName}`
-                  }))}
+                  onChange={handleLineChange}
+                  options={[...lines]
+                    .sort((a, b) => Number(lineRunsStyle(b, selectedOrder?.styleNo)) - Number(lineRunsStyle(a, selectedOrder?.styleNo))
+                      || String(a.lineCode).localeCompare(String(b.lineCode), undefined, { numeric: true }))
+                    .map(l => {
+                      const planned = planCountByLine.get(String(l.id)) ?? 0;
+                      const load = `${planned} order${planned === 1 ? "" : "s"} planned`;
+                      return {
+                        value: String(l.id),
+                        label: `${l.lineCode} · ${l.lineName}`,
+                        sublabel: lineStyleNo(l)
+                          ? (lineRunsStyle(l, selectedOrder?.styleNo) ? `✓ Runs ${lineStyleNo(l)} · ${load}` : `Runs ${lineStyleNo(l)} · ${load}`)
+                          : `No active style set · ${load}`,
+                      };
+                    })}
                   size="lg"
                 />
               </div>
@@ -2488,11 +2373,13 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 <CustomSelect
                   value={selectedOrderId}
                   onChange={val => setSelectedOrderId(val)}
-                  options={orders.map(ord => ({
+                  options={orderChoicesForLine.map(({ order: ord, fit }) => ({
                     value: String(ord.id),
                     label: ord.orderNo,
-                    sublabel: ord.buyer,
+                    sublabel: [ord.styleNo, ord.color, fit.note].filter(Boolean).join(" · "),
+                    disabled: !fit.selectable,
                   }))}
+                  placeholder={selectedLine && lineStyleNo(selectedLine) ? `No open ${lineStyleNo(selectedLine)} orders` : "Select an order"}
                   size="lg"
                 />
               </div>
@@ -2512,9 +2399,19 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                       {deliveryScheduleMetrics.plannedCompletionFormatted || "—"}
                     </span>
                   </div>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE] shrink-0">
-                    {deliveryScheduleMetrics.workingDaysRemaining}d left
-                  </span>
+                  {deliveryScheduleMetrics.isOverdue ? (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-200 shrink-0">
+                      {deliveryScheduleMetrics.daysOverdue}d overdue
+                    </span>
+                  ) : deliveryScheduleMetrics.noTimeLeft ? (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-red-50 text-red-700 border border-red-200 shrink-0">
+                      Due today
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE] shrink-0">
+                      {deliveryScheduleMetrics.workingDaysRemaining}d left
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center justify-between text-[11px] min-h-[16px]">
@@ -2547,7 +2444,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 />
               </div>
               <span className="text-[11px] text-[#8C7E6E] block truncate min-h-[16px]">
-                {selectedShift ? `${selectedShift.shiftName || "Standard Shift"} · 8.0h shift` : "8.0h working shift"}
+                {selectedShift ? `${selectedShift.shiftName || "Shift"} · ${shiftHours.toFixed(1)}h working (after breaks)` : "Select a shift"}
               </span>
             </div>
 
@@ -2569,7 +2466,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 </div>
               </div>
               <span className="text-[11px] text-[#8C7E6E] block truncate min-h-[16px]">
-                Pace target for on-time delivery
+                {deliveryPaceUnavailable ? "Line's planned pace (order past due date)" : "Pace target for on-time delivery"}
               </span>
             </div>
           </div>
@@ -2582,11 +2479,21 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 <label className="text-xs font-bold text-[#221912] block truncate mb-1.5">Physical Sewing Line</label>
                 <CustomSelect
                   value={selectedLineId}
-                  onChange={val => setSelectedLineId(val)}
-                  options={lines.map(l => ({
-                    value: String(l.id),
-                    label: `${l.lineCode} · ${l.lineName}`
-                  }))}
+                  onChange={handleLineChange}
+                  options={[...lines]
+                    .sort((a, b) => Number(lineRunsStyle(b, selectedOrder?.styleNo)) - Number(lineRunsStyle(a, selectedOrder?.styleNo))
+                      || String(a.lineCode).localeCompare(String(b.lineCode), undefined, { numeric: true }))
+                    .map(l => {
+                      const planned = planCountByLine.get(String(l.id)) ?? 0;
+                      const load = `${planned} order${planned === 1 ? "" : "s"} planned`;
+                      return {
+                        value: String(l.id),
+                        label: `${l.lineCode} · ${l.lineName}`,
+                        sublabel: lineStyleNo(l)
+                          ? (lineRunsStyle(l, selectedOrder?.styleNo) ? `✓ Runs ${lineStyleNo(l)} · ${load}` : `Runs ${lineStyleNo(l)} · ${load}`)
+                          : `No active style set · ${load}`,
+                      };
+                    })}
                   size="lg"
                 />
               </div>
@@ -2602,11 +2509,13 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 <CustomSelect
                   value={selectedOrderId}
                   onChange={val => setSelectedOrderId(val)}
-                  options={orders.map(ord => ({
+                  options={orderChoicesForLine.map(({ order: ord, fit }) => ({
                     value: String(ord.id),
                     label: ord.orderNo,
-                    sublabel: ord.buyer,
+                    sublabel: [ord.styleNo, ord.color, fit.note].filter(Boolean).join(" · "),
+                    disabled: !fit.selectable,
                   }))}
+                  placeholder={selectedLine && lineStyleNo(selectedLine) ? `No open ${lineStyleNo(selectedLine)} orders` : "Select an order"}
                   size="lg"
                 />
               </div>
@@ -2630,7 +2539,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                 />
               </div>
               <span className="text-[11px] text-[#8C7E6E] block truncate min-h-[16px]">
-                {selectedShift ? `${selectedShift.shiftName || "Standard Shift"} · 8.0h shift` : "8.0h working shift"}
+                {selectedShift ? `${selectedShift.shiftName || "Shift"} · ${shiftHours.toFixed(1)}h working (after breaks)` : "Select a shift"}
               </span>
             </div>
 
@@ -2961,6 +2870,15 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
       )}
 
 
+      {orderlessForPlan.runs > 0 && selectedOrder && (
+        <div role="status" className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 leading-relaxed">
+          <strong>{orderlessForPlan.pieces.toLocaleString()} good pieces</strong> ({orderlessForPlan.runs.toLocaleString()} runs, {orderlessForPlan.from}
+          {orderlessForPlan.to !== orderlessForPlan.from ? ` to ${orderlessForPlan.to}` : ""}) were recorded on this plan's stations by its operators
+          <strong> without an order</strong>, so they don't count toward {selectedOrder.orderNo}. If they were for this order, record them with its
+          Order No (Production Monitoring → Import Production, "Order No" column).
+        </div>
+      )}
+
       {/* ── 3. Bottleneck Alert Banner ────────────────────────────── */}
       {bottleneckCount > 0 ? (
         <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-3.5 shadow-xs">
@@ -3086,6 +3004,24 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
+              {stationMetrics.length === 0 && (
+                <tr>
+                  <td colSpan={20} className="py-12 px-6 text-center">
+                    <p className="text-sm font-bold text-[#221912]">No operations to balance yet</p>
+                    <p className="text-xs text-[#8C7E6E] mt-1 max-w-xl mx-auto leading-relaxed">
+                      {!selectedOrder
+                        ? "Select a production order."
+                        : `The operations come from the operation bulletin linked to style ${selectedOrder.styleNo || ""}. `
+                          + "Link a bulletin to that style (or import one) in Operation Bulletins, then come back."}
+                    </p>
+                    {selectedOrder && (
+                      <Link to="/operation-bulletins" className="inline-block mt-3 text-xs font-bold text-[#9C5B3C] hover:underline">
+                        Open Operation Bulletins
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              )}
               {stationMetrics.map((row, idx) => {
                 const loadPct = row.loadPercent;
                 const qualifiedOps = getEligibleOpsForSkill(row.operationId, row.requiredSkillRating);
@@ -3171,18 +3107,19 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                       <div className="relative w-full max-w-[145px] mx-auto space-y-1.5">
                         <div className="relative">
                           <select
-                            value={row.requiredSkillRating || "ANY"}
+                            value={(() => {
+                              // Legacy 1–5 values: 5 and "4+" are both Expert (4) on the 4-level scale
+                              const req = String(row.requiredSkillRating || "ANY");
+                              return req === "5" || req === "4_PLUS" ? String(MAX_SKILL_RATING) : req;
+                            })()}
                             onChange={e => handleUpdateRequiredSkill(idx, e.target.value)}
                             className="w-full h-8 bg-white border border-slate-200 hover:border-slate-300 rounded-xl pl-2.5 pr-7 text-[11px] font-semibold text-slate-800 focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer appearance-none transition-colors"
                           >
-                            <option value="ANY">Any Rating (All)</option>
-                            <option value="1">★ 1 · Trainee</option>
-                            <option value="2">★ 2 · Basic</option>
-                            <option value="3">★ 3 · Standard</option>
-                            <option value="4">★ 4 · Skilled</option>
-                            <option value="5">★ 5 · Master Expert</option>
-                            <option value="3_PLUS">★ 3+ · Skilled & Up</option>
-                            <option value="4_PLUS">★ 4+ · Senior & Up</option>
+                            <option value="ANY">Any Level (All)</option>
+                            {[...SKILL_RATINGS].reverse().map(r => (
+                              <option key={r} value={String(r)}>Level {r} · {SKILL_LEVELS[r].name}</option>
+                            ))}
+                            <option value="3_PLUS">Level 3+ · {SKILL_LEVELS[INDEPENDENT_RATING].name} & up</option>
                           </select>
                           <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                         </div>
@@ -3262,9 +3199,9 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                               const skillChecks = assignedOpIds.map(opId => {
                                 const r = getOperatorSkill(opId, row.operationId);
                                 if (r === null) return { r: 0, gap: true };
-                                if (req === "3_PLUS") return { r, gap: r < 3 };
-                                if (req === "4_PLUS") return { r, gap: r < 4 };
-                                return { r, gap: r < Number(req) };
+                                if (req === "3_PLUS") return { r, gap: r < INDEPENDENT_RATING };
+                                if (req === "4_PLUS") return { r, gap: r < MAX_SKILL_RATING };
+                                return { r, gap: r < clampRating(Number(req)) };
                               });
 
                               const hasGap = skillChecks.some(c => c.gap);
@@ -3344,7 +3281,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                                         return (
                                           <div key="affinity-badge" className="mt-1 flex items-center gap-1 text-[9.5px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded shadow-2xs">
                                             <Network className="w-2.5 h-2.5 text-indigo-600 shrink-0" />
-                                            <span>Covering via {aff.alternativeOperationName || "Alt Skill"} (★{altRating}, {aff.efficiencyTransferPct}% Eff)</span>
+                                            <span className="inline-flex items-center gap-1">Covering via {aff.alternativeOperationName || "Alt Skill"} (<SkillLevelIcon rating={altRating} size={10} />{SKILL_LEVELS[clampRating(altRating)].name}, {aff.efficiencyTransferPct}% Eff)</span>
                                           </div>
                                         );
                                       }
@@ -3375,7 +3312,9 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
                       <td className="py-3 px-4 text-center align-middle whitespace-nowrap bg-[#FAF8F5]/50">
                         <div className="flex flex-col items-center">
                           <span className="font-mono font-black text-sm text-slate-900">
-                            {(row.actualOutputTillDate || 0).toLocaleString()} <span className="text-[10px] text-slate-400 font-normal">pcs</span>
+                            {row.outputNotRecorded
+                              ? <span className="text-[11px] font-semibold text-amber-700" title="No production is recorded for this station; it takes the output of the next recorded station">Not recorded</span>
+                              : <>{(row.actualOutputTillDate || 0).toLocaleString()} <span className="text-[10px] text-slate-400 font-normal">pcs</span></>}
                           </span>
                           {(totalOrderQuantity || 0) > 0 && (
                             <div className="flex items-center gap-1.5 mt-0.5">
@@ -3593,7 +3532,7 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
 
       {/* ── 5. Yamazumi / Pitch Line Balance Chart ────────────────── */}
       {stations.length > 0 && (
-        <YamazumiPitchChart
+        <YamazumiChart
           data={stationMetrics}
           taktTimeSecs={taktTimeSecs}
           designedPitchTimeSecs={designedPitchTimeSecs}
@@ -3601,7 +3540,6 @@ export function LineBalancePage({ fixedMode }: LineBalancePageProps = {}) {
           requiredDesignCapacity={requiredDesignCapacity}
           plannedEfficiency={plannedEfficiency}
           lineBalanceEfficiency={lineBalanceEfficiency}
-          totalLineSMVSecs={totalLineSMVSecs}
           onAddOperator={handleAddOperator}
         />
       )}

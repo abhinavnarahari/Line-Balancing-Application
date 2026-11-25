@@ -6,7 +6,7 @@ export interface ShiftAssignment {
   shiftId: string | number;
   effectiveFrom: string; // YYYY-MM-DD
   effectiveTo: string | null; // null means active indefinitely
-  status: "Active" | "Scheduled" | "Completed";
+  status: "ACTIVE" | "SCHEDULED" | "COMPLETED"; // backend ShiftAssignment.Status enum
   createdAt?: string;
 }
 

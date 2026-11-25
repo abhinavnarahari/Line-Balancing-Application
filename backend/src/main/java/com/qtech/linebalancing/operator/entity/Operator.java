@@ -21,7 +21,8 @@ public class Operator extends AuditableEntity {
     @Column(nullable = false, length = 150)
     private String name;
 
-    @Column(nullable = false)
+    /** Optional. */
+    @Column
     private Integer age;
 
     @Column(nullable = false, length = 10)

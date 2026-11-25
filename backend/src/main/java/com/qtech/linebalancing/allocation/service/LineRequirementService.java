@@ -126,7 +126,7 @@ public class LineRequirementService {
                     .orderId(o.getId())
                     .orderNo(o.getOrderNo())
                     .styleNo(o.getStyle() != null ? o.getStyle().getStyleNo() : "N/A")
-                    .customerName(o.getBuyer() != null ? o.getBuyer() : "Universal Apparel")
+                    .customerName(o.getBuyer() != null ? o.getBuyer() : "—")
                     .orderQuantity(o.getTotalQuantity())
                     .bulletinId(b != null ? b.getId() : null)
                     .bulletinCode(b != null ? b.getBulletinCode() : "N/A")

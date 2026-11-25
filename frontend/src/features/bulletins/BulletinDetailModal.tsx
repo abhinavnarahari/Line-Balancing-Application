@@ -2,6 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import * as XLSX from "xlsx";
+import { saveWorkbook } from "../../utils/excel";
+import { clampRating, DEFAULT_REQUIRED_RATING, MAX_SKILL_RATING, skillLevelName } from "../skill-matrix/skillScale";
+import { SkillLevelBadge } from "../../components/ui/SkillLevelIcon";
 import { 
   X, 
   Clock, 
@@ -14,10 +17,12 @@ import {
   Tag,
   Layers,
   ShieldCheck,
-  Sliders
+  Sliders,
+  GitBranch
 } from "lucide-react";
 import type { OperationBulletin, BulletinStatus } from "./api";
-import { bulletinsApi } from "./api";
+import { bulletinsApi, isBulletinEditable } from "./api";
+import { getErrorMessage } from "../../lib/api";
 
 interface BulletinDetailModalProps {
   bulletin: OperationBulletin | null;
@@ -39,6 +44,7 @@ export function BulletinDetailModal({
   onRefresh,
 }: BulletinDetailModalProps) {
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -81,7 +87,7 @@ export function BulletinDetailModal({
     // Skill average
     let skillSum = 0;
     bulletin.lines.forEach(l => {
-      const r = Number(l.skillRatingRequired) || 3;
+      const r = clampRating(Number(l.skillRatingRequired) || DEFAULT_REQUIRED_RATING);
       skillSum += r;
     });
     const avgSkill = bulletin.lines.length > 0 ? (skillSum / bulletin.lines.length).toFixed(1) : "3.0";
@@ -102,11 +108,12 @@ export function BulletinDetailModal({
   const handleStatusChange = async (newStatus: BulletinStatus) => {
     if (!bulletin.id) return;
     setUpdatingStatus(true);
+    setStatusError(null);
     try {
       await bulletinsApi.updateStatus(bulletin.id, newStatus);
       onRefresh();
     } catch (err) {
-      console.error("Failed to update status:", err);
+      setStatusError(getErrorMessage(err, "Failed to update status"));
     } finally {
       setUpdatingStatus(false);
     }
@@ -127,7 +134,7 @@ export function BulletinDetailModal({
         "SMV (sec)": Number((smvVal * 60).toFixed(1)),
         "% Work Share": pctShare,
         "WIP Threshold (pcs)": l.wipThreshold ?? 20,
-        "Skill Required": `L${l.skillRatingRequired || 3}`,
+        "Skill Required": `L${clampRating(l.skillRatingRequired || DEFAULT_REQUIRED_RATING)} · ${skillLevelName(l.skillRatingRequired || DEFAULT_REQUIRED_RATING)}`,
         "Notes & Quality Points": l.notes || "—",
       };
     });
@@ -184,7 +191,7 @@ export function BulletinDetailModal({
     const ws = XLSX.utils.json_to_sheet(allRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Operation Bulletin");
-    XLSX.writeFile(wb, `OB_${bulletin.bulletinCode}_v${bulletin.version}.xlsx`);
+    void saveWorkbook(wb, `OB_${bulletin.bulletinCode}_v${bulletin.version}.xlsx`);
   };
 
   const modalContent = (
@@ -236,6 +243,9 @@ export function BulletinDetailModal({
                   <option value="ARCHIVED">ARCHIVED (Retired)</option>
                 </select>
               </div>
+              {statusError && (
+                <span role="alert" className="text-[11px] font-semibold text-rose-700">{statusError}</span>
+              )}
             </div>
 
             <h2 className="text-lg font-black text-[#221912]">{bulletin.name}</h2>
@@ -312,7 +322,7 @@ export function BulletinDetailModal({
                 <span className="text-2xl sm:text-3xl font-black font-mono text-amber-700">
                   {metrics.avgSkill}
                 </span>
-                <span className="text-xs text-amber-600 font-bold">/ 5</span>
+                <span className="text-xs text-amber-600 font-bold">/ {MAX_SKILL_RATING}</span>
               </div>
               <p className="text-[11px] text-[#8C7E6E] mt-0.5 font-medium">
                 Sewing complexity rating
@@ -422,9 +432,7 @@ export function BulletinDetailModal({
                           </span>
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap">
-                          <span className="font-mono font-extrabold text-xs px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-md shadow-2xs whitespace-nowrap inline-block">
-                            L{line.skillRatingRequired || 3}
-                          </span>
+                          <SkillLevelBadge rating={line.skillRatingRequired || DEFAULT_REQUIRED_RATING} />
                         </td>
                         <td className="py-3 px-4 text-[#8C7E6E] text-xs italic">
                           {line.notes || "—"}
@@ -482,8 +490,17 @@ export function BulletinDetailModal({
               onClick={() => onEdit(bulletin)}
               className="px-3.5 py-1.5 bg-white hover:bg-[#F6F1E8] text-[#221912] text-xs font-bold border border-[#E6DDCE] rounded-xl shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
             >
-              <Edit2 className="w-3.5 h-3.5 text-[#9C5B3C]" />
-              <span>Edit Bulletin</span>
+              {isBulletinEditable(bulletin.status) ? (
+                <>
+                  <Edit2 className="w-3.5 h-3.5 text-[#9C5B3C]" />
+                  <span>Edit Bulletin</span>
+                </>
+              ) : (
+                <>
+                  <GitBranch className="w-3.5 h-3.5 text-[#9C5B3C]" />
+                  <span>Create Revision</span>
+                </>
+              )}
             </button>
 
             <Link

@@ -10,10 +10,11 @@ import {
   UserMinus,
   Sparkles,
   AlertTriangle,
-  Star,
   UserX
 } from "lucide-react";
 import type { Operator } from "../../features/operators/api";
+import { SKILL_LEVELS, clampRating, skillLevelName } from "../../features/skill-matrix/skillScale";
+import { SkillLevelIcon } from "./SkillLevelIcon";
 
 export interface OperatorComboboxProps {
   value: string | number | null;
@@ -338,7 +339,10 @@ export function OperatorCombobox({
     );
   };
 
-  // Render Star Badge
+  // "3_PLUS" -> "3+", "4" -> "4"
+  const reqLevelLabel = String(requiredSkillRating ?? "").replace("_PLUS", "+");
+
+  // Render skill-level badge (factory quarter-circle)
   const renderStarBadge = (rating: number | null, isMismatch = false) => {
     if (rating === null) {
       return (
@@ -352,43 +356,29 @@ export function OperatorCombobox({
       return (
         <span
           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-2xs"
-          title={`Rating ★${rating} does not meet station requirement (★${requiredSkillRating})`}
+          title={`Level ${rating} (${skillLevelName(rating)}) does not meet station requirement (Level ${reqLevelLabel})`}
         >
-          <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-600" />
-          <span>★ {rating}</span>
+          <SkillLevelIcon rating={rating} size={12} decorative />
+          <span>L{rating}</span>
           <AlertTriangle className="w-2.5 h-2.5 text-amber-700 ml-0.5" />
         </span>
       );
     }
 
-    if (rating >= 4) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
-          <Star className="w-2.5 h-2.5 fill-emerald-500 text-emerald-600" />
-          <span>★ {rating}</span>
-        </span>
-      );
-    }
-
-    if (rating === 3) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#FAF7F2] text-[#9C5B3C] border border-[#E6DDCE] shadow-2xs">
-          <Star className="w-2.5 h-2.5 fill-[#9C5B3C] text-[#9C5B3C]" />
-          <span>★ {rating}</span>
-        </span>
-      );
-    }
-
+    const info = SKILL_LEVELS[clampRating(rating)];
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
-        <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-600" />
-        <span>★ {rating}</span>
+      <span
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border shadow-2xs ${info.badge}`}
+        title={`Level ${clampRating(rating)} · ${info.name} (${info.band}) — ${info.description}`}
+      >
+        <SkillLevelIcon rating={rating} size={12} decorative />
+        <span>L{rating}</span>
       </span>
     );
   };
 
   const slotSuffix = totalSlots > 1 ? ` #${slotIndex + 1}` : "";
-  const reqRatingText = requiredSkillRating !== "ANY" ? `★${requiredSkillRating} ` : "";
+  const reqRatingText = requiredSkillRating !== "ANY" ? `L${reqLevelLabel} ` : "";
 
   return (
     <div className={`relative w-full ${className}`}>
@@ -495,7 +485,7 @@ export function OperatorCombobox({
                 </span>
                 {requiredSkillRating && requiredSkillRating !== "ANY" && (
                   <span className="text-[9.5px] font-bold px-1.5 py-0.2 rounded-md bg-amber-100 text-amber-900 border border-amber-200">
-                    Required: ★{requiredSkillRating}
+                    Required: Level {reqLevelLabel}
                   </span>
                 )}
               </div>
@@ -581,8 +571,8 @@ export function OperatorCombobox({
                       : "bg-[#FAF7F2] text-[#78350F] hover:bg-[#F5EBE1] border border-[#E6DDCE]"
                   }`}
                 >
-                  <Star className="w-2.5 h-2.5" />
-                  <span>★ 4-5 Stars ({stats.expertCount})</span>
+                  <SkillLevelIcon rating={4} size={11} mono decorative />
+                  <span>Expert · L4 ({stats.expertCount})</span>
                 </button>
 
                 {stats.floaterCount > 0 && (

@@ -39,6 +39,10 @@ public class ChatMessage {
     @Column(name = "structured_payload", columnDefinition = "TEXT")
     private String structuredPayload;
 
+    /** JSON {@link com.qtech.linebalancing.chatbot.assistant.ConversationState} for follow-up questions (assistant messages only). */
+    @Column(name = "assistant_state", columnDefinition = "TEXT")
+    private String assistantState;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

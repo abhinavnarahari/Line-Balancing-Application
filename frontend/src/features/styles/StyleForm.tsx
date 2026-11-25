@@ -38,7 +38,7 @@ export function StyleForm({ existingStyles = [], initialData, onSubmit, onCancel
     if (initialData) {
       setFormData({
         styleNo: initialData.styleNo,
-        buyer: initialData.buyer,
+        buyer: initialData.buyer ?? "",
         description: initialData.description,
         season: initialData.season,
         productType: initialData.productType,
@@ -89,11 +89,10 @@ export function StyleForm({ existingStyles = [], initialData, onSubmit, onCancel
           hint="Sequential style catalog identifier"
         />
         <Input
-          label="Buyer / Client"
+          label="Buyer / Client (optional)"
           name="buyer"
-          value={formData.buyer}
+          value={formData.buyer ?? ""}
           onChange={handleChange}
-          required
           placeholder="e.g. Acme Corp"
         />
         <div className="md:col-span-2">

@@ -2,11 +2,12 @@ import { useState, useEffect, useMemo } from "react";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import type { Operator } from "./api";
+import { useSubmitGuard } from "../../utils/useSubmitGuard";
 
 interface OperatorFormProps {
   existingOperators?: Operator[];
   initialData?: Operator | null;
-  onSubmit: (data: Omit<Operator, "id" | "createdAt" | "updatedAt">) => void;
+  onSubmit: (data: Omit<Operator, "id" | "createdAt" | "updatedAt">) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -26,7 +27,7 @@ export function OperatorForm({ existingOperators = [], initialData, onSubmit, on
   const [formData, setFormData] = useState({
     employeeId: initialData?.employeeId || sequentialCode,
     name: initialData?.name || "",
-    age: initialData?.age || 25,
+    age: initialData?.age ?? null as number | null,
     gender: initialData?.gender || ("Female" as "Male" | "Female" | "Other"),
     department: initialData?.department || "Sewing",
     role: initialData?.role || ("OPERATOR" as "OPERATOR" | "HELPER" | "FLOATER" | "LINE_SUPERVISOR" | "QUALITY_CHECKER"),
@@ -44,17 +45,23 @@ export function OperatorForm({ existingOperators = [], initialData, onSubmit, on
     const { name, value, type } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "number" ? parseInt(value, 10) : value,
+      // An empty number field means "not given" (age is optional)
+      [name]: type === "number" ? (value === "" ? null : parseInt(value, 10)) : value,
     }));
   };
 
+  const submit = useSubmitGuard();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    submit.run(() => onSubmit(formData));
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {submit.error && (
+        <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold">{submit.error}</div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Input
           label="Employee ID"
@@ -76,15 +83,14 @@ export function OperatorForm({ existingOperators = [], initialData, onSubmit, on
           required
         />
         <Input
-          label="Age"
+          label="Age (optional)"
           id="age"
           name="age"
           type="number"
-          min="18"
-          max="60"
-          value={formData.age}
+          min="16"
+          max="70"
+          value={formData.age ?? ""}
           onChange={handleChange}
-          required
         />
 
         <div className="flex flex-col space-y-2">
@@ -164,7 +170,7 @@ export function OperatorForm({ existingOperators = [], initialData, onSubmit, on
 
       <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#F1F5F9]">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" variant="primary">
+        <Button type="submit" variant="primary" loading={submit.saving} disabled={submit.saving}>
           {initialData ? "Update Operator" : "Register Operator"}
         </Button>
       </div>

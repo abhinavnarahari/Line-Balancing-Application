@@ -9,6 +9,15 @@
 import type { OperationAffinity } from "../operations/api";
 import type { Operator } from "../operators/api";
 import { cycleTimeToRating, type SkillAssessment } from "../skill-matrix/api";
+import {
+  clampRating,
+  planningEfficiency,
+  DEFAULT_REQUIRED_RATING,
+  INDEPENDENT_RATING,
+  MAX_SKILL_RATING,
+  MIN_SKILL_RATING,
+  SKILL_RATINGS,
+} from "../skill-matrix/skillScale";
 
 export interface OptimizerStationSlot {
   stationIndex: number;
@@ -88,20 +97,25 @@ export interface GlobalOptimizerParams {
   attendanceRecords?: { operatorId: string | number; status: string }[];
   externalAssignedOperatorIds?: Set<string>;
   taktTimeSecs: number;
-  plannedEfficiency?: number;
   shiftHours?: number;
   fillOnlyEmpty?: boolean;
 }
 
-// Efficiency Multiplier based on Skill Rating (1 to 5)
-// Standard Industrial Engineering Pace: 4 = 100% standard SMV pace
-export const RATING_EFFICIENCY_MULTIPLIERS: Record<number, number> = {
-  5: 1.20, // 120% efficiency (Fast / Expert)
-  4: 1.00, // 100% standard benchmark
-  3: 0.85, // 85% standard factory floor average
-  2: 0.70, // 70% basic learner
-  1: 0.55  // 55% novice / training
-};
+/**
+ * Relative speed of an operator at a skill level (1–4) versus a standard "Independent" (level 3) operator,
+ * derived from the factory planning efficiencies in skillScale (single source of truth):
+ *   4 Expert ≈ 1.15, 3 Independent = 1.00 (baseline), 2 Needs support ≈ 0.69, 1 In training ≈ 0.38.
+ * The optimizer compares against a designed OB that assumes 100% standard pace, so the level-3 operator
+ * stays the 1.0 baseline (the old 1–5 map had ★4 = 1.00, and old ★4 data is now level 3).
+ */
+export function relativeSkillSpeed(rating: number): number {
+  return planningEfficiency(rating) / planningEfficiency(DEFAULT_REQUIRED_RATING);
+}
+
+/** Rating (1–4) → relative speed multiplier; see relativeSkillSpeed. */
+export const RATING_EFFICIENCY_MULTIPLIERS: Record<number, number> = Object.fromEntries(
+  SKILL_RATINGS.map(r => [r, Math.round(relativeSkillSpeed(r) * 100) / 100])
+);
 
 /**
  * Global Operator Allocation Optimizer
@@ -119,7 +133,6 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
     attendanceRecords = [],
     externalAssignedOperatorIds = new Set<string>(),
     taktTimeSecs = 60,
-    plannedEfficiency = 80,
     shiftHours = 8,
     fillOnlyEmpty = false,
   } = params;
@@ -250,7 +263,7 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
       if (directSkill.cycleTimeSeconds && directSkill.cycleTimeSeconds > 0) {
         rating = cycleTimeToRating(directSkill.cycleTimeSeconds, slot.operationName || directSkill.operationName, slot.smvSeconds / 60);
       } else {
-        rating = directSkill.rating || 1;
+        rating = directSkill.rating ? clampRating(directSkill.rating) : 1;
       }
     } else {
       // Check operational affinity fallback
@@ -266,7 +279,7 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
         const altSkill = opSkills?.get(altOpIdStr) || 
           (aff.alternativeOperationCode ? opSkills?.get(aff.alternativeOperationCode.trim().toUpperCase()) : undefined);
         if (altSkill) {
-          let effRating = altSkill.rating || 1;
+          let effRating: number = altSkill.rating ? clampRating(altSkill.rating) : 1;
           if (altSkill.cycleTimeSeconds && altSkill.cycleTimeSeconds > 0) {
             effRating = cycleTimeToRating(altSkill.cycleTimeSeconds, aff.alternativeOperationName || altSkill.operationName);
           }
@@ -291,32 +304,30 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
       }
     }
 
-    const baseEff = RATING_EFFICIENCY_MULTIPLIERS[rating] || 0.85;
+    const baseEff = RATING_EFFICIENCY_MULTIPLIERS[clampRating(rating)];
     const effectiveEff = Math.round((baseEff * (transferPct / 100)) * 100) / 100;
 
     // Parse required skill rating for this slot
     let targetRating: number | null = null;
-    let isPlusRating = false;
     if (slot.requiredSkillRating && slot.requiredSkillRating !== "ANY") {
       const reqStr = String(slot.requiredSkillRating).trim();
       if (reqStr === "3_PLUS") {
-        targetRating = 3;
-        isPlusRating = true;
+        targetRating = INDEPENDENT_RATING;
       } else if (reqStr === "4_PLUS") {
-        targetRating = 4;
-        isPlusRating = true;
+        targetRating = MAX_SKILL_RATING;
       } else {
         const num = Number(reqStr);
-        if (!isNaN(num) && num >= 1 && num <= 5) {
-          targetRating = num;
+        if (!isNaN(num) && num >= MIN_SKILL_RATING) {
+          // Legacy 1–5 requirements (5) clamp to Expert (4)
+          targetRating = clampRating(num);
         }
       }
     }
 
     // 1. Skill Rating and Qualification Scoring
-    // Higher star operators (5 > 4 > 3 > 2 > 1) are fundamentally faster, higher-skilled, and more capable.
+    // Higher skill levels (4 > 3 > 2 > 1) are fundamentally faster, higher-skilled, and more capable.
     // Lower cost = better candidate.
-    const baseSkillCost = -(rating * 2000); // ★5: -10000, ★4: -8000, ★3: -6000, ★2: -4000, ★1: -2000
+    const baseSkillCost = -(rating * 2000); // L4: -8000, L3: -6000, L2: -4000, L1: -2000
 
     let skillReqCost = 0;
     if (targetRating !== null) {
@@ -380,7 +391,7 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
   // Prioritize critical skill requirements and bottlenecks first
   const getSlotSkillDemandWeight = (slot: OptimizerStationSlot): number => {
     const reqStr = String(slot.requiredSkillRating || "ANY").trim();
-    if (reqStr === "5") return 5000;
+    if (reqStr === "5") return 4000; // legacy 1–5 value, treated as Expert (4)
     if (reqStr === "4_PLUS") return 4500;
     if (reqStr === "4") return 4000;
     if (reqStr === "3_PLUS") return 3500;
@@ -398,7 +409,7 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
       const weightA = getSlotSkillDemandWeight(slotA);
       const weightB = getSlotSkillDemandWeight(slotB);
       if (weightB !== weightA) {
-        return weightB - weightA; // Higher skill requirements first (5 -> 4 -> 3...)
+        return weightB - weightA; // Higher skill requirements first (4 -> 3 -> 2...)
       }
       // Tie-breaker: Sort descending by SMV (bottlenecks first)
       return slotB.smvSeconds - slotA.smvSeconds;
@@ -534,7 +545,7 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
     const assignedSlots = slotDetails.filter(d => d.stationIndex === idx && d.operatorId !== null);
     if (assignedSlots.length === 0) return s.smvSeconds;
     const totalEffMultiplier = assignedSlots.reduce(
-      (sum, sl) => sum + (RATING_EFFICIENCY_MULTIPLIERS[sl.assignedRating] || 0.85),
+      (sum, sl) => sum + relativeSkillSpeed(sl.assignedRating),
       0
     );
     return totalEffMultiplier > 0 ? s.smvSeconds / totalEffMultiplier : s.smvSeconds;
@@ -573,7 +584,7 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
   if (bottleneckAssignedSlot && bottleneckAssignedSlot.assignedRating <= 2) {
     const slackSlot = slotDetails.find(d => {
       if (d.stationIndex === bottleneckStationIndex) return false;
-      if (d.assignedRating < 4) return false;
+      if (d.assignedRating < MAX_SKILL_RATING) return false;
       const stationTime = realStationTimes[d.stationIndex] || 0;
       return stationTime < taktTimeSecs * 0.75; // Has ample slack
     });
@@ -593,7 +604,7 @@ export function runGlobalPoolOptimization(params: GlobalOptimizerParams): {
           currentRating: slackSlot.assignedRating,
         },
         predictedEfficiencyGainPct: Math.round((efficiencyGapPct * 0.6) * 10) / 10,
-        rational: `Station #${bottleneckStation.stationNum} (${bottleneckStation.operationName}) is pacing the line with a ★${bottleneckAssignedSlot.assignedRating} operator. Swapping with ★${slackSlot.assignedRating} operator on Station #${slackSlot.stationNum} relieves line choke and recovers throughput.`,
+        rational: `Station #${bottleneckStation.stationNum} (${bottleneckStation.operationName}) is pacing the line with a level ${bottleneckAssignedSlot.assignedRating} operator. Swapping with level ${slackSlot.assignedRating} operator on Station #${slackSlot.stationNum} relieves line choke and recovers throughput.`,
       });
     }
   }

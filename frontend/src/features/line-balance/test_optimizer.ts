@@ -40,19 +40,20 @@ const operators: Operator[] = [
 ];
 
 // 3. Setup Skill Matrix:
-// Ananya (101): Master Expert (★5) on Sleeve Attach Left (Op 4)
-// Rajesh (102): Skilled (★4) on Neck Rib Attach (Op 2)
-// Sunita (103): Skilled (★4) on Shoulder Join (Op 1)
-// Deepak (104): Trainee (★2) on Sleeve Attach Left (Op 4), Skilled (★4) on Neck Top Stitch (Op 3)
-// Meera (105): ONLY has skill on Sleeve Attach Left (Op 4, ★4) - NO direct skill on Sleeve Attach Right (Op 5)!
+// Skill levels use the factory 4-level scale (1 In training, 2 Needs support, 3 Independent, 4 Expert).
+// Ananya (101): Expert (L4) on Sleeve Attach Left (Op 4)
+// Rajesh (102): Independent (L3) on Neck Rib Attach (Op 2)
+// Sunita (103): Independent (L3) on Shoulder Join (Op 1)
+// Deepak (104): Needs support (L2) on Sleeve Attach Left (Op 4), Independent (L3) on Neck Top Stitch (Op 3)
+// Meera (105): ONLY has skill on Sleeve Attach Left (Op 4, L3) - NO direct skill on Sleeve Attach Right (Op 5)!
 const skillAssessments: SkillAssessment[] = [
-  { id: 1, operatorId: 101, operationId: 4, rating: 5, cycleTimeSeconds: 37, revision: 1, effectiveDate: "2026-01-01" },
-  { id: 2, operatorId: 102, operationId: 2, rating: 4, cycleTimeSeconds: 39, revision: 1, effectiveDate: "2026-01-01" },
-  { id: 3, operatorId: 103, operationId: 1, rating: 4, cycleTimeSeconds: 24, revision: 1, effectiveDate: "2026-01-01" },
-  { id: 4, operatorId: 104, operationId: 3, rating: 4, cycleTimeSeconds: 21, revision: 1, effectiveDate: "2026-01-01" },
+  { id: 1, operatorId: 101, operationId: 4, rating: 4, cycleTimeSeconds: 37, revision: 1, effectiveDate: "2026-01-01" },
+  { id: 2, operatorId: 102, operationId: 2, rating: 3, cycleTimeSeconds: 39, revision: 1, effectiveDate: "2026-01-01" },
+  { id: 3, operatorId: 103, operationId: 1, rating: 3, cycleTimeSeconds: 24, revision: 1, effectiveDate: "2026-01-01" },
+  { id: 4, operatorId: 104, operationId: 3, rating: 3, cycleTimeSeconds: 21, revision: 1, effectiveDate: "2026-01-01" },
   { id: 5, operatorId: 104, operationId: 4, rating: 2, cycleTimeSeconds: 64, revision: 1, effectiveDate: "2026-01-01" },
   // Meera has skill on Op 4 (Sleeve Attach Left), but NOT Op 5 (Sleeve Attach Right)
-  { id: 6, operatorId: 105, operationId: 4, rating: 4, cycleTimeSeconds: 45, revision: 1, effectiveDate: "2026-01-01" },
+  { id: 6, operatorId: 105, operationId: 4, rating: 3, cycleTimeSeconds: 45, revision: 1, effectiveDate: "2026-01-01" },
 ];
 
 // 4. Setup Operation Affinities:
@@ -115,8 +116,8 @@ console.log("   STATION-BY-STATION ALLOCATION BREAKDOWN");
 console.log("--------------------------------------------------------------------------------");
 result.slotDetails.forEach(slot => {
   const affBadge = slot.isAffinityAssignment
-    ? `[AFFINITY: Covering via ${slot.affinitySourceOpName} (★${slot.assignedRating}, ${slot.assignedEfficiencyPct}% Eff)]`
-    : `[DIRECT: ★${slot.assignedRating} (${slot.assignedEfficiencyPct}% Eff)]`;
+    ? `[AFFINITY: Covering via ${slot.affinitySourceOpName} (L${slot.assignedRating}, ${slot.assignedEfficiencyPct}% Eff)]`
+    : `[DIRECT: L${slot.assignedRating} (${slot.assignedEfficiencyPct}% Eff)]`;
 
   console.log(
     `Station #${slot.stationNum} ${slot.operationName.padEnd(22)} -> ${slot.operatorName?.padEnd(16)} (Cycle: ${slot.effectiveCycleTimeSecs.toFixed(1)}s) ${affBadge}`
@@ -128,7 +129,7 @@ console.log("\n-----------------------------------------------------------------
 console.log("   ASSERTION CHECKS");
 console.log("--------------------------------------------------------------------------------");
 
-// Check 1: Top talent (Ananya Patel ★5) was assigned to the heaviest bottleneck (Station 4: Sleeve Attach Left, 45s SMV)
+// Check 1: Top talent (Ananya Patel, Expert L4) was assigned to the heaviest bottleneck (Station 4: Sleeve Attach Left, 45s SMV)
 const station4 = result.slotDetails.find(s => s.stationNum === 4);
 const isAnanyaOnBottleneck = station4?.employeeId === "EMP-101";
 console.log(`Assertion 1 (Google Maps Analogy - Top talent on worst bottleneck): ${isAnanyaOnBottleneck ? "PASSED" : "FAILED"}`);

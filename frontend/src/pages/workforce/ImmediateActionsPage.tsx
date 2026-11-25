@@ -25,6 +25,9 @@ import { attendanceApi, type AttendanceRecord } from "../../features/attendance/
 import { linePlanApi, type LinePlan } from "../../features/line-balance/api";
 import { skillApi, type SkillAssessment } from "../../features/skill-matrix/api";
 import { operationsApi, type Operation } from "../../features/operations/api";
+import { toLocalDateString } from "../../utils/date";
+import { loadFailed } from "../../components/common/GlobalErrorToaster";
+import { usePolling } from "../../utils/usePolling";
 
 export function ImmediateActionsPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -57,7 +60,7 @@ export function ImmediateActionsPage() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = toLocalDateString();
       const [
         opsData,
         shiftsData,
@@ -71,9 +74,9 @@ export function ImmediateActionsPage() {
         shiftApi.getShifts(true),
         shiftAssignmentApi.getAssignments(),
         attendanceApi.getAttendanceByDate(todayStr),
-        linePlanApi.getAllPlans().catch(() => []),
-        skillApi.getCurrentMatrix().catch(() => []),
-        operationsApi.getOperations().catch(() => []),
+        linePlanApi.getAllPlans().catch(loadFailed([])),
+        skillApi.getCurrentMatrix().catch(loadFailed([])),
+        operationsApi.getOperations().catch(loadFailed([])),
       ]);
 
       if (opsData.status === "fulfilled") setOperators(opsData.value || []);
@@ -92,9 +95,8 @@ export function ImmediateActionsPage() {
 
   useEffect(() => {
     loadAllData();
-    const interval = setInterval(loadAllData, 10000); // 10s live floor poll
-    return () => clearInterval(interval);
   }, []);
+  usePolling(loadAllData, 30000); // live floor refresh, paused while the tab is hidden
 
   const showToast = (message: string, type: "success" | "info" = "success") => {
     setActionToast({ message, type });

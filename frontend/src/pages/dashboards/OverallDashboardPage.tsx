@@ -11,6 +11,8 @@ import { shiftsApi, type Shift } from "../../features/shifts/api";
 import { pieceProductionApi, type OperatorTimesheet24h, type PieceProductionLog } from "../../features/production-logs/api";
 import { useMasterDataSubscription } from "../../utils/masterDataEvents";
 import { OverallDashboard } from "../../features/dashboards/OverallDashboard";
+import { toLocalDateString } from "../../utils/date";
+import { usePolling } from "../../utils/usePolling";
 
 /**
  * OverallDashboardPage — standalone route at /overall-dashboard and /
@@ -35,7 +37,7 @@ export function OverallDashboardPage() {
   const loadData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = toLocalDateString();
       const [ords, bulls, oprs, skills, lns, plans, machs, atts, shfts, tsheets, logs] =
         await Promise.allSettled([
           ordersApi.getOrders(),
@@ -79,12 +81,7 @@ export function OverallDashboardPage() {
   });
 
   // Background Live Piece & Status Polling (every 15s)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadData(false);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [loadData]);
+  usePolling(() => loadData(false), 15000, [loadData]); // paused while the tab is hidden
 
   return (
     <div className="min-h-screen bg-[#F6F1E8] p-4 sm:p-6 lg:p-8">

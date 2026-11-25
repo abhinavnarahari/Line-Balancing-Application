@@ -8,6 +8,7 @@ import { DataCard, DataCardHeader, SkeletonTable, EmptyState, StatusBadge } from
 import type { ShiftAssignment } from "./api";
 import type { Operator } from "../operators/api";
 import type { Shift } from "../shifts/types";
+import { toLocalDateString } from "../../utils/date";
 
 interface AssignmentListProps {
   assignments: ShiftAssignment[];
@@ -22,7 +23,7 @@ export function AssignmentList({ assignments, operators, shifts, onEndAssignment
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get("employeeId") || "");
   const [endingId, setEndingId] = useState<string | null>(null);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState(toLocalDateString());
   
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -74,8 +75,8 @@ export function AssignmentList({ assignments, operators, shifts, onEndAssignment
 
   // Sort: Active first, then by date descending
   filtered.sort((a, b) => {
-    if (a.status === "Active" && b.status !== "Active") return -1;
-    if (b.status === "Active" && a.status !== "Active") return 1;
+    if (a.status === "ACTIVE" && b.status !== "ACTIVE") return -1;
+    if (b.status === "ACTIVE" && a.status !== "ACTIVE") return 1;
     return new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime();
   });
 
@@ -123,7 +124,7 @@ export function AssignmentList({ assignments, operators, shifts, onEndAssignment
               {filtered.slice((page - 1) * pageSize, page * pageSize).map((a, index) => (
                 <motion.tr
                   key={a.id}
-                  className={`group bg-white hover:bg-[#FEFCF9] border-b border-[#F0EAE0] last:border-0 transition-colors duration-100 ${a.status === 'Completed' ? 'opacity-60' : ''}`}
+                  className={`group bg-white hover:bg-[#FEFCF9] border-b border-[#F0EAE0] last:border-0 transition-colors duration-100 ${a.status === 'COMPLETED' ? 'opacity-60' : ''}`}
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: (index % pageSize) * 0.02, duration: 0.2 }}
@@ -164,12 +165,12 @@ export function AssignmentList({ assignments, operators, shifts, onEndAssignment
                   </TableCell>
                   <TableCell>
                     <StatusBadge 
-                      status={a.status === 'Active' ? 'active' : a.status === 'Scheduled' ? 'present' : 'inactive'} 
-                      label={a.status} 
+                      status={a.status === 'ACTIVE' ? 'active' : a.status === 'SCHEDULED' ? 'present' : 'inactive'} 
+                      label={a.status.charAt(0) + a.status.slice(1).toLowerCase()} 
                     />
                   </TableCell>
                   <TableCell className="text-right">
-                    {a.status === "Active" && endingId !== a.id.toString() && editingId !== a.id.toString() && (
+                    {a.status === "ACTIVE" && endingId !== a.id.toString() && editingId !== a.id.toString() && (
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button variant="outline" size="xs" onClick={() => handleEditClick(a)} className="border-[#E6DDCE] text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8]">
                           Edit

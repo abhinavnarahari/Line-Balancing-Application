@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Bell, Clock, CheckCircle2, ShieldAlert, Trash2, ArrowUpRight, Check } from "lucide-react";
 import { notificationsApi, type NotificationItem } from "../../features/notifications/api";
 import { useNavigate } from "react-router-dom";
+import { usePolling } from "../../utils/usePolling";
 
 export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
@@ -31,9 +32,8 @@ export function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 12000); // 12s live polling
-    return () => clearInterval(interval);
   }, [filter]);
+  usePolling(fetchNotifications, 30000, [filter]); // paused while the tab is hidden
 
   // Close on outside click
   useEffect(() => {

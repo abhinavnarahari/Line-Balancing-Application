@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from "react";
 import { X, UserCheck, Pin, Search, CheckCircle2, Clock } from "lucide-react";
 import type { AllocationAssignmentItem, OperatorPoolItem } from "../types";
+import { DEFAULT_REQUIRED_RATING, MAX_SKILL_RATING, skillLevelName } from "../../skill-matrix/skillScale";
+import { SkillLevelIcon } from "../../../components/ui/SkillLevelIcon";
 
 interface ManualOverrideModalProps {
   assignment: AllocationAssignmentItem | null;
@@ -16,14 +18,18 @@ interface ManualOverrideModalProps {
   }) => void;
 }
 
-export function ManualOverrideModal({
+export function ManualOverrideModal(props: ManualOverrideModalProps) {
+  // Guard in a wrapper so the hooks below always run in the same order (rules of hooks).
+  if (!props.assignment) return null;
+  return <ManualOverrideModalContent {...props} assignment={props.assignment} />;
+}
+
+function ManualOverrideModalContent({
   assignment,
   availableOperators,
   onClose,
   onSaveOverride,
-}: ManualOverrideModalProps) {
-  if (!assignment) return null;
-
+}: ManualOverrideModalProps & { assignment: NonNullable<ManualOverrideModalProps["assignment"]> }) {
   const [search, setSearch] = useState("");
   const [selectedOpId, setSelectedOpId] = useState<string>(
     assignment.operatorId ? String(assignment.operatorId) : ""
@@ -51,7 +57,7 @@ export function ManualOverrideModal({
     if (!selectedOp) return assignment.effectiveCycleTimeSecs;
     const baseSmvSecs = (assignment.standardSmv || 1.0) * 60;
     const eff = (selectedOp.historicalEfficiency || 80) / 100;
-    const skillMultiplier = selectedOp.averageSkillRating >= (assignment.requiredSkillLevel || 3) ? 0.95 : 1.15;
+    const skillMultiplier = selectedOp.averageSkillRating >= (assignment.requiredSkillLevel || DEFAULT_REQUIRED_RATING) ? 0.95 : 1.15;
     return Math.round((baseSmvSecs / Math.max(0.4, eff)) * skillMultiplier);
   }, [selectedOp, assignment]);
 
@@ -109,7 +115,10 @@ export function ManualOverrideModal({
             </div>
             <div>
               <span className="text-[#8C7E6E] block text-[10px] uppercase font-bold">Target Rating</span>
-              <span className="font-bold text-[#B48259]">R{assignment.requiredSkillLevel}+</span>
+              <span className="font-bold text-[#B48259] inline-flex items-center gap-1" title={skillLevelName(assignment.requiredSkillLevel)}>
+                <SkillLevelIcon rating={assignment.requiredSkillLevel} size={12} decorative />
+                L{assignment.requiredSkillLevel}+
+              </span>
             </div>
             <div>
               <span className="text-[#8C7E6E] block text-[10px] uppercase font-bold">Current Operator</span>
@@ -172,14 +181,14 @@ export function ManualOverrideModal({
                         <span className="font-mono text-[10px] text-[#8C7E6E]">({op.employeeCode})</span>
                       </div>
                       <span className="text-[10px] text-[#8C7E6E] block">
-                        Rating {Number(op.averageSkillRating || 3).toFixed(1)}/5 • {op.department || "Sewing"}
+                        Level {Number(op.averageSkillRating || DEFAULT_REQUIRED_RATING).toFixed(1)}/{MAX_SKILL_RATING} ({skillLevelName(op.averageSkillRating || DEFAULT_REQUIRED_RATING)}) • {op.department || "Sewing"}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-1.5">
                       {!hasSkill && (
                         <span className="px-1.5 py-0.5 rounded bg-[#B48259]/15 text-[#B48259] text-[9px] font-bold">
-                          Skill R{Number(op.averageSkillRating || 3).toFixed(1)}
+                          Skill L{Number(op.averageSkillRating || DEFAULT_REQUIRED_RATING).toFixed(1)}
                         </span>
                       )}
                       {isSelected && <CheckCircle2 className="w-4 h-4 text-[#9C5B3C]" />}

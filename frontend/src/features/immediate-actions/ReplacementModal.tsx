@@ -39,7 +39,7 @@ export function ReplacementModal({
                 </span>
               </h3>
               <p className="text-xs text-[#E6DDCE] mt-0.5 font-medium">
-                Verified floor operators present today with ★3+ competency matching risk operations
+                Verified floor operators present today at skill level 3+ (Independent) on the at-risk operations
               </p>
             </div>
           </div>
@@ -182,7 +182,7 @@ export function ReplacementModal({
               </div>
             ) : (
               <div className="p-8 text-center bg-white rounded-xl border border-[#E6DDCE] text-xs text-[#8C7E6E] space-y-1">
-                <p className="font-bold text-[#221912]">No Free Present Operators with ★3+ Rating Found</p>
+                <p className="font-bold text-[#221912]">No free present operators at skill level 3+ found</p>
                 <p>All qualified operators for these operations are currently assigned to active production orders or absent.</p>
               </div>
             )}

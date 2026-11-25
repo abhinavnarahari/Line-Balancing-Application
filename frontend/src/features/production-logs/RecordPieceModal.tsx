@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X, CheckCircle2, Clock, Calculator, ShieldAlert, Cpu, Trash2, AlertCircle, Layers } from "lucide-react";
 import { pieceProductionApi, type PieceProductionLog } from "./api";
@@ -6,6 +6,7 @@ import { CustomSelect } from "../../components/ui/CustomSelect";
 import type { Operator } from "../../features/operators/api";
 import type { Operation } from "../../features/operations/api";
 import type { Order } from "../../features/orders/api";
+import { toLocalDateString } from "../../utils/date";
 
 export interface StationExecutionInfo {
   stationNum: number;
@@ -42,7 +43,7 @@ export function RecordPieceModal({
   operations,
   orders = [],
   stationFlowList = [],
-  initialDate = new Date().toISOString().split("T")[0],
+  initialDate = toLocalDateString(),
   initialOperatorId,
   initialOperationId,
   initialOrderId,
@@ -69,7 +70,19 @@ export function RecordPieceModal({
   const [errorMsg, setErrorMsg] = useState<string>("");
 
   // Initialize or reset form state based on editingLog or initial props
+  // Read the lists through refs: the parent re-fetches them in the background (window focus, polling),
+  // and a new array reference must not wipe what the user is typing.
+  const operatorsRef = useRef(operators);
+  const operationsRef = useRef(operations);
   useEffect(() => {
+    // Declared before the reset effect below, so it runs first in the same commit.
+    operatorsRef.current = operators;
+    operationsRef.current = operations;
+  });
+
+  useEffect(() => {
+    const operators = operatorsRef.current;
+    const operations = operationsRef.current;
     if (editingLog) {
       setOperatorId(String(editingLog.operatorId));
       setOperationId(editingLog.operationId ? String(editingLog.operationId) : "");
@@ -109,7 +122,7 @@ export function RecordPieceModal({
       setNotes("");
     }
     setErrorMsg("");
-  }, [editingLog, isOpen, initialOperatorId, initialOperationId, initialOrderId, initialMachineCode, initialStartTime, initialDate, operators, operations]);
+  }, [editingLog, isOpen, initialOperatorId, initialOperationId, initialOrderId, initialMachineCode, initialStartTime, initialDate]);
 
   const handleOperationChange = (opId: string) => {
     setOperationId(opId);

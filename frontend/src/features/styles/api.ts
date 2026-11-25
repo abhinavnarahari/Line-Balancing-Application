@@ -3,7 +3,8 @@ import { api } from "../../lib/api";
 export interface Style {
   id: string | number;
   styleNo: string;
-  buyer: string;
+  /** Optional */
+  buyer?: string | null;
   description: string;
   season: string;
   productType: string;

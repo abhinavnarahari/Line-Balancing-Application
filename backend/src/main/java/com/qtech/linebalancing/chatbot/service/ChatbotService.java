@@ -2,7 +2,9 @@ package com.qtech.linebalancing.chatbot.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.qtech.linebalancing.chatbot.agent.EnterpriseAgentEngine;
+import com.qtech.linebalancing.chatbot.assistant.Answer;
+import com.qtech.linebalancing.chatbot.assistant.ConversationState;
+import com.qtech.linebalancing.chatbot.assistant.GroundedAssistant;
 import com.qtech.linebalancing.chatbot.dto.*;
 import com.qtech.linebalancing.chatbot.entity.ChatConversation;
 import com.qtech.linebalancing.chatbot.entity.ChatFeedback;
@@ -14,7 +16,9 @@ import com.qtech.linebalancing.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
@@ -33,85 +37,97 @@ public class ChatbotService {
     private final ChatConversationRepository conversationRepository;
     private final ChatMessageRepository messageRepository;
     private final ChatFeedbackRepository feedbackRepository;
-    private final EnterpriseAgentEngine agentEngine;
+    private final GroundedAssistant assistant;
     private final ObjectMapper objectMapper;
+    private final PlatformTransactionManager transactionManager;
 
-    @Transactional
+    /** Conversation id and what the previous answer was about, captured in the first (short) transaction. */
+    private record PreparedTurn(Long conversationId, ConversationState previous) {
+    }
+
+    /**
+     * Handles one chat turn in two short transactions with the LLM/agent call in between, so a slow LLM
+     * (seconds per round trip) never holds a pooled database connection. The agent's tools open their own
+     * read-only transactions.
+     */
     public ChatMessageResponse processMessage(ChatMessageRequest request) {
         String userIdentifier = request.getUserIdentifier() != null ? request.getUserIdentifier() : "default_user";
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
 
-        // 1. Get or create conversation session
-        ChatConversation conversation;
-        if (request.getConversationId() != null) {
-            conversation = conversationRepository.findById(request.getConversationId())
-                    .orElseGet(() -> createNewConversation(userIdentifier, request.getMessage(), request.getContext()));
-        } else {
-            conversation = createNewConversation(userIdentifier, request.getMessage(), request.getContext());
-        }
+        // 1. Get/create the conversation, persist the user message, collect history
+        PreparedTurn turn = tx.execute(status -> {
+            ChatConversation conversation;
+            if (request.getConversationId() != null) {
+                // Only continue a conversation the caller owns; otherwise start a new one.
+                conversation = conversationRepository.findByIdAndUserIdentifier(request.getConversationId(), userIdentifier)
+                        .orElseGet(() -> createNewConversation(userIdentifier, request.getMessage(), request.getContext()));
+            } else {
+                conversation = createNewConversation(userIdentifier, request.getMessage(), request.getContext());
+            }
 
-        // 2. Persist User Message
-        ChatMessage userMessage = ChatMessage.builder()
-                .conversation(conversation)
-                .sender(ChatMessage.MessageSender.USER)
-                .messageText(request.getMessage().trim())
-                .createdAt(LocalDateTime.now())
-                .build();
-        messageRepository.save(userMessage);
+            messageRepository.save(ChatMessage.builder()
+                    .conversation(conversation)
+                    .sender(ChatMessage.MessageSender.USER)
+                    .messageText(request.getMessage().trim())
+                    .createdAt(LocalDateTime.now())
+                    .build());
 
-        // 3. Retrieve conversation history for multi-turn context
-        List<ChatMessage> previousMessages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversation.getId());
-        List<Map<String, String>> history = new ArrayList<>();
-        // Keep up to last 8 messages
-        int startIdx = Math.max(0, previousMessages.size() - 8);
-        for (int i = startIdx; i < previousMessages.size() - 1; i++) {
-            ChatMessage pm = previousMessages.get(i);
-            String role = pm.getSender() == ChatMessage.MessageSender.USER ? "user" : "assistant";
-            history.add(Map.of("role", role, "content", pm.getMessageText()));
-        }
+            // Follow-up context: what the last assistant answer in this conversation was about
+            List<ChatMessage> previousMessages = messageRepository.findByConversationIdOrderByCreatedAtAsc(conversation.getId());
+            ConversationState previous = null;
+            for (int i = previousMessages.size() - 1; i >= 0 && previous == null; i--) {
+                if (previousMessages.get(i).getSender() == ChatMessage.MessageSender.ASSISTANT) {
+                    previous = ConversationState.fromJson(previousMessages.get(i).getAssistantState());
+                }
+            }
+            return new PreparedTurn(conversation.getId(), previous);
+        });
 
-        // 4. Run Enterprise Agent Engine
-        EnterpriseAgentEngine.AgentResult result = agentEngine.execute(
-                request.getMessage(),
-                request.getContext(),
-                history
-        );
+        // 2. Answer outside any write transaction (the assistant reads in its own read-only transaction)
+        GroundedAssistant.Reply reply = assistant.ask(request.getMessage(), request.getContext(), turn.previous());
+        Answer result = reply.answer();
 
-        // 5. Serialize Structured Payload
         String payloadJson = null;
-        if (result.structuredPayload() != null) {
+        if (result.payload() != null) {
             try {
-                payloadJson = objectMapper.writeValueAsString(result.structuredPayload());
+                payloadJson = objectMapper.writeValueAsString(result.payload());
             } catch (JsonProcessingException e) {
                 log.warn("Failed to serialize structured payload", e);
             }
         }
+        final String payload = payloadJson;
+        final String stateJson = reply.state() != null ? reply.state().toJson() : null;
 
-        // 6. Persist Assistant Message
-        ChatMessage assistantMessage = ChatMessage.builder()
-                .conversation(conversation)
-                .sender(ChatMessage.MessageSender.ASSISTANT)
-                .messageText(result.responseText())
-                .intent(result.intent())
-                .dataSource(result.dataSource())
-                .dataAvailable(result.dataAvailable())
-                .structuredPayload(payloadJson)
-                .createdAt(LocalDateTime.now())
-                .build();
-        assistantMessage = messageRepository.save(assistantMessage);
-
-        conversation.setUpdatedAt(LocalDateTime.now());
-        conversationRepository.save(conversation);
+        // 3. Persist the assistant reply
+        ChatMessage assistantMessage = tx.execute(status -> {
+            ChatConversation conversation = conversationRepository.findById(turn.conversationId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + turn.conversationId()));
+            ChatMessage saved = messageRepository.save(ChatMessage.builder()
+                    .conversation(conversation)
+                    .sender(ChatMessage.MessageSender.ASSISTANT)
+                    .messageText(result.text())
+                    .intent(reply.intent().name())
+                    .dataSource(result.dataAvailable() ? "APPLICATION_DATA" : "NONE")
+                    .dataAvailable(result.dataAvailable())
+                    .structuredPayload(payload)
+                    .assistantState(stateJson)
+                    .createdAt(LocalDateTime.now())
+                    .build());
+            conversation.setUpdatedAt(LocalDateTime.now());
+            conversationRepository.save(conversation);
+            return saved;
+        });
 
         return ChatMessageResponse.builder()
                 .id(assistantMessage.getId())
-                .conversationId(conversation.getId())
+                .conversationId(turn.conversationId())
                 .sender("ASSISTANT")
                 .messageText(assistantMessage.getMessageText())
                 .intent(assistantMessage.getIntent())
                 .dataSource(assistantMessage.getDataSource())
                 .dataAvailable(assistantMessage.getDataAvailable())
-                .structuredPayload(result.structuredPayload())
-                .suggestedQuestions(result.suggestedQuestions() != null ? result.suggestedQuestions() : List.of())
+                .structuredPayload(result.payload())
+                .suggestedQuestions(result.suggestions() != null ? result.suggestions() : List.of())
                 .createdAt(assistantMessage.getCreatedAt())
                 .build();
     }
@@ -164,15 +180,19 @@ public class ChatbotService {
     }
 
     @Transactional(readOnly = true)
-    public ChatConversationResponse getConversationById(Long id) {
-        ChatConversation conv = conversationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + id));
-        return toConversationResponse(conv);
+    public ChatConversationResponse getConversationById(Long id, String userIdentifier) {
+        return toConversationResponse(findOwned(id, userIdentifier));
     }
 
     @Transactional
-    public void deleteConversation(Long id) {
-        conversationRepository.deleteById(id);
+    public void deleteConversation(Long id, String userIdentifier) {
+        conversationRepository.delete(findOwned(id, userIdentifier));
+    }
+
+    /** 404 (not 403) for other users' conversations so their ids are not disclosed. */
+    private ChatConversation findOwned(Long id, String userIdentifier) {
+        return conversationRepository.findByIdAndUserIdentifier(id, userIdentifier)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found with id: " + id));
     }
 
     @Transactional

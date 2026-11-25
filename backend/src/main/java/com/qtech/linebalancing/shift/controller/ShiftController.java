@@ -56,8 +56,6 @@ public class ShiftController {
             return ResponseEntity.ok(ApiResponse.success("Shift deleted successfully", null));
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
             throw new com.qtech.linebalancing.common.exception.BusinessRuleException("Cannot delete shift. It is in use.");
-        } catch (Exception e) {
-            throw new com.qtech.linebalancing.common.exception.BusinessRuleException("Delete failed: " + e.getMessage() + " " + e.getClass().getName());
         }
     }
 }

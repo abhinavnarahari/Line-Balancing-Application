@@ -8,6 +8,7 @@
 import type { Order } from "../orders/api";
 import type { OperationBulletin } from "../bulletins/api";
 import type { Operator } from "../operators/api";
+import { INDEPENDENT_RATING } from "../skill-matrix/skillScale";
 import type { SkillAssessment } from "../skill-matrix/api";
 import type { Operation } from "../operations/api";
 
@@ -15,7 +16,7 @@ export interface ForwardPlanSkillDemand {
   machineClass: string;
   category: string;
   requiredOperators: number;
-  availableQualifiedOperators: number; // Rating >= 3
+  availableQualifiedOperators: number; // Rating >= 3 (Independent)
   skillGap: number; // available - required (negative means deficit)
   gapPercentage: number; // deficit %
   status: "severe_deficit" | "moderate_deficit" | "balanced" | "surplus";
@@ -143,7 +144,7 @@ export function computeForwardSkillGapAnalysis(
     { mClass: "Manual Table / QC / Packaging", baseMultiplier: 2, category: "Manual QC & Handling" },
   ];
 
-  // 3. Count current plant operator competencies (from Skill Matrix Rating >= 3)
+  // 3. Count current plant operator competencies (from Skill Matrix Rating >= 3 = Independent)
   const opClassCompetency: Record<string, Set<string | number>> = {};
   standardClasses.forEach((sc) => {
     opClassCompetency[sc.mClass] = new Set<string | number>();
@@ -152,7 +153,7 @@ export function computeForwardSkillGapAnalysis(
   // Map skill assessments
   const opMap = new Map(operations.map((o) => [String(o.id), o]));
   skillMatrix.forEach((sm) => {
-    if (sm.rating >= 3) {
+    if (sm.rating >= INDEPENDENT_RATING) {
       const op = opMap.get(String(sm.operationId));
       const mClass = normalizeMachineClass(op?.machineType);
       if (!opClassCompetency[mClass]) {
@@ -260,7 +261,7 @@ export function computeForwardSkillGapAnalysis(
           employeeId: opObj.employeeId,
           operatorName: opObj.name,
           currentMachine: "Single Needle Lockstitch (SNLS 301)",
-          currentRating: 4,
+          currentRating: INDEPENDENT_RATING, // surplus pool = operators rated Independent or better
           targetMachine: def.machineClass,
           targetCategory: def.category,
           trainingDaysEstimate: def.machineClass.includes("Flatlock") ? 10 : def.machineClass.includes("Feed") ? 12 : 5,

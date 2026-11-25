@@ -5,6 +5,8 @@ import { Modal } from "../../components/ui/Modal";
 import { skillApi, cycleTimeToRating, type PerformanceLogInput } from "../../features/skill-matrix/api";
 import type { Operation } from "../../features/operations/api";
 import type { Operator } from "../../features/operators/api";
+import { toLocalDateString } from "../../utils/date";
+import { SkillLevelBadge } from "../../components/ui/SkillLevelIcon";
 
 interface UploadPerformanceExcelModalProps {
   isOpen: boolean;
@@ -47,7 +49,7 @@ export function UploadPerformanceExcelModal({
     const defaultEmpId = operator?.employeeId || allOperators[0]?.employeeId || "EMP-1201";
     const sampleOp1 = allOperations[0]?.name || "Shoulder Join";
     const sampleOp2 = allOperations[1]?.name || "Neck Rib Attach";
-    const today = new Date().toISOString().split("T")[0];
+    const today = toLocalDateString();
 
     const templateData = [
       {
@@ -150,7 +152,7 @@ export function UploadPerformanceExcelModal({
           item["Test Date (YYYY-MM-DD)"] ||
             item["Test Date"] ||
             item["Date"] ||
-            new Date().toISOString().split("T")[0]
+            toLocalDateString()
         ).trim();
 
         const cycleTimeField = parseFloat(
@@ -265,10 +267,14 @@ export function UploadPerformanceExcelModal({
         ...data,
         count: data.times.length,
         avg: avg.toFixed(1),
-        rating: cycleTimeToRating(avg, data.operationName),
+        rating: cycleTimeToRating(
+          avg,
+          data.operationName,
+          allOperations.find((o) => String(o.id) === String(data.operationId))?.standardSmv
+        ),
       };
     });
-  }, [parsedRows]);
+  }, [parsedRows, allOperations]);
 
   const handleUploadSubmit = async (status: "DRAFT" | "SUBMITTED") => {
     if (parsedRows.length === 0) return;
@@ -293,7 +299,7 @@ export function UploadPerformanceExcelModal({
             await skillApi.addAssessment({
               operatorId: Number(item.operatorId),
               operationId: Number(item.operationId),
-              rating: item.rating as 1 | 2 | 3 | 4 | 5,
+              rating: item.rating,
               cycleTimeSeconds: Math.round(Number(item.avg)),
               effectiveDate: item.date,
               notes: `Excel submitted ${item.count} test runs (Avg: ${item.avg}s)`,
@@ -395,7 +401,7 @@ export function UploadPerformanceExcelModal({
                     <th className="py-2 px-3">Operation</th>
                     <th className="py-2 px-2 text-center">Tests</th>
                     <th className="py-2 px-2 text-center">Avg Time</th>
-                    <th className="py-2 px-3 text-right">Auto Rating</th>
+                    <th className="py-2 px-3 text-right">Auto Level</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E6DDCE]/60">
@@ -408,9 +414,7 @@ export function UploadPerformanceExcelModal({
                       <td className="py-2 px-2 text-center font-bold text-[#221912]">{item.count}</td>
                       <td className="py-2 px-2 text-center font-mono font-bold text-[#9C5B3C]">{item.avg}s</td>
                       <td className="py-2 px-3 text-right">
-                        <span className="inline-block bg-[#221912] text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
-                          Rating {item.rating}
-                        </span>
+                        <SkillLevelBadge rating={item.rating} size={12} />
                       </td>
                     </tr>
                   ))}

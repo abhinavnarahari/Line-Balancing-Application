@@ -100,7 +100,7 @@ export function Sidebar() {
       ];
     }
 
-    if (role === "PRODUCTION_MANAGER" || role === "PLANT_MANAGER") {
+    if (role === "PRODUCTION_MANAGER") {
       return [
         {
           group: "Executive Cockpit & Monitoring",

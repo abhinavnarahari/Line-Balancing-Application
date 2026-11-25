@@ -68,13 +68,15 @@ FRONTEND_ALT_PORT=3000
 # PostgreSQL Settings
 POSTGRES_DB=qtech_linebalancing
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=password123
+POSTGRES_PASSWORD=<long random password, e.g. openssl rand -hex 24>
 POSTGRES_PORT=5432
 
-# Flyway Settings
-SPRING_FLYWAY_ENABLED=true
-SPRING_FLYWAY_BASELINE_ON_MIGRATE=true
-SPRING_FLYWAY_OUT_OF_ORDER=true
+# First administrator (created on first start; then manage users in Settings -> User Accounts)
+APP_ADMIN_EMAIL=admin@sewnexa.local
+APP_ADMIN_PASSWORD=<8+ characters with a letter and a digit>
+
+# Flyway runs in strict mode; set true for ONE start only to repair migration history
+FLYWAY_REPAIR_ON_START=false
 
 # AI Assistant
 LLM_API_KEY=YOUR_GEMINI_OR_LLM_API_KEY

@@ -1,5 +1,7 @@
 package com.qtech.linebalancing.skillmatrix.service;
 
+import com.qtech.linebalancing.common.skill.SkillScale;
+
 import com.qtech.linebalancing.operation.entity.Operation;
 import com.qtech.linebalancing.operation.service.OperationService;
 import com.qtech.linebalancing.operator.entity.Operator;
@@ -73,6 +75,30 @@ public class SkillMatrixService {
                 .stream().map(this::toResponse).toList();
     }
 
+    /**
+     * Excel import of a skill matrix: every rating is recorded in one transaction, or none are.
+     * Each rating becomes a new revision (history is kept), exactly as if entered one by one.
+     */
+    @Transactional
+    public List<SkillAssessmentResponse> addAssessmentsBatch(List<SkillAssessmentRequest> requests) {
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        List<SkillAssessmentResponse> saved = new ArrayList<>();
+        for (SkillAssessmentRequest r : requests) {
+            if (!seen.add(r.getOperatorId() + ":" + r.getOperationId())) {
+                throw new com.qtech.linebalancing.common.exception.BusinessRuleException(
+                        "Operator " + r.getOperatorId() + " has more than one rating for operation " + r.getOperationId() + " in the import.");
+            }
+            try {
+                saved.add(addAssessment(r));
+            } catch (IllegalArgumentException | com.qtech.linebalancing.common.exception.BusinessRuleException e) {
+                Operator operator = operatorService.findEntityById(r.getOperatorId());
+                throw new com.qtech.linebalancing.common.exception.BusinessRuleException(
+                        "Employee " + operator.getEmployeeId() + ": " + e.getMessage());
+            }
+        }
+        return saved;
+    }
+
     @Transactional
     public SkillAssessmentResponse addAssessment(SkillAssessmentRequest request) {
         Operator operator = operatorService.findEntityById(request.getOperatorId());
@@ -112,127 +138,14 @@ public class SkillMatrixService {
         return cycleTimeToRating(seconds, null, null);
     }
 
+    /**
+     * Skill level (1-4, see {@link SkillScale}) for a measured cycle time: efficiency = standard time / cycle time.
+     * Without a standard SMV, 30 s is assumed.
+     */
     public static int cycleTimeToRating(double seconds, String operationName, Double standardSmv) {
-        if (seconds <= 0) return 1;
-        if (operationName != null) {
-            String name = operationName.toLowerCase().trim();
-            if (name.contains("shoulder")) {
-                if (seconds <= 29.0) return 5;
-                if (seconds <= 32.0) return 4;
-                if (seconds <= 37.0) return 3;
-                if (seconds <= 42.0) return 2;
-                return 1;
-            } else if (name.contains("neck rib")) {
-                if (seconds <= 41.0) return 5;
-                if (seconds <= 45.0) return 4;
-                if (seconds <= 52.0) return 3;
-                if (seconds <= 60.0) return 2;
-                return 1;
-            } else if (name.contains("neck top") || name.contains("top stitch")) {
-                if (seconds <= 35.0) return 5;
-                if (seconds <= 38.0) return 4;
-                if (seconds <= 44.0) return 3;
-                if (seconds <= 51.0) return 2;
-                return 1;
-            } else if (name.contains("sleeve attach")) {
-                if (seconds <= 37.0) return 5;
-                if (seconds <= 41.0) return 4;
-                if (seconds <= 47.0) return 3;
-                if (seconds <= 54.0) return 2;
-                return 1;
-            } else if (name.contains("side seam")) {
-                if (seconds <= 33.0) return 5;
-                if (seconds <= 36.0) return 4;
-                if (seconds <= 41.0) return 3;
-                if (seconds <= 47.0) return 2;
-                return 1;
-            } else if (name.contains("bottom hem")) {
-                if (seconds <= 47.0) return 5;
-                if (seconds <= 52.0) return 4;
-                if (seconds <= 59.0) return 3;
-                if (seconds <= 69.0) return 2;
-                return 1;
-            } else if (name.contains("sleeve hem")) {
-                if (seconds <= 44.0) return 5;
-                if (seconds <= 48.0) return 4;
-                if (seconds <= 55.0) return 3;
-                if (seconds <= 64.0) return 2;
-                return 1;
-            } else if (name.contains("label attach") || name.contains("label")) {
-                if (seconds <= 26.0) return 5;
-                if (seconds <= 28.0) return 4;
-                if (seconds <= 32.0) return 3;
-                if (seconds <= 37.0) return 2;
-                return 1;
-            } else if (name.contains("trim check")) {
-                if (seconds <= 27.0) return 5;
-                if (seconds <= 30.0) return 4;
-                if (seconds <= 34.0) return 3;
-                if (seconds <= 40.0) return 2;
-                return 1;
-            } else if (name.contains("thread trimming") || name.contains("trimming")) {
-                if (seconds <= 32.0) return 5;
-                if (seconds <= 35.0) return 4;
-                if (seconds <= 40.0) return 3;
-                if (seconds <= 46.0) return 2;
-                return 1;
-            } else if (name.contains("initial inspection")) {
-                if (seconds <= 38.0) return 5;
-                if (seconds <= 42.0) return 4;
-                if (seconds <= 48.0) return 3;
-                if (seconds <= 55.0) return 2;
-                return 1;
-            } else if (name.contains("spot cleaning") || name.contains("cleaning")) {
-                if (seconds <= 45.0) return 5;
-                if (seconds <= 50.0) return 4;
-                if (seconds <= 57.0) return 3;
-                if (seconds <= 65.0) return 2;
-                return 1;
-            } else if (name.contains("final measurement") || name.contains("measurement")) {
-                if (seconds <= 40.0) return 5;
-                if (seconds <= 44.0) return 4;
-                if (seconds <= 50.0) return 3;
-                if (seconds <= 57.0) return 2;
-                return 1;
-            } else if (name.contains("final inspection")) {
-                if (seconds <= 42.0) return 5;
-                if (seconds <= 46.0) return 4;
-                if (seconds <= 52.0) return 3;
-                if (seconds <= 60.0) return 2;
-                return 1;
-            } else if (name.contains("folding")) {
-                if (seconds <= 31.0) return 5;
-                if (seconds <= 34.0) return 4;
-                if (seconds <= 39.0) return 3;
-                if (seconds <= 44.0) return 2;
-                return 1;
-            } else if (name.contains("poly bag") || name.contains("poly")) {
-                if (seconds <= 35.0) return 5;
-                if (seconds <= 38.0) return 4;
-                if (seconds <= 43.0) return 3;
-                if (seconds <= 49.0) return 2;
-                return 1;
-            } else if (name.contains("carton")) {
-                if (seconds <= 42.0) return 5;
-                if (seconds <= 46.0) return 4;
-                if (seconds <= 52.0) return 3;
-                if (seconds <= 60.0) return 2;
-                return 1;
-            }
-        }
-        if (standardSmv != null && standardSmv > 0) {
-            double smvSec = standardSmv * 60;
-            if (seconds <= smvSec * 0.9) return 5;
-            if (seconds <= smvSec * 1.0) return 4;
-            if (seconds <= smvSec * 1.18) return 3;
-            if (seconds <= smvSec * 1.38) return 2;
-            return 1;
-        }
-        if (seconds <= 28.0) return 5;
-        if (seconds <= 35.0) return 4;
-        if (seconds <= 44.0) return 3;
-        if (seconds <= 55.0) return 2;
-        return 1;
+        if (seconds <= 0) return SkillScale.MIN;
+        double smvSecs = standardSmv != null && standardSmv > 0 ? standardSmv * 60.0 : 30.0;
+        return SkillScale.ratingForEfficiency(smvSecs / seconds);
     }
 
     @Transactional
@@ -465,7 +378,7 @@ public class SkillMatrixService {
         r.setOperatorName(sa.getOperator().getName()); r.setEmployeeId(sa.getOperator().getEmployeeId());
         r.setOperationId(sa.getOperation().getId()); r.setOperationName(sa.getOperation().getName());
         r.setOperationCode(sa.getOperation().getOperationCode());
-        int rating = sa.getRating() != null ? sa.getRating() : 3;
+        int rating = sa.getRating() != null ? sa.getRating() : SkillScale.DEFAULT_REQUIRED;
         if (sa.getCycleTimeSeconds() != null && sa.getCycleTimeSeconds() > 0) {
             Double stdSmv = sa.getOperation().getStandardSmv() != null ? sa.getOperation().getStandardSmv().doubleValue() : null;
             rating = cycleTimeToRating(sa.getCycleTimeSeconds(), sa.getOperation().getName(), stdSmv);

@@ -9,7 +9,11 @@ import { OperatorForm } from "../../features/operators/OperatorForm";
 import { operatorsApi, type Operator } from "../../features/operators/api";
 import { Button } from "../../components/ui/Button";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { OPERATORS_TEMPLATE } from "../../utils/importTemplates";
 import { notifyMasterDataUpdated } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
+import { RowErrors, excelDateToIso } from "../../utils/importParsing";
+import { getErrorMessage } from "../../lib/api";
 
 export function OperatorsPage() {
   const [operators, setOperators] = useState<Operator[]>([]);
@@ -80,28 +84,54 @@ export function OperatorsPage() {
       "Joining Date": op.joiningDate,
       "Status": op.active ? "Active" : "Inactive"
     }));
-    exportToExcel(data, `Operators_Master_${new Date().toISOString().split("T")[0]}`);
+    exportToExcel(data, `Operators_Master_${toLocalDateString()}`);
   };
 
   const handleImport = async (file: File) => {
+    let data: Record<string, unknown>[];
     try {
-      const data = await readFromExcel<any>(file);
-      for (const row of data) {
-        await operatorsApi.createOperator({
-          employeeId: row["Employee ID"],
-          name: row["Name"],
-          age: parseInt(row["Age"]) || 0,
-          gender: row["Gender"] || "OTHER",
-          department: row["Department"] || "Sewing",
-          joiningDate: row["Joining Date"] || new Date().toISOString().split("T")[0],
-          active: row["Status"] === "Active"
-        });
-      }
-      await loadOperators();
-      alert("Operators imported successfully!");
+      data = await readFromExcel<Record<string, unknown>>(file);
     } catch (err) {
-      console.error(err);
-      alert("Failed to import operators. Please verify Excel column headers.");
+      alert(`Could not read the file: ${getErrorMessage(err)}`);
+      return;
+    }
+
+    // Validate every row first: nothing is imported unless the whole file is valid
+    const errors = new RowErrors();
+    const genders: Record<string, "Male" | "Female" | "Other"> = { m: "Male", male: "Male", f: "Female", female: "Female", o: "Other", other: "Other" };
+    const rows = data.map((row, i) => {
+      const employeeId = String(row["Employee ID"] ?? "").trim();
+      const name = String(row["Name"] ?? "").trim();
+      const rawAge = String(row["Age"] ?? "").trim();
+      const age = rawAge === "" ? null : Number(rawAge);
+      const gender = genders[String(row["Gender"] ?? "other").trim().toLowerCase()];
+      const joiningDate = row["Joining Date"] ? excelDateToIso(row["Joining Date"]) : toLocalDateString();
+      if (!employeeId) errors.add(i, "Employee ID is required");
+      if (!name) errors.add(i, "Name is required");
+      if (age !== null && (!Number.isInteger(age) || age < 16 || age > 70)) errors.add(i, `Age, if given, must be a whole number from 16 to 70 (got "${row["Age"] ?? ""}")`);
+      if (!gender) errors.add(i, `Gender must be Male, Female or Other (got "${row["Gender"]}")`);
+      if (!joiningDate) errors.add(i, `Joining Date is not a valid date (got "${row["Joining Date"]}")`);
+      return {
+        employeeId, name, age, gender: gender ?? "Other",
+        department: String(row["Department"] ?? "").trim() || "Sewing",
+        joiningDate: joiningDate ?? "",
+        active: String(row["Status"] ?? "Active").trim().toLowerCase() !== "inactive",
+      };
+    });
+    if (rows.length === 0) {
+      alert("The file has no data rows.");
+      return;
+    }
+    if (!errors.ok) {
+      alert(`Nothing was imported. Fix these rows and try again:\n\n${errors.summary()}`);
+      return;
+    }
+    try {
+      await operatorsApi.createOperatorsBatch(rows);
+      await loadOperators();
+      alert(`${rows.length} operators imported successfully.`);
+    } catch (err) {
+      alert(`Nothing was imported: ${getErrorMessage(err)}`);
     }
   };
 
@@ -112,6 +142,7 @@ export function OperatorsPage() {
         showImportExport={true}
         onExport={handleExport}
         onImport={handleImport}
+        importTemplate={OPERATORS_TEMPLATE}
         eyebrow="Workforce Directory"
         title="Sewing Operators Master"
 

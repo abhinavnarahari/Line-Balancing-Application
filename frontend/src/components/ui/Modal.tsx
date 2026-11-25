@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
@@ -12,10 +12,61 @@ export interface ModalProps {
   children: React.ReactNode;
   className?: string;
   maxWidth?: string;
+  /** Stacking layer; raise it for dialogs that can open on top of other overlays. */
+  zIndexClass?: string;
 }
 
-export function Modal({ isOpen, onClose, title, subtitle, children, className, maxWidth }: ModalProps) {
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+export function Modal({ isOpen, onClose, title, subtitle, children, className, maxWidth, zIndexClass = "z-[9999]" }: ModalProps) {
   const [mounted, setMounted] = useState(false);
+  const titleId = useId();
+  const subtitleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
+  // Accessibility: move focus into the dialog, trap Tab inside it, close on Escape, restore focus afterwards.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const focusTimer = window.setTimeout(() => {
+      const dialog = dialogRef.current;
+      if (!dialog || dialog.contains(document.activeElement)) return;
+      const first = dialog.querySelector<HTMLElement>('input:not([disabled]):not([type="hidden"]), select, textarea') ??
+        dialog.querySelector<HTMLElement>(FOCUSABLE);
+      (first ?? dialog).focus();
+    }, 50);
+    const onKeyDown = (e: KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onCloseRef.current();
+      } else if (e.key === "Tab") {
+        const items = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null);
+        if (items.length === 0) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     setMounted(true);
@@ -37,7 +88,7 @@ export function Modal({ isOpen, onClose, title, subtitle, children, className, m
   const content = (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+        <div className={cn("fixed inset-0 flex items-center justify-center p-3 sm:p-6 overflow-y-auto", zIndexClass)}>
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -59,18 +110,25 @@ export function Modal({ isOpen, onClose, title, subtitle, children, className, m
               maxWidth || className || "max-w-3xl"
             )}
             onClick={e => e.stopPropagation()}
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            aria-describedby={subtitle ? subtitleId : undefined}
+            tabIndex={-1}
           >
             {/* Modal Header */}
             <div className="px-6 py-4.5 border-b border-[#E2E8F0] bg-white flex items-center justify-between shrink-0">
               <div className="space-y-0.5">
-                <h2 className="text-base font-bold text-[#221912]">{title}</h2>
-                {subtitle && <p className="text-xs font-medium text-[#8C7E6E]">{subtitle}</p>}
+                <h2 id={titleId} className="text-base font-bold text-[#221912]">{title}</h2>
+                {subtitle && <p id={subtitleId} className="text-xs font-medium text-[#8C7E6E]">{subtitle}</p>}
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="text-[#8C7E6E] hover:text-[#221912] p-1.5 rounded-xl hover:bg-[#F6F1E8] transition-colors cursor-pointer focus:outline-none"
+                className="text-[#8C7E6E] hover:text-[#221912] p-1.5 rounded-xl hover:bg-[#F6F1E8] transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#9C5B3C]"
                 title="Close"
+                aria-label="Close dialog"
               >
                 <X className="h-5 w-5" />
               </button>

@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -83,15 +84,62 @@ public class OperationBulletinService {
         log.info("Creating bulletin '{}' v{} rev{} with {} lines, totalSMV={}",
                 bulletin.getBulletinCode(), bulletin.getVersion(), bulletin.getRevisionNumber(),
                 bulletin.getLines().size(), bulletin.getTotalSmv());
-        return toResponse(bulletinRepository.save(bulletin));
+        return toResponse(bulletinRepository.saveAndFlush(bulletin)); // flush so rowVersion in the response is current
+    }
+
+    /** Allowed status changes (change control for operation bulletins). */
+    private static final Map<OperationBulletin.Status, Set<OperationBulletin.Status>> TRANSITIONS = Map.of(
+            OperationBulletin.Status.DRAFT, EnumSet.of(OperationBulletin.Status.UNDER_REVIEW, OperationBulletin.Status.APPROVED, OperationBulletin.Status.ARCHIVED),
+            OperationBulletin.Status.UNDER_REVIEW, EnumSet.of(OperationBulletin.Status.DRAFT, OperationBulletin.Status.APPROVED, OperationBulletin.Status.ARCHIVED),
+            OperationBulletin.Status.APPROVED, EnumSet.of(OperationBulletin.Status.RELEASED, OperationBulletin.Status.PUBLISHED, OperationBulletin.Status.DRAFT, OperationBulletin.Status.ARCHIVED),
+            OperationBulletin.Status.RELEASED, EnumSet.of(OperationBulletin.Status.PUBLISHED, OperationBulletin.Status.ARCHIVED, OperationBulletin.Status.OBSOLETE),
+            OperationBulletin.Status.PUBLISHED, EnumSet.of(OperationBulletin.Status.RELEASED, OperationBulletin.Status.ARCHIVED, OperationBulletin.Status.OBSOLETE),
+            OperationBulletin.Status.ARCHIVED, EnumSet.noneOf(OperationBulletin.Status.class),
+            OperationBulletin.Status.OBSOLETE, EnumSet.noneOf(OperationBulletin.Status.class));
+
+    /** Only these statuses allow changing operations/SMVs; later stages are changed through a revision. */
+    private static final Set<OperationBulletin.Status> EDITABLE = EnumSet.of(
+            OperationBulletin.Status.DRAFT, OperationBulletin.Status.UNDER_REVIEW);
+
+    private static void assertTransition(OperationBulletin bulletin, OperationBulletin.Status target) {
+        OperationBulletin.Status current = bulletin.getStatus();
+        if (current == target) {
+            return;
+        }
+        if (!TRANSITIONS.getOrDefault(current, Set.of()).contains(target)) {
+            String hint = target == OperationBulletin.Status.RELEASED || target == OperationBulletin.Status.PUBLISHED
+                    ? " Approve it first." : "";
+            throw new BusinessRuleException("Bulletin '" + bulletin.getBulletinCode() + "' cannot move from "
+                    + current + " to " + target + "." + hint);
+        }
+    }
+
+    private static void applyStatus(OperationBulletin bulletin, OperationBulletin.Status newStatus, String user) {
+        assertTransition(bulletin, newStatus);
+        if (bulletin.getStatus() == newStatus) {
+            return;
+        }
+        bulletin.setStatus(newStatus);
+        if (newStatus == OperationBulletin.Status.APPROVED) {
+            bulletin.setApprovedBy(user != null ? user : "IE Manager");
+            bulletin.setApprovedAt(java.time.LocalDateTime.now());
+        } else if (newStatus == OperationBulletin.Status.RELEASED || newStatus == OperationBulletin.Status.PUBLISHED) {
+            bulletin.setReleasedBy(user != null ? user : "Plant IE Head");
+            bulletin.setReleasedAt(java.time.LocalDateTime.now());
+        }
     }
 
     @Transactional
     public BulletinResponse update(Long id, BulletinRequest request) {
         OperationBulletin bulletin = findOrThrow(id);
+        assertNotStale(request.getRowVersion(), bulletin.getRowVersion(), "Bulletin '" + bulletin.getBulletinCode() + "'");
+        if (!EDITABLE.contains(bulletin.getStatus())) {
+            throw new BusinessRuleException("Bulletin '" + bulletin.getBulletinCode() + "' is " + bulletin.getStatus()
+                    + " and locked for editing. Create a revision to change it.");
+        }
 
-        if (bulletinRepository.existsByBulletinCodeIgnoreCaseAndVersionAndIdNot(
-                request.getBulletinCode(), request.getVersion(), id)) {
+        if (bulletinRepository.existsByBulletinCodeIgnoreCaseAndVersionAndRevisionNumberAndIdNot(
+                request.getBulletinCode(), request.getVersion(), bulletin.getRevisionNumber(), id)) {
             throw new BusinessRuleException(
                     "Bulletin '" + request.getBulletinCode() + "' version " + request.getVersion() + " already exists.");
         }
@@ -107,7 +155,7 @@ public class OperationBulletinService {
             bulletin.setRevisionNumber(request.getRevisionNumber());
         }
         if (request.getStatus() != null) {
-            bulletin.setStatus(request.getStatus());
+            applyStatus(bulletin, request.getStatus(), null);
         }
         bulletin.setEffectiveFrom(request.getEffectiveFrom());
         bulletin.setEffectiveTo(request.getEffectiveTo());
@@ -120,21 +168,14 @@ public class OperationBulletinService {
         updateLinesInPlace(bulletin, request.getLines());
         bulletin.setTotalSmv(computeTotalSmv(bulletin.getLines()));
 
-        return toResponse(bulletinRepository.save(bulletin));
+        return toResponse(bulletinRepository.saveAndFlush(bulletin)); // flush so rowVersion in the response is current
     }
 
     @Transactional
     public BulletinResponse updateStatus(Long id, OperationBulletin.Status newStatus, String user) {
         OperationBulletin bulletin = findOrThrow(id);
-        bulletin.setStatus(newStatus);
-        if (newStatus == OperationBulletin.Status.APPROVED) {
-            bulletin.setApprovedBy(user != null ? user : "IE Manager");
-            bulletin.setApprovedAt(java.time.LocalDateTime.now());
-        } else if (newStatus == OperationBulletin.Status.RELEASED || newStatus == OperationBulletin.Status.PUBLISHED) {
-            bulletin.setReleasedBy(user != null ? user : "Plant IE Head");
-            bulletin.setReleasedAt(java.time.LocalDateTime.now());
-        }
-        return toResponse(bulletinRepository.save(bulletin));
+        applyStatus(bulletin, newStatus, user);
+        return toResponse(bulletinRepository.saveAndFlush(bulletin)); // flush so rowVersion in the response is current
     }
 
     @Transactional
@@ -188,7 +229,17 @@ public class OperationBulletinService {
     @Transactional
     public void delete(Long id) {
         OperationBulletin bulletin = findOrThrow(id);
-        bulletinRepository.delete(bulletin);
+        if (bulletin.getStatus() == OperationBulletin.Status.RELEASED || bulletin.getStatus() == OperationBulletin.Status.PUBLISHED) {
+            throw new BusinessRuleException("Bulletin '" + bulletin.getBulletinCode() + "' is " + bulletin.getStatus()
+                    + " to the line and cannot be deleted. Archive it instead.");
+        }
+        try {
+            bulletinRepository.delete(bulletin);
+            bulletinRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new BusinessRuleException("Bulletin '" + bulletin.getBulletinCode()
+                    + "' is used by line plans or capacity plans and cannot be deleted. Archive it instead.");
+        }
         log.info("Deleted operation bulletin '{}' (id={})", bulletin.getBulletinCode(), id);
     }
 
@@ -403,6 +454,13 @@ public class OperationBulletinService {
                 .orElseThrow(() -> new ResourceNotFoundException("OperationBulletin", "id", id));
     }
 
+    private static void assertNotStale(Long requestVersion, Long currentVersion, String what) {
+        if (requestVersion != null && !requestVersion.equals(currentVersion)) {
+            throw new BusinessRuleException(what + " was changed by someone else since you opened it. "
+                    + "Reload it and apply your changes again.");
+        }
+    }
+
     private BulletinResponse toResponse(OperationBulletin b) {
         BulletinResponse resp = new BulletinResponse();
         resp.setId(b.getId());
@@ -413,6 +471,7 @@ public class OperationBulletinService {
         resp.setRevisionNumber(b.getRevisionNumber() != null ? b.getRevisionNumber() : 1);
         resp.setParentBulletinId(b.getParentBulletin() != null ? b.getParentBulletin().getId() : null);
         resp.setStatus(b.getStatus());
+        resp.setRowVersion(b.getRowVersion());
         resp.setApprovedBy(b.getApprovedBy());
         resp.setApprovedAt(b.getApprovedAt());
         resp.setReleasedBy(b.getReleasedBy());

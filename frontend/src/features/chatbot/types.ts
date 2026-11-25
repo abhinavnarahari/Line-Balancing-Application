@@ -58,3 +58,10 @@ export type FeedbackRequest = {
   helpful: boolean;
   comment?: string;
 };
+
+/** Starter-question group from GET /api/chatbot/suggestions. */
+export type PromptCategory = {
+  id: string;
+  label: string;
+  prompts: string[];
+};

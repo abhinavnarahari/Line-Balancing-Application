@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Sparkles, Plus, History, Trash2, ChevronRight, MessageSquare, ArrowLeft, Maximize2, Minimize2, Compass, Target, Star, Users, Layers, RotateCcw } from "lucide-react";
+import { X, Sparkles, Plus, History, Trash2, ChevronRight, MessageSquare, ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
 import type { ChatMessage, ChatConversation, ChatContext } from "./types";
 import { sendChatMessage, getChatConversations, getChatConversationById, deleteChatConversation } from "./api";
 import { ChatMessageList } from "./ChatMessageList";
@@ -10,15 +10,6 @@ interface ChatbotDrawerProps {
   onClose: () => void;
   context?: ChatContext;
 }
-
-const QUICK_TOPICS = [
-  { label: "🧭 App Guide", query: "How does this application work?" },
-  { label: "⚡ Balance Line", query: "How do I balance a line in this app?" },
-  { label: "⭐ Skill Matrix", query: "How does the 1–5 Skill Matrix work?" },
-  { label: "👥 Add Operator", query: "How do I add an operator?" },
-  { label: "📋 Bulletins", query: "Show details of OB-POLO-800" },
-  { label: "📊 Dashboards", query: "Tell me about the dashboard" },
-];
 
 export const ChatbotDrawer: React.FC<ChatbotDrawerProps> = ({ isOpen, onClose, context }) => {
   const [activeTab, setActiveTab] = useState<"chat" | "history">("chat");
@@ -86,7 +77,7 @@ export const ChatbotDrawer: React.FC<ChatbotDrawerProps> = ({ isOpen, onClose, c
         id: Date.now() + 1,
         conversationId: activeConversationId || 0,
         sender: "ASSISTANT",
-        messageText: "⚠️ Sorry, I encountered an issue retrieving data from SewNexa. Please try again or check the server status.",
+        messageText: "Sorry, I could not reach the SewNexa server. Please try again in a moment.",
         dataSource: "APPLICATION_DATA",
         dataAvailable: false,
         createdAt: new Date().toISOString(),
@@ -142,6 +133,9 @@ export const ChatbotDrawer: React.FC<ChatbotDrawerProps> = ({ isOpen, onClose, c
       />
 
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sewnexa-ai-title"
         className={`fixed inset-y-0 right-0 z-50 bg-white border-l border-slate-200 shadow-2xl flex flex-col font-sans transition-all duration-300 ease-in-out ${
           isExpanded
             ? "w-full sm:w-[840px] md:w-[980px] lg:w-[1120px] max-w-[96vw]"
@@ -149,97 +143,46 @@ export const ChatbotDrawer: React.FC<ChatbotDrawerProps> = ({ isOpen, onClose, c
         }`}
       >
         {/* Header */}
-        <header className="h-16 border-b border-slate-200 bg-white px-4 flex items-center justify-between shrink-0 shadow-2xs">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-linear-to-br from-amber-600 to-amber-800 text-white flex items-center justify-center shadow-xs ring-2 ring-amber-500/20">
-              <Sparkles className="h-5 w-5" />
+        <header className="h-14 border-b border-slate-200 bg-white px-4 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="h-8 w-8 rounded-lg bg-[#9C5B3C] text-white flex items-center justify-center shrink-0">
+              <Sparkles className="h-4 w-4" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-extrabold text-slate-900 tracking-tight">SewNexa AI</span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold flex items-center gap-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
-                  ONLINE
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-500 font-medium">Garment Industrial Engineering Copilot</div>
+            <div className="min-w-0">
+              <h2 id="sewnexa-ai-title" className="text-sm font-bold text-slate-900 leading-tight">
+                SewNexa AI
+              </h2>
+              <p className="text-[11px] text-slate-500 leading-tight truncate">Answers from your factory data</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* Expand / Collapse Width Toggle */}
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="p-2 text-slate-600 hover:text-amber-800 hover:bg-slate-100 rounded-xl border border-transparent hover:border-slate-200 transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
-              title={isExpanded ? "Collapse to standard width" : "Expand to wide view for tables"}
-            >
-              {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              <span className="hidden sm:inline">{isExpanded ? "Collapse" : "Expand"}</span>
-            </button>
-
-            {/* New Chat Button */}
-            <button
-              onClick={handleStartNewChat}
-              className="p-2 text-slate-600 hover:text-amber-800 hover:bg-slate-100 rounded-xl border border-transparent hover:border-slate-200 transition-all cursor-pointer flex items-center gap-1 text-xs font-semibold"
-              title="Start new conversation"
-            >
+          <div className="flex items-center gap-0.5">
+            <HeaderButton label="New chat" onClick={handleStartNewChat}>
               <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">New</span>
-            </button>
-
-            {/* History Toggle Button */}
-            <button
+            </HeaderButton>
+            <HeaderButton
+              label={activeTab === "history" ? "Back to chat" : "Chat history"}
+              active={activeTab === "history"}
               onClick={() => setActiveTab(activeTab === "chat" ? "history" : "chat")}
-              className={`p-2 rounded-xl border transition-all cursor-pointer relative flex items-center gap-1 text-xs font-semibold ${
-                activeTab === "history"
-                  ? "bg-slate-100 text-amber-800 border-slate-300 shadow-2xs"
-                  : "text-slate-600 hover:text-slate-900 border-transparent hover:bg-slate-100 hover:border-slate-200"
-              }`}
-              title="View past conversation threads"
             >
               <History className="h-4 w-4" />
-              {conversations.length > 0 && (
-                <span className="text-[10px] font-mono px-1.5 rounded-full bg-amber-100 text-amber-800 font-bold">
-                  {conversations.length}
-                </span>
-              )}
-            </button>
-
-            <div className="h-4 w-px bg-slate-200 mx-0.5" />
-
-            {/* Close Button */}
-            <button
-              onClick={onClose}
-              className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl border border-transparent hover:border-slate-200 transition-all cursor-pointer"
-              title="Close SewNexa AI (Esc)"
+            </HeaderButton>
+            <HeaderButton
+              label={isExpanded ? "Narrow view" : "Wide view"}
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="hidden sm:flex"
             >
+              {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </HeaderButton>
+            <HeaderButton label="Close (Esc)" onClick={onClose}>
               <X className="h-4 w-4" />
-            </button>
+            </HeaderButton>
           </div>
         </header>
 
-        {/* Quick Topics Pills Bar (Visible on Active Chat) */}
-        {activeTab === "chat" && (
-          <div className="bg-slate-50/80 border-b border-slate-200/80 px-3 py-1.5 flex items-center gap-1.5 overflow-x-auto custom-scrollbar shrink-0">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-0.5">
-              Quick:
-            </span>
-            {QUICK_TOPICS.map((topic, tIdx) => (
-              <button
-                key={tIdx}
-                type="button"
-                onClick={() => handleSendMessage(topic.query)}
-                className="px-2.5 py-1 rounded-lg bg-white hover:bg-amber-50 hover:border-amber-300 text-slate-700 hover:text-amber-900 border border-slate-200 text-[11px] font-semibold transition-all shrink-0 cursor-pointer shadow-2xs"
-              >
-                {topic.label}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Main Body */}
         {activeTab === "chat" ? (
-          <div className="flex-1 flex flex-col min-h-0 bg-slate-50/30">
+          <div className="flex-1 flex flex-col min-h-0 bg-[#FAFAF9]">
             <ChatMessageList
               messages={messages}
               isLoading={isLoading}
@@ -261,7 +204,7 @@ export const ChatbotDrawer: React.FC<ChatbotDrawerProps> = ({ isOpen, onClose, c
                 className="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer transition-colors"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                <span>Back to Active Chat</span>
+                <span>Back to chat</span>
               </button>
 
               <button
@@ -269,14 +212,14 @@ export const ChatbotDrawer: React.FC<ChatbotDrawerProps> = ({ isOpen, onClose, c
                 className="text-xs font-bold text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
               >
                 <Plus className="h-3.5 w-3.5" />
-                <span>New Conversation</span>
+                <span>New chat</span>
               </button>
             </div>
 
             {conversations.length === 0 ? (
               <div className="py-16 text-center text-xs text-slate-500 space-y-2">
                 <MessageSquare className="h-8 w-8 text-slate-300 mx-auto" />
-                <div className="font-semibold text-slate-600">No past conversation threads yet</div>
+                <div className="font-semibold text-slate-600">No past conversations yet</div>
                 <div className="text-[11px] text-slate-400">Questions you ask will be saved here automatically.</div>
               </div>
             ) : (
@@ -328,3 +271,26 @@ export const ChatbotDrawer: React.FC<ChatbotDrawerProps> = ({ isOpen, onClose, c
     </>
   );
 };
+
+interface HeaderButtonProps {
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}
+
+const HeaderButton: React.FC<HeaderButtonProps> = ({ label, onClick, active, className = "", children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={label}
+    aria-label={label}
+    aria-pressed={active}
+    className={`h-8 w-8 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
+      active ? "bg-[#F6F1E8] text-[#9C5B3C]" : "text-slate-500 hover:text-slate-900 hover:bg-slate-100"
+    } ${className}`}
+  >
+    {children}
+  </button>
+);

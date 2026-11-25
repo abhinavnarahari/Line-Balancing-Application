@@ -14,6 +14,7 @@ public class BulletinResponse {
     private String bulletinCode;
     private String name;
     private String description;
+    private Long rowVersion;
     private Integer version;
     private Integer revisionNumber;
     private Long parentBulletinId;

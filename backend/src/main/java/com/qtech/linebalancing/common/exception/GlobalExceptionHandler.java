@@ -3,16 +3,28 @@ package com.qtech.linebalancing.common.exception;
 import com.qtech.linebalancing.common.response.ApiResponse;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.ErrorResponse;
+import org.springframework.web.HttpMediaTypeException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Centralised exception handler for all REST controllers.
@@ -59,24 +71,93 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationErrors(
             MethodArgumentNotValidException ex) {
-        Map<String, String> errors = new HashMap<>();
+        Map<String, String> errors = new LinkedHashMap<>();
         ex.getBindingResult().getAllErrors().forEach(error -> {
             String fieldName = error instanceof FieldError fe ? fe.getField() : error.getObjectName();
-            errors.put(fieldName, error.getDefaultMessage());
+            errors.putIfAbsent(fieldName, error.getDefaultMessage());
         });
         log.warn("Validation failed: {}", errors);
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error("Validation failed"));
+                .body(ApiResponse.error("Validation failed: " + describe(errors), errors));
     }
 
     /**
      * Handle 400 — Constraint violation (e.g., @Min, @Max on path/query params).
      */
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException ex) {
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleConstraintViolation(ConstraintViolationException ex) {
         log.warn("Constraint violation: {}", ex.getMessage());
+        // Use only the leaf property name so internal method/parameter paths are not exposed.
+        Map<String, String> errors = new LinkedHashMap<>();
+        ex.getConstraintViolations().forEach(v -> {
+            String path = v.getPropertyPath().toString();
+            String field = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1) : path;
+            errors.putIfAbsent(field, v.getMessage());
+        });
         return ResponseEntity.badRequest()
-                .body(ApiResponse.error(ex.getMessage()));
+                .body(ApiResponse.error("Validation failed: " + describe(errors), errors));
+    }
+
+    /**
+     * Handle 400 — Method-level validation (e.g. List<@Valid T> request bodies on @Validated controllers).
+     */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handleMethodValidation(HandlerMethodValidationException ex) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        ex.getAllErrors().forEach(error -> {
+            String field = error instanceof FieldError fe ? fe.getField() : "request";
+            errors.putIfAbsent(field, error.getDefaultMessage());
+        });
+        log.warn("Method validation failed: {}", errors);
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error("Validation failed: " + describe(errors), errors));
+    }
+
+    /**
+     * Handle 400 — Malformed JSON body or a path/query parameter of the wrong type (e.g. /api/orders/abc).
+     */
+    @ExceptionHandler({HttpMessageNotReadableException.class, TypeMismatchException.class})
+    public ResponseEntity<ApiResponse<Void>> handleBadRequest(Exception ex) {
+        log.warn("Bad request: {}", ex.getMessage());
+        String message = ex instanceof TypeMismatchException tme && tme.getPropertyName() != null
+                ? "Invalid value for parameter '" + tme.getPropertyName() + "'."
+                : "Malformed request body.";
+        return ResponseEntity.badRequest().body(ApiResponse.error(message));
+    }
+
+    /**
+     * Spring MVC exceptions that already know their HTTP status: unknown URL (404), wrong method (405),
+     * missing parameter (400), unsupported media type (415), upload too large (413), ResponseStatusException.
+     */
+    @ExceptionHandler({
+            NoResourceFoundException.class,
+            NoHandlerFoundException.class,
+            HttpRequestMethodNotSupportedException.class,
+            HttpMediaTypeException.class,
+            ServletRequestBindingException.class,
+            MaxUploadSizeExceededException.class,
+            ResponseStatusException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleSpringErrorResponse(Exception ex) {
+        ErrorResponse errorResponse = (ErrorResponse) ex;
+        HttpStatus status = HttpStatus.resolve(errorResponse.getStatusCode().value());
+        if (status == null) {
+            status = HttpStatus.BAD_REQUEST;
+        }
+        log.warn("{} {}: {}", status.value(), ex.getClass().getSimpleName(), ex.getMessage());
+        String detail = errorResponse.getBody().getDetail();
+        return ResponseEntity.status(status)
+                .body(ApiResponse.error(detail != null ? detail : status.getReasonPhrase()));
+    }
+
+    /**
+     * Handle 409 — Two saves of the same record raced (JPA @Version check).
+     */
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(Exception ex) {
+        log.warn("Optimistic lock conflict: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("This record was changed by someone else at the same time. Reload it and try again."));
     }
 
     /**
@@ -92,6 +173,12 @@ public class GlobalExceptionHandler {
         }
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("Database constraint violation. Please check your input."));
+    }
+
+    private static String describe(Map<String, String> errors) {
+        return errors.entrySet().stream()
+                .map(e -> e.getKey() + " " + e.getValue())
+                .collect(Collectors.joining("; "));
     }
 
     /**

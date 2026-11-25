@@ -15,13 +15,14 @@ import {
   Eye, 
   Sliders,
   X,
-  Download,
-  Upload,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  GitBranch
 } from "lucide-react";
 import { motion } from "framer-motion";
 import * as XLSX from "xlsx";
+import { saveWorkbook } from "../../utils/excel";
+import { BULLETINS_TEMPLATE } from "../../utils/importTemplates";
 
 import { Button } from "../../components/ui/Button";
 import { PageHeader, DataCard, EmptyState, SkeletonTable } from "../../components/ui/PremiumUI";
@@ -35,13 +36,15 @@ import {
   type ImportResult 
 } from "../../features/bulletins/bulletinExcel";
 
-import { bulletinsApi, type OperationBulletin, type CreateBulletinDTO, type BulletinStatus } from "../../features/bulletins/api";
+import { bulletinsApi, isBulletinEditable, type OperationBulletin, type CreateBulletinDTO, type BulletinStatus } from "../../features/bulletins/api";
+import { getErrorMessage } from "../../lib/api";
 import { BulletinForm } from "../../features/bulletins/BulletinForm";
 import { BulletinDetailModal } from "../../features/bulletins/BulletinDetailModal";
 
 import { stylesApi, type Style } from "../../features/styles/api";
 import { operationsApi, type Operation } from "../../features/operations/api";
 import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
 
 export function BulletinsPage() {
   const [bulletins, setBulletins] = useState<OperationBulletin[]>([]);
@@ -164,7 +167,7 @@ export function BulletinsPage() {
   const handleFormSubmit = async (data: CreateBulletinDTO) => {
     try {
       if (editingBulletin && editingBulletin.id) {
-        await bulletinsApi.updateBulletin(editingBulletin.id, data);
+        await bulletinsApi.updateBulletin(editingBulletin.id, { ...data, rowVersion: editingBulletin.rowVersion });
         showToast(`✓ Operation Bulletin '${data.bulletinCode}' updated successfully`);
       } else {
         await bulletinsApi.createBulletin(data);
@@ -177,6 +180,26 @@ export function BulletinsPage() {
     } catch (err: any) {
       console.error("Failed to save bulletin:", err);
       showToast(`❌ ${err?.response?.data?.message || err?.message || "Failed to save operation bulletin"}`);
+    }
+  };
+
+  // Edit in place, or — for approved/released bulletins, which are locked — create a DRAFT revision and edit that
+  const handleEditOrRevise = async (bulletin: OperationBulletin) => {
+    if (isBulletinEditable(bulletin.status)) {
+      setEditingBulletin(bulletin);
+      setIsFormOpen(true);
+      return;
+    }
+    if (!bulletin.id) return;
+    try {
+      const revision = await bulletinsApi.createRevision(bulletin.id);
+      showToast(`✓ Revision ${String(revision.revisionNumber ?? "").padStart(2, "0")} of '${bulletin.bulletinCode}' created as DRAFT`);
+      notifyMasterDataUpdated("bulletin");
+      await loadData();
+      setEditingBulletin(revision);
+      setIsFormOpen(true);
+    } catch (err) {
+      showToast(`❌ ${getErrorMessage(err, "Failed to create revision")}`);
     }
   };
 
@@ -227,10 +250,11 @@ export function BulletinsPage() {
   };
 
   // 1. Export All Detailed (All 25 fields across bulletin header & lines, SMV in seconds)
-  const handleExportAllDetailed = () => {
+  const handleExportAllDetailed = async () => {
     const listToExport = filteredBulletins.length > 0 ? filteredBulletins : bulletins;
-    exportBulletinsDetailed(listToExport, `Operation_Bulletins_Full_${new Date().toISOString().split("T")[0]}`);
-    showToast(`✓ Exported ${listToExport.length} bulletin(s) with all 25 fields`);
+    if (await exportBulletinsDetailed(listToExport, `Operation_Bulletins_Full_${toLocalDateString()}`)) {
+      showToast(`✓ Exported ${listToExport.length} bulletin(s)`);
+    }
   };
 
   // 2. Download Pre-configured Sample Template
@@ -276,7 +300,7 @@ export function BulletinsPage() {
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Bulletins Library");
-    XLSX.writeFile(wb, `Operation_Bulletins_Summary_${new Date().toISOString().split("T")[0]}.xlsx`);
+    void saveWorkbook(wb, `Operation_Bulletins_Summary_${toLocalDateString()}.xlsx`);
   };
 
   return (
@@ -296,18 +320,10 @@ export function BulletinsPage() {
         showImportExport={true}
         onExport={handleExportAllDetailed}
         onImport={handleImportExcel}
+        importTemplate={BULLETINS_TEMPLATE}
+        onDownloadTemplate={handleDownloadTemplate}
         action={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleDownloadTemplate}
-              className="h-9 px-3 rounded-xl border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
-              title="Download standard Excel import template with all 25 fields"
-            >
-              <Download className="w-3.5 h-3.5 text-[#9C5B3C]" />
-              <span>Template</span>
-            </button>
-
             <button
               type="button"
               onClick={handleExportAllExcel}
@@ -652,14 +668,12 @@ export function BulletinsPage() {
 
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditingBulletin(bulletin);
-                              setIsFormOpen(true);
-                            }}
+                            onClick={() => handleEditOrRevise(bulletin)}
                             className="p-1.5 rounded-lg text-slate-500 hover:text-[#9C5B3C] hover:bg-[#F6F1E8] transition-colors cursor-pointer"
-                            title="Edit Bulletin"
+                            title={isBulletinEditable(bulletin.status) ? "Edit Bulletin" : "Locked — create a revision to change it"}
+                            aria-label={isBulletinEditable(bulletin.status) ? "Edit Bulletin" : "Create revision"}
                           >
-                            <Edit2 className="w-4 h-4" />
+                            {isBulletinEditable(bulletin.status) ? <Edit2 className="w-4 h-4" /> : <GitBranch className="w-4 h-4" />}
                           </button>
 
                           <button
@@ -735,8 +749,7 @@ export function BulletinsPage() {
         onClose={() => setViewingBulletin(null)}
         onEdit={(b) => {
           setViewingBulletin(null);
-          setEditingBulletin(b);
-          setIsFormOpen(true);
+          handleEditOrRevise(b);
         }}
         onClone={(b) => {
           setViewingBulletin(null);

@@ -1,5 +1,6 @@
 package com.qtech.linebalancing.hourly.service;
 
+import com.qtech.linebalancing.common.exception.BusinessRuleException;
 import com.qtech.linebalancing.common.exception.ResourceNotFoundException;
 import com.qtech.linebalancing.hourly.dto.HourlyBoardResponse;
 import com.qtech.linebalancing.hourly.dto.HourlyBoardResponse.HourCell;
@@ -22,6 +23,7 @@ import com.qtech.linebalancing.order.repository.OrderRepository;
 import com.qtech.linebalancing.shift.entity.Shift;
 import com.qtech.linebalancing.shift.repository.ShiftRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +34,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -46,13 +49,16 @@ public class HourlyProductionService {
     private final OperationBulletinRepository bulletinRepository;
 
     /**
-     * Build the full operation x hour board for a given line plan or order and date.
-     * If no LinePlan exists for the order, it auto-initializes one from the bulletin/operations
-     * so the manager never encounters an empty or blocked board.
+     * Build the operation x hour board for an existing line plan (by id or order) and date. Read-only:
+     * a different {@code shiftId} only changes the hour columns shown, it is never saved to the plan.
+     * Use {@link #initLinePlan} to create a plan for an order that has none.
      */
-    @Transactional
+    @Transactional(readOnly = true)
     public HourlyBoardResponse buildBoard(Long linePlanId, Long orderId, Long shiftId, LocalDate date) {
-        LinePlan plan = resolveOrInitLinePlan(linePlanId, orderId, shiftId);
+        LinePlan plan = findExistingPlan(linePlanId, orderId);
+        Shift boardShift = (shiftId != null)
+                ? shiftRepository.findById(shiftId).orElse(plan.getShift())
+                : plan.getShift();
 
         LocalDate effectiveDate = date != null ? date : LocalDate.now();
 
@@ -67,8 +73,8 @@ public class HourlyProductionService {
         }
 
         // Determine shift hours from the plan's shift
-        String shiftStart = plan.getShift().getStartTime().toString();
-        String shiftEnd   = plan.getShift().getEndTime().toString();
+        String shiftStart = boardShift.getStartTime().toString();
+        String shiftEnd   = boardShift.getEndTime().toString();
         List<String[]> hourSlots = buildHourSlots(shiftStart, shiftEnd);
         int totalHours = hourSlots.size();
 
@@ -164,7 +170,7 @@ public class HourlyProductionService {
         HourlyBoardResponse resp = new HourlyBoardResponse();
         resp.setLinePlanId(plan.getId());
         resp.setOrderNo(plan.getOrder().getOrderNo());
-        resp.setShiftName(plan.getShift().getShiftName());
+        resp.setShiftName(boardShift.getShiftName());
         resp.setLogDate(effectiveDate.toString());
         resp.setTotalShiftHours(totalHours);
         resp.setShiftStartTime(shiftStart.length() > 5 ? shiftStart.substring(0, 5) : shiftStart);
@@ -178,109 +184,88 @@ public class HourlyProductionService {
         return resp;
     }
 
-    /**
-     * Resolves an existing LinePlan or auto-creates one with active operations & operators.
-     */
-    @Transactional
-    public LinePlan resolveOrInitLinePlan(Long linePlanId, Long orderId, Long shiftId) {
+    private LinePlan findExistingPlan(Long linePlanId, Long orderId) {
         if (linePlanId != null) {
             return linePlanRepository.findById(linePlanId)
                     .orElseThrow(() -> new ResourceNotFoundException("LinePlan", "id", linePlanId));
         }
-
-        final Long targetOrderId;
         if (orderId == null) {
-            // Find first available order
-            List<Order> orders = orderRepository.findAll();
-            if (orders.isEmpty()) {
-                throw new ResourceNotFoundException("No orders available to create line plan");
-            }
-            targetOrderId = orders.get(0).getId();
-        } else {
-            targetOrderId = orderId;
+            throw new IllegalArgumentException("Either linePlanId or orderId is required.");
+        }
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+        return linePlanRepository.findFirstByOrderIdOrderByIdAsc(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("No line plan exists for order "
+                        + order.getOrderNo() + ". Initialise the board or create a plan in Planned Balancing."));
+    }
+
+    /**
+     * Explicitly creates the line plan for an order from the operation bulletin of the order's style
+     * (released/published preferred). Operators are left unassigned for the supervisor to place.
+     * Returns the existing plan unchanged if the order already has one.
+     */
+    @Transactional
+    public LinePlan initLinePlan(Long orderId, Long shiftId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+        Optional<LinePlan> existing = linePlanRepository.findFirstByOrderIdOrderByIdAsc(orderId);
+        if (existing.isPresent()) {
+            return existing.get();
         }
 
-        Order order = orderRepository.findById(targetOrderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", targetOrderId));
-
-        Optional<LinePlan> existingOpt = linePlanRepository.findByOrderId(targetOrderId);
-        if (existingOpt.isPresent() && !existingOpt.get().getAssignments().isEmpty()) {
-            LinePlan plan = existingOpt.get();
-            if (shiftId != null && !plan.getShift().getId().equals(shiftId)) {
-                Shift newShift = shiftRepository.findById(shiftId)
-                        .orElse(plan.getShift());
-                plan.setShift(newShift);
-                return linePlanRepository.save(plan);
-            }
-            return plan;
+        List<BulletinLine> bLines = findBulletinLinesForStyle(order);
+        if (bLines.isEmpty()) {
+            String style = order.getStyle() != null ? order.getStyle().getStyleNo() : "(none)";
+            throw new BusinessRuleException("No operation bulletin with operations is linked to style "
+                    + style + " of order " + order.getOrderNo() + ". Link a bulletin to the style first.");
         }
 
-        Shift shift = (shiftId != null)
-                ? shiftRepository.findById(shiftId).orElse(null)
-                : null;
+        Shift shift = (shiftId != null) ? shiftRepository.findById(shiftId).orElse(null) : null;
         if (shift == null) {
-            List<Shift> shifts = shiftRepository.findByActiveOrderByShiftCodeAsc(true);
-            shift = !shifts.isEmpty() ? shifts.get(0) : shiftRepository.findAll().get(0);
+            shift = shiftRepository.findByActiveOrderByShiftCodeAsc(true).stream().findFirst()
+                    .orElseThrow(() -> new BusinessRuleException("No active shift is configured."));
         }
 
-        LinePlan plan = existingOpt.orElse(new LinePlan());
+        LinePlan plan = new LinePlan();
         plan.setOrder(order);
         plan.setShift(shift);
         plan.setTargetOutput(order.getTotalQuantity() != null && order.getTotalQuantity() > 0 ? order.getTotalQuantity() : 100);
         plan.setAllowance(10);
         plan.setStatus("active");
-
-        List<Operator> activeOperators = operatorRepository.findByActiveOrderByNameAsc(true);
-
-        // 1. Try to populate from Order style's Operation Bulletin
-        List<BulletinLine> bLines = findBulletinLinesForOrder(order);
-        if (!bLines.isEmpty()) {
-            int opIdx = 0;
-            for (BulletinLine bl : bLines) {
-                Operator op = (!activeOperators.isEmpty()) ? activeOperators.get(opIdx % activeOperators.size()) : null;
-                LinePlanAssignment assign = LinePlanAssignment.builder()
-                        .linePlan(plan)
-                        .bulletinLine(bl)
-                        .operation(bl.getOperation())
-                        .operator(op)
-                        .build();
-                plan.addAssignment(assign);
-                opIdx++;
-            }
-        } else {
-            // 2. Fallback to Operation Master
-            List<Operation> operations = operationRepository.findByActiveOrderBySequenceAsc(true);
-            if (operations.isEmpty()) {
-                operations = operationRepository.findAll();
-            }
-            int opIdx = 0;
-            for (Operation opItem : operations) {
-                Operator op = (!activeOperators.isEmpty()) ? activeOperators.get(opIdx % activeOperators.size()) : null;
-                LinePlanAssignment assign = LinePlanAssignment.builder()
-                        .linePlan(plan)
-                        .operation(opItem)
-                        .operator(op)
-                        .build();
-                plan.addAssignment(assign);
-                opIdx++;
-            }
+        for (BulletinLine bl : bLines) {
+            plan.addAssignment(LinePlanAssignment.builder()
+                    .linePlan(plan)
+                    .bulletinLine(bl)
+                    .operation(bl.getOperation())
+                    .operator(null)
+                    .build());
         }
-
+        log.info("Initialised line plan for order {} from {} bulletin operations", order.getOrderNo(), bLines.size());
         return linePlanRepository.save(plan);
     }
 
-    private List<BulletinLine> findBulletinLinesForOrder(Order order) {
-        if (order.getStyle() == null) return Collections.emptyList();
-        List<OperationBulletin> bulletins = bulletinRepository.findAll();
-        for (OperationBulletin b : bulletins) {
-            if (b.getStyles() != null && b.getStyles().contains(order.getStyle()) && !b.getLines().isEmpty()) {
-                return b.getLines();
-            }
+    /** Lines of the bulletin linked to the order's style, preferring live (released/published) ones. */
+    private List<BulletinLine> findBulletinLinesForStyle(Order order) {
+        if (order.getStyle() == null) {
+            return Collections.emptyList();
         }
-        if (!bulletins.isEmpty() && !bulletins.get(0).getLines().isEmpty()) {
-            return bulletins.get(0).getLines();
-        }
-        return Collections.emptyList();
+        Comparator<OperationBulletin> byPreference = Comparator
+                .comparingInt((OperationBulletin b) -> statusRank(b.getStatus()))
+                .thenComparing(OperationBulletin::getId, Comparator.reverseOrder());
+        return bulletinRepository.findAll().stream()
+                .filter(b -> b.getStyles() != null && b.getStyles().contains(order.getStyle()) && !b.getLines().isEmpty())
+                .min(byPreference)
+                .map(OperationBulletin::getLines)
+                .orElse(Collections.emptyList());
+    }
+
+    private static int statusRank(OperationBulletin.Status status) {
+        return switch (status) {
+            case RELEASED, PUBLISHED -> 0;
+            case APPROVED -> 1;
+            case DRAFT, UNDER_REVIEW -> 2;
+            default -> 3;
+        };
     }
 
     /**

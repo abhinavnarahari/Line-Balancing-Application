@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, ReactNode } from "react";
+import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Check, X } from "lucide-react";
 import { cn } from "../../utils/cn";
@@ -59,17 +59,23 @@ export function CustomSelect({
     [normalizedOptions, value]
   );
 
-  // Reset highlighted index when open state changes
+  // Highlight the selected option only when the list OPENS. Parents rebuild `options` on every render
+  // (live pages re-render every second), so depending on them here kept jumping the list back while scrolling.
+  const scrollToHighlightRef = useRef(false);
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
       const idx = normalizedOptions.findIndex((opt) => String(opt.value) === String(value));
+      scrollToHighlightRef.current = true;
       setHighlightedIndex(idx >= 0 ? idx : 0);
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen, normalizedOptions, value]);
 
-  // Scroll highlighted item into view
+  // Scroll the highlighted item into view on open and keyboard navigation (not on mouse hover)
   useEffect(() => {
-    if (isOpen && listRef.current) {
+    if (isOpen && listRef.current && scrollToHighlightRef.current) {
+      scrollToHighlightRef.current = false;
       const items = listRef.current.querySelectorAll("[data-select-option-index]");
       if (items[highlightedIndex]) {
         (items[highlightedIndex] as HTMLElement).scrollIntoView({ block: "nearest" });
@@ -107,9 +113,11 @@ export function CustomSelect({
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      scrollToHighlightRef.current = true;
       setHighlightedIndex((prev) => (prev < normalizedOptions.length - 1 ? prev + 1 : 0));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      scrollToHighlightRef.current = true;
       setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : normalizedOptions.length - 1));
     } else if (e.key === "Enter") {
       e.preventDefault();
@@ -162,11 +170,12 @@ export function CustomSelect({
         <div className="flex items-center gap-2 truncate flex-1 min-w-0">
           {icon && <span className="text-[#9C5B3C] shrink-0">{icon}</span>}
           {selectedOption ? (
-            <div className="flex items-center gap-1.5 truncate">
+            <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
               {selectedOption.icon && <span className="shrink-0">{selectedOption.icon}</span>}
-              <span className="truncate text-[#221912] font-semibold">{selectedOption.label}</span>
+              {/* The label keeps its full width; only the grey detail shortens (or disappears) when space runs out */}
+              <span className="shrink-0 max-w-full truncate text-[#221912] font-semibold">{selectedOption.label}</span>
               {selectedOption.sublabel && (
-                <span className="text-[#8C7E6E] font-normal text-[11px] truncate">({selectedOption.sublabel})</span>
+                <span className="min-w-0 text-[#8C7E6E] font-normal text-[11px] truncate">({selectedOption.sublabel})</span>
               )}
               {selectedOption.badge && (
                 <span

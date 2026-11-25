@@ -130,6 +130,10 @@ public class AllocationOptimizationEngine {
         Map<Long, OperatorPoolDTO> operatorMap = availableOperators.stream()
                 .collect(Collectors.toMap(OperatorPoolDTO::getOperatorId, op -> op, (a, b) -> a));
 
+        // Bulk-load performance data once for every operator x operation this run can evaluate
+        OperatorPerformanceService.PerformanceSnapshot snapshot = performanceService.loadSnapshot(
+                operatorMap.keySet(), allSlots.stream().map(Slot::getOperationId).toList());
+
         Set<Long> usedOperators = new HashSet<>();
         List<AssignmentDecision> decisions = new ArrayList<>();
 
@@ -150,7 +154,7 @@ public class AllocationOptimizationEngine {
                 Long fixedOpId = fixedSlotMap.get(slotKey);
                 OperatorPoolDTO op = operatorMap.get(fixedOpId);
                 if (op != null) {
-                    var eval = performanceService.evaluate(
+                    var eval = performanceService.evaluate(snapshot, 
                             fixedOpId, slot.getOperationId(), slot.getRequiredMachineType(), slot.getStandardSmv(), slot.getRequiredSkillLevel());
 
                     decisions.add(AssignmentDecision.builder()
@@ -185,33 +189,39 @@ public class AllocationOptimizationEngine {
 
         // 2. Score candidate pairings for remaining slots
         String scenario = request.getPrimaryScenario() != null ? request.getPrimaryScenario() : "MAX_OUTPUT";
+        // Slider weights scale each scoring component: 50 = unchanged, 100 = double, 0 = ignored.
+        // Without weights every factor is 1.0, i.e. the original scenario scoring.
+        OptimizationRequestDTO.SolverWeights w = request.getWeights();
+        double fEfficiency = factor(w != null ? w.getEfficiencyWeight() : null);
+        double fSkill = factor(w != null ? w.getSkillMatchWeight() : null);
+        double fMachine = factor(w != null ? w.getMachineCompatWeight() : null);
+        double fBalance = factor(w != null ? w.getLineBalanceWeight() : null);
+        boolean balanceAlways = w != null && w.getLineBalanceWeight() != null;
         List<CandidateScore> candidateScores = new ArrayList<>();
 
         for (Slot slot : remainingSlots) {
             for (OperatorPoolDTO op : availableOperators) {
                 if (usedOperators.contains(op.getOperatorId())) continue;
 
-                var eval = performanceService.evaluate(
+                var eval = performanceService.evaluate(snapshot, 
                         op.getOperatorId(), slot.getOperationId(), slot.getRequiredMachineType(), slot.getStandardSmv(), slot.getRequiredSkillLevel());
 
                 // Base Utility = Operator Efficiency
-                double utility = eval.getOperatorEfficiencyPercent();
+                double utility = eval.getOperatorEfficiencyPercent() * fEfficiency;
 
                 // Bonus for exact or higher skill match
+                double skillTerm = 0.0;
                 if (eval.getEvaluatedSkillLevel() >= slot.getRequiredSkillLevel()) {
-                    utility += 15.0;
+                    skillTerm = 15.0;
                 } else if ("SKILL_GAP".equalsIgnoreCase(eval.getMatchStatus())) {
-                    utility -= 20.0;
+                    skillTerm = -20.0;
                 } else if ("TRAINEE".equalsIgnoreCase(eval.getMatchStatus())) {
-                    utility -= 40.0;
+                    skillTerm = -40.0;
                 }
+                utility += skillTerm * fSkill;
 
-                // Machine qualification bonus / penalty
-                if (eval.isMachineQualified()) {
-                    utility += 10.0;
-                } else {
-                    utility -= 35.0; // Heavy penalty for uncertified machine
-                }
+                // Machine qualification bonus / penalty (heavy penalty for uncertified machine)
+                utility += (eval.isMachineQualified() ? 10.0 : -35.0) * fMachine;
 
                 // Home Line Movement Stability: Prefer operator on their home line
                 boolean isHomeLine = (op.getCurrentLineId() != null && op.getCurrentLineId().equals(slot.getLineId()));
@@ -222,12 +232,13 @@ public class AllocationOptimizationEngine {
                 }
 
                 // Scenario adjustments
-                if ("BALANCED_LINES".equalsIgnoreCase(scenario)) {
+                if ("BALANCED_LINES".equalsIgnoreCase(scenario) || balanceAlways) {
                     // Give priority to slots with tighter pitch times (bottlenecks) to maintain high minimum line efficiency
                     if (slot.getStandardSmv() * 60.0 > slot.getDesignedPitchSecs() * 0.9) {
-                        utility += 12.0;
+                        utility += 12.0 * fBalance;
                     }
-                } else if ("PRIORITY_PROTECTION".equalsIgnoreCase(scenario)) {
+                }
+                if ("PRIORITY_PROTECTION".equalsIgnoreCase(scenario)) {
                     if (slot.isPriorityLine()) {
                         utility += 25.0; // Prioritize line 1
                     }
@@ -334,5 +345,13 @@ public class AllocationOptimizationEngine {
     private static double round(double val, int places) {
         if (Double.isNaN(val) || Double.isInfinite(val)) return 0.0;
         return BigDecimal.valueOf(val).setScale(places, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    /** Maps a 0-100 slider weight to a score multiplier (50 -> 1.0); null means "use built-in scoring" (1.0). */
+    public static double factor(Integer weight) {
+        if (weight == null) {
+            return 1.0;
+        }
+        return Math.max(0, Math.min(100, weight)) / 50.0;
     }
 }

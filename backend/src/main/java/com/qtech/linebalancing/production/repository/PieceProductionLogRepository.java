@@ -12,6 +12,24 @@ import java.util.List;
 @Repository
 public interface PieceProductionLogRepository extends JpaRepository<PieceProductionLog, Long> {
 
+    /** One row per day with production: [logDate, run count, good pieces]. Used by the date pickers. */
+    @Query("SELECT p.logDate, COUNT(p), COALESCE(SUM(p.goodQty), 0) FROM PieceProductionLog p GROUP BY p.logDate ORDER BY p.logDate")
+    java.util.List<Object[]> summarizeByDate();
+
+    boolean existsByOrderId(Long orderId);
+
+    /** Most recent production log (used to point users at the latest day with data). */
+    java.util.Optional<PieceProductionLog> findTopByOrderByLogDateDesc();
+
+    /** Good pieces per order: rows of [orderId, sum(goodQty)]. */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT p.order.id, COALESCE(SUM(p.goodQty), 0) FROM PieceProductionLog p WHERE p.order IS NOT NULL GROUP BY p.order.id")
+    List<Object[]> sumGoodQtyByOrder();
+
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT COALESCE(SUM(p.goodQty), 0) FROM PieceProductionLog p WHERE p.order.id = :orderId")
+    Long sumGoodQtyForOrder(@org.springframework.data.repository.query.Param("orderId") Long orderId);
+
     List<PieceProductionLog> findByLogDateOrderByStartTimeAsc(LocalDate logDate);
 
     List<PieceProductionLog> findByOperatorIdAndLogDateOrderByStartTimeAsc(Long operatorId, LocalDate logDate);

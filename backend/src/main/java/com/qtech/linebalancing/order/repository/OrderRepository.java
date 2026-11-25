@@ -11,4 +11,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Order> findAllByOrderByCreatedAtDesc();
     boolean existsByOrderNoIgnoreCase(String orderNo);
     boolean existsByOrderNoIgnoreCaseAndIdNot(String orderNo, Long id);
+
+    @org.springframework.data.jpa.repository.Query("SELECT o.orderNo FROM Order o WHERE UPPER(o.orderNo) LIKE CONCAT(UPPER(:prefix), '%')")
+    List<String> findOrderNosStartingWith(@org.springframework.data.repository.query.Param("prefix") String prefix);
 }

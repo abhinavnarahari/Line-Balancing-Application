@@ -53,6 +53,8 @@ cd Line-Balancing-Application
 # 2. Create your .env (REQUIRED - compose refuses to start without POSTGRES_PASSWORD)
 cp .env.example .env
 sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
+# Choose the first administrator's password (8+ characters, at least one letter and one digit)
+sed -i "s/^APP_ADMIN_PASSWORD=.*/APP_ADMIN_PASSWORD=YourStrongPass1/" .env
 
 # 3. Build and launch all containers in detached mode
 docker compose up -d --build
@@ -99,6 +101,31 @@ If you have a domain name (e.g., `sewnex.yourcompany.com`):
    sudo certbot --nginx -d sewnex.yourcompany.com
    ```
    *Certbot will automatically obtain a free Let's Encrypt certificate and renew it forever.*
+
+---
+
+## 🔐 Sign-in & User Accounts
+
+The app now requires a real sign-in (server-side session, role-based permissions).
+
+1. Open the site and sign in with `APP_ADMIN_EMAIL` (default `admin@sewnexa.local`) and `APP_ADMIN_PASSWORD` from `.env`.
+2. Go to **Settings → User Accounts** and create accounts for each person (Industrial Engineer, Production Manager, Line Supervisor, System Administrator).
+3. Each user can change their password from the profile menu; admins reset forgotten passwords on the same page.
+
+The admin is created only when no accounts exist, so changing `APP_ADMIN_PASSWORD` later has no effect (use the Users page).
+After enabling HTTPS, set `SESSION_COOKIE_SECURE=true` in `.env`.
+
+### Updating an existing droplet to this version
+```bash
+cd Line-Balancing-Application
+git pull origin main
+echo "APP_ADMIN_EMAIL=admin@sewnexa.local" >> .env
+echo "APP_ADMIN_PASSWORD=YourStrongPass1" >> .env
+docker compose up -d --build        # no "down -v": data is kept; migrations V67-V73 apply automatically
+docker compose logs -f backend      # wait for "Started LineBalancingApplication"
+```
+If the backend stops with **"Migration checksum mismatch"**, start it once with
+`FLYWAY_REPAIR_ON_START=true docker compose up -d backend`, then remove the variable and run `docker compose up -d backend` again.
 
 ---
 

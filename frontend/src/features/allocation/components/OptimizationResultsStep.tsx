@@ -20,6 +20,8 @@ import type {
   OptimizationResponse,
   AllocationAssignmentItem,
 } from "../types";
+import { skillLevelName } from "../../skill-matrix/skillScale";
+import { SkillLevelIcon } from "../../../components/ui/SkillLevelIcon";
 
 interface OptimizationResultsStepProps {
   response: OptimizationResponse;
@@ -559,8 +561,14 @@ export function OptimizationResultsStep({
                         )}
                       </td>
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        <span className="font-semibold text-[#8C7E6E]">R{row.requiredSkillLevel}</span>
-                        <span className="text-[#221912] font-bold"> / R{row.assignedSkillLevel || 0}</span>
+                        <span className="inline-flex items-center gap-1" title={`Required: ${skillLevelName(row.requiredSkillLevel)} / Assigned: ${skillLevelName(row.assignedSkillLevel)}`}>
+                          <span className="font-semibold text-[#8C7E6E] inline-flex items-center gap-0.5">
+                            <SkillLevelIcon rating={row.requiredSkillLevel} size={11} decorative />L{row.requiredSkillLevel}
+                          </span>
+                          <span className="text-[#221912] font-bold inline-flex items-center gap-0.5">
+                            {" / "}<SkillLevelIcon rating={row.assignedSkillLevel} size={11} decorative />L{row.assignedSkillLevel || 0}
+                          </span>
+                        </span>
                       </td>
                       <td className="py-2.5 px-3 text-center font-mono font-bold">
                         <span className={row.isBottleneck ? "text-[#C53030] font-bold" : "text-[#2E6F40]"}>

@@ -33,7 +33,7 @@ public class AllocationScenarioService {
                 .id(1L)
                 .scenarioCode("SCENARIO_A")
                 .scenarioTitle("Scenario A: Maximum Total Output")
-                .scenarioDescription("Concentrates top-tier (Rating 4-5) operators on the highest-SMV core bottleneck stations to produce maximum pieces per shift across all active lines.")
+                .scenarioDescription("Concentrates expert (level 4) operators on the highest-SMV core bottleneck stations to produce maximum pieces per shift across all active lines.")
                 .totalAchievableOutput(baseOutput)
                 .overallEfficiency(baseEff)
                 .assignedManpower(baseAssigned)

@@ -12,13 +12,10 @@ import {
   Search, 
   X, 
   Scissors, 
-  CheckCircle2, 
   AlertTriangle, 
   ChevronRight, 
   ChevronLeft, 
   Workflow, 
-  Sliders,
-  Expand
 } from "lucide-react";
 import type { WorkstationAllocation, BalancingScenario } from "../bulletins/lineBalancingScenarios";
 

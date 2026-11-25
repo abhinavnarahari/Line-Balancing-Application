@@ -22,7 +22,7 @@ public class OperatorPoolDTO {
     private String role; // OPERATOR, HELPER, FLOATER, QUALITY_CHECKER
     private Long currentLineId;
     private String currentLineName;
-    private Double averageSkillRating; // e.g. 4.5 or 3.2
+    private Double averageSkillRating; // 1.0 to 4.0 (SkillScale)
     private List<QualifiedOperationItem> qualifiedOperations;
     private List<QualifiedMachineItem> qualifiedMachines;
     private String shiftAvailability; // FULL_SHIFT, HALF_SHIFT, NOT_AVAILABLE
@@ -43,7 +43,7 @@ public class OperatorPoolDTO {
         private Long operationId;
         private String operationCode;
         private String operationName;
-        private Integer rating; // 1 to 5
+        private Integer rating; // 1 to 4 (SkillScale)
         private Integer cycleTimeSeconds;
     }
 

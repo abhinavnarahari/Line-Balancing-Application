@@ -12,6 +12,10 @@ import java.util.Optional;
 @Repository
 public interface HourlyProductionEntryRepository extends JpaRepository<HourlyProductionEntry, Long> {
 
+    boolean existsByLinePlanOrderId(Long orderId);
+
+    List<HourlyProductionEntry> findByLinePlanLineId(Long lineId);
+
     @Query("SELECT e FROM HourlyProductionEntry e " +
            "JOIN FETCH e.operation " +
            "JOIN FETCH e.operator " +

@@ -7,9 +7,13 @@ import {
   getBenchmarkForOperation,
   saveCustomBenchmark,
   resetBenchmarkToDefault,
+  generateDynamicSmvBenchmark,
+  tierKey,
   type OperationRatingTier,
   type OperationRatingBenchmark,
 } from "./ratingBenchmarks";
+import { SKILL_LEVELS, SKILL_RATINGS, type SkillRating } from "../skill-matrix/skillScale";
+import { SkillLevelIcon } from "../../components/ui/SkillLevelIcon";
 
 interface OperationRatingModalProps {
   isOpen: boolean;
@@ -19,15 +23,37 @@ interface OperationRatingModalProps {
 }
 
 interface EditableTierState {
-  rating: 5 | 4 | 3 | 2 | 1;
+  rating: SkillRating;
   grade: string;
-  classification: "Expert" | "Skilled" | "Intermediate" | "Basic" | "Beginner";
+  classification: string;
   minSec: number;
+  /** Upper bound; the slowest level (1) is open-ended. */
   maxSec: number;
   efficiencyLabel: string;
   criteria: string;
   tagColor: string;
-  pillColor: string;
+}
+
+/** Level 1 has no upper cycle-time limit. */
+const isOpenEnded = (rating: SkillRating) => rating === 1;
+
+/** Editable rows (Expert → In training) from a stored or SMV-derived benchmark. */
+function buildEditableTiers(benchmark: OperationRatingBenchmark | null, smvMinutes = 0.5): EditableTierState[] {
+  const fallback = generateDynamicSmvBenchmark("operation", "OP-GEN", smvMinutes);
+  return SKILL_RATINGS.map((rating) => {
+    const info = SKILL_LEVELS[rating];
+    const t = benchmark?.[tierKey(rating)] ?? fallback[tierKey(rating)];
+    return {
+      rating,
+      grade: `Level ${rating}`,
+      classification: info.name,
+      minSec: t?.minSec ?? 0,
+      maxSec: isOpenEnded(rating) ? Number.MAX_SAFE_INTEGER : t?.maxSec ?? 0,
+      efficiencyLabel: t?.efficiencyLabel || info.band,
+      criteria: t?.criteria || info.description,
+      tagColor: info.badge,
+    };
+  });
 }
 
 export function OperationRatingModal({
@@ -55,63 +81,7 @@ export function OperationRatingModal({
     const benchmark = getBenchmarkForOperation(operation.name || operation.operationCode, currentSmv);
     setIsCustom(Boolean(benchmark?.isCustom));
 
-    const defaultTiers: EditableTierState[] = [
-      {
-        rating: 5,
-        grade: "Grade 5",
-        classification: "Expert",
-        minSec: benchmark?.rating5?.minSec || Math.round(currentSmv * 60 * 0.85),
-        maxSec: benchmark?.rating5?.maxSec || Math.round(currentSmv * 60 * 0.95),
-        efficiencyLabel: benchmark?.rating5?.efficiencyLabel || "> 100%",
-        criteria: benchmark?.rating5?.criteria || "Autonomous execution, zero defect rate, exceeding line takt time",
-        tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        pillColor: "bg-emerald-600 text-white",
-      },
-      {
-        rating: 4,
-        grade: "Grade 4",
-        classification: "Skilled",
-        minSec: benchmark?.rating4?.minSec || Math.round(currentSmv * 60 * 0.95),
-        maxSec: benchmark?.rating4?.maxSec || Math.round(currentSmv * 60 * 1.05),
-        efficiencyLabel: benchmark?.rating4?.efficiencyLabel || "90–100%",
-        criteria: benchmark?.rating4?.criteria || "Consistent cycle time, minimal supervision, high seam quality",
-        tagColor: "bg-[#FAF7F2] text-[#9C5B3C] border-[#E6DDCE]",
-        pillColor: "bg-[#9C5B3C] text-white",
-      },
-      {
-        rating: 3,
-        grade: "Grade 3",
-        classification: "Intermediate",
-        minSec: benchmark?.rating3?.minSec || Math.round(currentSmv * 60 * 1.05),
-        maxSec: benchmark?.rating3?.maxSec || Math.round(currentSmv * 60 * 1.20),
-        efficiencyLabel: benchmark?.rating3?.efficiencyLabel || "78–89%",
-        criteria: benchmark?.rating3?.criteria || "Meets standard factory SMV target and line balancing requirements",
-        tagColor: "bg-amber-50 text-amber-800 border-amber-200",
-        pillColor: "bg-amber-600 text-white",
-      },
-      {
-        rating: 2,
-        grade: "Grade 2",
-        classification: "Basic",
-        minSec: benchmark?.rating2?.minSec || Math.round(currentSmv * 60 * 1.20),
-        maxSec: benchmark?.rating2?.maxSec || Math.round(currentSmv * 60 * 1.40),
-        efficiencyLabel: benchmark?.rating2?.efficiencyLabel || "69–77%",
-        criteria: benchmark?.rating2?.criteria || "Requires mentoring, slight cycle time deviation from target",
-        tagColor: "bg-orange-50 text-orange-700 border-orange-200",
-        pillColor: "bg-orange-600 text-white",
-      },
-      {
-        rating: 1,
-        grade: "Grade 1",
-        classification: "Beginner",
-        minSec: benchmark?.rating1?.minSec || Math.round(currentSmv * 60 * 1.40),
-        maxSec: benchmark?.rating1?.maxSec || Math.round(currentSmv * 60 * 1.65),
-        efficiencyLabel: benchmark?.rating1?.efficiencyLabel || "< 69%",
-        criteria: benchmark?.rating1?.criteria || "Under structured IE training / time-study observation",
-        tagColor: "bg-rose-50 text-rose-700 border-rose-200",
-        pillColor: "bg-rose-600 text-white",
-      },
-    ];
+    const defaultTiers = buildEditableTiers(benchmark, currentSmv);
 
     setTiers(defaultTiers);
     setSuccessMessage(null);
@@ -140,13 +110,15 @@ export function OperationRatingModal({
         const numVal = Math.max(0, parseFloat(val) || 0);
         const updated = { ...t, [field]: numVal };
 
-        // Auto-recalculate efficiency estimate
-        const midSec = (updated.minSec + updated.maxSec) / 2 || targetCycleSec;
-        if (targetCycleSec > 0 && midSec > 0) {
-          const effPct = Math.round((targetCycleSec / midSec) * 100);
-          if (rating === 5) updated.efficiencyLabel = `> ${effPct - 5}%`;
-          else if (rating === 1) updated.efficiencyLabel = `< ${effPct + 5}%`;
-          else updated.efficiencyLabel = `${effPct - 5}–${effPct + 5}%`;
+        // Auto-recalculate the efficiency band (standard time ÷ cycle time) covered by the edited range
+        if (targetCycleSec > 0) {
+          const pct = (sec: number) => Math.round((targetCycleSec / sec) * 100);
+          if (isOpenEnded(t.rating)) {
+            if (updated.minSec > 0) updated.efficiencyLabel = `< ${pct(updated.minSec)}%`;
+          } else if (updated.maxSec > 0) {
+            updated.efficiencyLabel =
+              updated.minSec > 0 ? `${pct(updated.maxSec)}–${pct(updated.minSec)}%` : `≥ ${pct(updated.maxSec)}%`;
+          }
         }
 
         return updated;
@@ -164,8 +136,8 @@ export function OperationRatingModal({
     try {
       // Validate positive cycle times
       for (const t of tiers) {
-        if (t.minSec < 0 || t.maxSec <= 0) {
-          setErrorMessage(`Please enter a valid positive cycle time for Rating ${t.rating} (${t.classification}).`);
+        if (t.minSec < 0 || t.maxSec <= 0 || t.maxSec <= t.minSec) {
+          setErrorMessage(`Please enter a valid positive cycle time range for Level ${t.rating} (${t.classification}).`);
           setSaving(false);
           return;
         }
@@ -174,7 +146,11 @@ export function OperationRatingModal({
       const buildTier = (t: EditableTierState): OperationRatingTier => ({
         minSec: t.minSec,
         maxSec: t.maxSec,
-        label: `${t.minSec}–${t.maxSec} sec`,
+        label: isOpenEnded(t.rating)
+          ? `> ${t.minSec} sec`
+          : t.minSec <= 0
+            ? `≤ ${t.maxSec} sec`
+            : `${t.minSec}–${t.maxSec} sec`,
         efficiencyLabel: t.efficiencyLabel,
         skillLevel: t.classification,
         badgeColor: t.tagColor,
@@ -186,7 +162,6 @@ export function OperationRatingModal({
         operationCode: operation.operationCode,
         defaultSmv: smvMinutes,
         isCustom: true,
-        rating5: buildTier(tiers.find((t) => t.rating === 5)!),
         rating4: buildTier(tiers.find((t) => t.rating === 4)!),
         rating3: buildTier(tiers.find((t) => t.rating === 3)!),
         rating2: buildTier(tiers.find((t) => t.rating === 2)!),
@@ -246,63 +221,7 @@ export function OperationRatingModal({
       const defSmv = defaultBenchmark.defaultSmv || 0.5;
       setSmvMinutes(defSmv);
       setSmvSeconds(Math.round(defSmv * 60 * 10) / 10);
-      const resetTiers: EditableTierState[] = [
-        {
-          rating: 5,
-          grade: "Grade 5",
-          classification: "Expert",
-          minSec: defaultBenchmark.rating5?.minSec || 26,
-          maxSec: defaultBenchmark.rating5?.maxSec || 29,
-          efficiencyLabel: defaultBenchmark.rating5?.efficiencyLabel || "> 100%",
-          criteria: defaultBenchmark.rating5?.criteria || "Autonomous execution, zero defect rate, exceeding line takt time",
-          tagColor: "bg-emerald-50 text-emerald-700 border-emerald-200",
-          pillColor: "bg-emerald-600 text-white",
-        },
-        {
-          rating: 4,
-          grade: "Grade 4",
-          classification: "Skilled",
-          minSec: defaultBenchmark.rating4?.minSec || 29,
-          maxSec: defaultBenchmark.rating4?.maxSec || 32,
-          efficiencyLabel: defaultBenchmark.rating4?.efficiencyLabel || "90–100%",
-          criteria: defaultBenchmark.rating4?.criteria || "Consistent cycle time, minimal supervision, high seam quality",
-          tagColor: "bg-[#FAF7F2] text-[#9C5B3C] border-[#E6DDCE]",
-          pillColor: "bg-[#9C5B3C] text-white",
-        },
-        {
-          rating: 3,
-          grade: "Grade 3",
-          classification: "Intermediate",
-          minSec: defaultBenchmark.rating3?.minSec || 32,
-          maxSec: defaultBenchmark.rating3?.maxSec || 37,
-          efficiencyLabel: defaultBenchmark.rating3?.efficiencyLabel || "78–89%",
-          criteria: defaultBenchmark.rating3?.criteria || "Meets standard factory SMV target and line balancing requirements",
-          tagColor: "bg-amber-50 text-amber-800 border-amber-200",
-          pillColor: "bg-amber-600 text-white",
-        },
-        {
-          rating: 2,
-          grade: "Grade 2",
-          classification: "Basic",
-          minSec: defaultBenchmark.rating2?.minSec || 37,
-          maxSec: defaultBenchmark.rating2?.maxSec || 42,
-          efficiencyLabel: defaultBenchmark.rating2?.efficiencyLabel || "69–77%",
-          criteria: defaultBenchmark.rating2?.criteria || "Requires mentoring, slight cycle time deviation from target",
-          tagColor: "bg-orange-50 text-orange-700 border-orange-200",
-          pillColor: "bg-orange-600 text-white",
-        },
-        {
-          rating: 1,
-          grade: "Grade 1",
-          classification: "Beginner",
-          minSec: defaultBenchmark.rating1?.minSec || 42,
-          maxSec: defaultBenchmark.rating1?.maxSec || 48,
-          efficiencyLabel: defaultBenchmark.rating1?.efficiencyLabel || "< 69%",
-          criteria: defaultBenchmark.rating1?.criteria || "Under structured IE training / time-study observation",
-          tagColor: "bg-rose-50 text-rose-700 border-rose-200",
-          pillColor: "bg-rose-600 text-white",
-        },
-      ];
+      const resetTiers = buildEditableTiers(defaultBenchmark, defSmv);
       setTiers(resetTiers);
     }
 
@@ -315,7 +234,7 @@ export function OperationRatingModal({
       isOpen={isOpen}
       onClose={onClose}
       title="Standard SMV & Skill Rating Benchmark"
-      subtitle="Industrial Engineering (IE) work-study standards, target cycle time & 5-tier operator qualification criteria."
+      subtitle="Industrial Engineering (IE) work-study standards, target cycle time & the factory's 4-level operator skill scale."
       maxWidth="max-w-4xl"
     >
       <div className="space-y-4">
@@ -415,7 +334,7 @@ export function OperationRatingModal({
           </div>
         )}
 
-        {/* ── 5-Tier Configurable Cycle Time Table ───────────────────── */}
+        {/* ── 4-Level Configurable Cycle Time Table ───────────────────── */}
         <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
           <div className="bg-slate-50/80 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -447,8 +366,9 @@ export function OperationRatingModal({
                       {/* Rating Pill */}
                       <td className="py-2.5 px-3.5 text-center align-middle">
                         <span
-                          className={`inline-flex items-center justify-center w-7 h-7 rounded-lg font-mono font-bold text-xs shadow-2xs ${tier.pillColor}`}
+                          className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border font-mono font-bold text-xs shadow-2xs ${tier.tagColor}`}
                         >
+                          <SkillLevelIcon rating={tier.rating} size={18} decorative />
                           {tier.rating}
                         </span>
                       </td>
@@ -459,7 +379,7 @@ export function OperationRatingModal({
                           {tier.classification}
                         </span>
                         <span className="text-[10.5px] text-slate-400 font-mono">
-                          {tier.grade}
+                          {tier.grade} · {SKILL_LEVELS[tier.rating].band} of target
                         </span>
                       </td>
 
@@ -476,15 +396,24 @@ export function OperationRatingModal({
                             title="Minimum cycle time (seconds)"
                           />
                           <span className="text-slate-400 font-bold text-xs">–</span>
-                          <input
-                            type="number"
-                            step="0.5"
-                            min="1"
-                            value={tier.maxSec}
-                            onChange={(e) => handleTierChange(tier.rating, "maxSec", e.target.value)}
-                            className="w-14 h-7 text-xs font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded px-1 text-center focus:outline-none focus:border-[#9C5B3C]"
-                            title="Maximum cycle time (seconds)"
-                          />
+                          {isOpenEnded(tier.rating) ? (
+                            <span
+                              className="w-14 h-7 inline-flex items-center justify-center text-xs font-mono font-bold text-slate-500"
+                              title="Slowest level: no upper cycle-time limit"
+                            >
+                              ∞
+                            </span>
+                          ) : (
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="1"
+                              value={tier.maxSec}
+                              onChange={(e) => handleTierChange(tier.rating, "maxSec", e.target.value)}
+                              className="w-14 h-7 text-xs font-mono font-bold text-slate-900 bg-white border border-slate-200 rounded px-1 text-center focus:outline-none focus:border-[#9C5B3C]"
+                              title="Maximum cycle time (seconds)"
+                            />
+                          )}
                           <span className="text-[11px] font-mono text-slate-500 pr-1">sec</span>
                         </div>
                       </td>

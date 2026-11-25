@@ -5,12 +5,14 @@ import { PremiumSelect } from "../../components/ui/PremiumUI";
 import type { ShiftAssignment } from "./api";
 import type { Operator } from "../operators/api";
 import type { Shift } from "../shifts/types";
+import { toLocalDateString } from "../../utils/date";
+import { useSubmitGuard } from "../../utils/useSubmitGuard";
 
 interface AssignmentFormProps {
   operators: Operator[];
   shifts: Shift[];
   assignments: ShiftAssignment[];
-  onSubmit: (data: Omit<ShiftAssignment, "id" | "status" | "createdAt">[]) => void;
+  onSubmit: (data: Omit<ShiftAssignment, "id" | "status" | "createdAt">[]) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -19,9 +21,11 @@ export function AssignmentForm({ operators, shifts, assignments, onSubmit, onCan
   const [formData, setFormData] = useState({
     operatorIds: [] as string[],
     shiftId: "",
-    effectiveFrom: new Date().toISOString().split("T")[0],
+    effectiveFrom: toLocalDateString(),
     effectiveTo: "", // empty means null
   });
+
+  const submit = useSubmitGuard();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +38,7 @@ export function AssignmentForm({ operators, shifts, assignments, onSubmit, onCan
       effectiveTo: formData.effectiveTo || null,
     }));
     
-    onSubmit(assignments);
+    submit.run(() => onSubmit(assignments));
   };
 
   const toggleOperator = (opId: string) => {
@@ -48,6 +52,9 @@ export function AssignmentForm({ operators, shifts, assignments, onSubmit, onCan
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {submit.error && (
+        <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold">{submit.error}</div>
+      )}
       <div className="grid grid-cols-1 gap-6 mb-6">
         <div className="flex flex-col space-y-1.5">
           <label className="text-[11px] font-semibold tracking-[0.1em] uppercase text-[#475569]">Operators</label>
@@ -124,7 +131,7 @@ export function AssignmentForm({ operators, shifts, assignments, onSubmit, onCan
 
       <div className="flex justify-end gap-3 pt-5 border-t border-[#F1F5F9]">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" variant="primary">Assign Shift</Button>
+        <Button type="submit" variant="primary" loading={submit.saving} disabled={submit.saving}>Assign Shift</Button>
       </div>
     </form>
   );

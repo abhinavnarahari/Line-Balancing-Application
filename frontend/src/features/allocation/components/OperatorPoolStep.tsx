@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Star,
   Award,
-  Cpu,
   ChevronDown,
   ChevronUp,
   ArrowUpDown,
@@ -15,6 +14,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { OperatorPoolItem } from "../types";
+import { clampRating, DEFAULT_REQUIRED_RATING, MAX_SKILL_RATING, SKILL_LEVELS, SKILL_RATINGS, skillLevelName, type SkillRating } from "../../skill-matrix/skillScale";
+import { SkillLevelIcon, SkillLevelBadge } from "../../../components/ui/SkillLevelIcon";
 
 
 interface OperatorPoolStepProps {
@@ -39,14 +40,9 @@ export function OperatorPoolStep({
 
   // Skill Tier Analytics
   const skillTierCounts = useMemo(() => {
-    const counts = { r5: 0, r4: 0, r3: 0, r2: 0, r1: 0 };
+    const counts: Record<SkillRating, number> = { 4: 0, 3: 0, 2: 0, 1: 0 };
     operators.forEach((op) => {
-      const r = Math.round(op.averageSkillRating || 3);
-      if (r >= 5) counts.r5++;
-      else if (r === 4) counts.r4++;
-      else if (r === 3) counts.r3++;
-      else if (r === 2) counts.r2++;
-      else counts.r1++;
+      counts[clampRating(op.averageSkillRating || DEFAULT_REQUIRED_RATING)]++;
     });
     return counts;
   }, [operators]);
@@ -62,7 +58,7 @@ export function OperatorPoolStep({
 
       const matchSkill =
         skillFilter === "ALL" ||
-        Math.round(op.averageSkillRating || 3).toString() === skillFilter;
+        clampRating(op.averageSkillRating || DEFAULT_REQUIRED_RATING).toString() === skillFilter;
 
       const matchAttendance =
         attendanceFilter === "ALL" ||
@@ -168,46 +164,16 @@ export function OperatorPoolStep({
           <span className="text-xs text-[#8C7E6E] font-semibold">{operators.length} Total Registered Workforce</span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE] flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-[#B48259] uppercase block">Rating 5 (Master)</span>
-              <span className="text-xl font-bold font-mono text-[#221912]">{skillTierCounts.r5}</span>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {SKILL_RATINGS.map((r) => (
+            <div key={r} className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE] flex items-center justify-between" title={`${SKILL_LEVELS[r].band} — ${SKILL_LEVELS[r].description}`}>
+              <div>
+                <span className="text-[10px] font-bold uppercase block" style={{ color: SKILL_LEVELS[r].color }}>Level {r} ({SKILL_LEVELS[r].name})</span>
+                <span className="text-xl font-bold font-mono text-[#221912]">{skillTierCounts[r]}</span>
+              </div>
+              <SkillLevelIcon rating={r} size={18} decorative />
             </div>
-            <div className="flex text-[#B48259]"><Star className="w-4 h-4 fill-[#B48259]" /></div>
-          </div>
-
-          <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE] flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-[#77876F] uppercase block">Rating 4 (Skilled)</span>
-              <span className="text-xl font-bold font-mono text-[#221912]">{skillTierCounts.r4}</span>
-            </div>
-            <div className="flex text-[#77876F]"><Star className="w-4 h-4 fill-[#77876F]" /></div>
-          </div>
-
-          <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE] flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-[#8C7E6E] uppercase block">Rating 3 (Standard)</span>
-              <span className="text-xl font-bold font-mono text-[#221912]">{skillTierCounts.r3}</span>
-            </div>
-            <div className="flex text-[#8C7E6E]"><Star className="w-4 h-4 fill-[#8C7E6E]" /></div>
-          </div>
-
-          <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE] flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-[#9C5B3C] uppercase block">Rating 2 (Basic)</span>
-              <span className="text-xl font-bold font-mono text-[#221912]">{skillTierCounts.r2}</span>
-            </div>
-            <div className="flex text-[#9C5B3C]"><Star className="w-4 h-4 fill-[#9C5B3C]" /></div>
-          </div>
-
-          <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE] flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-[#4A6B82] uppercase block">Rating 1 (Trainee)</span>
-              <span className="text-xl font-bold font-mono text-[#221912]">{skillTierCounts.r1}</span>
-            </div>
-            <div className="flex text-[#4A6B82]"><Star className="w-4 h-4 fill-[#4A6B82]" /></div>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -235,12 +201,10 @@ export function OperatorPoolStep({
               onChange={(e) => setSkillFilter(e.target.value)}
               className="bg-transparent font-bold text-[#221912] focus:outline-hidden cursor-pointer"
             >
-              <option value="ALL">All Ratings (1-5)</option>
-              <option value="5">Rating 5 (Master)</option>
-              <option value="4">Rating 4 (Skilled)</option>
-              <option value="3">Rating 3 (Standard)</option>
-              <option value="2">Rating 2 (Basic)</option>
-              <option value="1">Rating 1 (Trainee)</option>
+              <option value="ALL">All Levels (1-{MAX_SKILL_RATING})</option>
+              {SKILL_RATINGS.map((r) => (
+                <option key={r} value={String(r)}>Level {r} ({SKILL_LEVELS[r].name})</option>
+              ))}
             </select>
           </div>
 
@@ -354,9 +318,9 @@ export function OperatorPoolStep({
                         {/* Skill Rating */}
                         <td className="py-3 px-3 text-center whitespace-nowrap">
                           <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#FAF7F2] border border-[#E6DDCE]">
-                            <Star className="w-3.5 h-3.5 fill-[#B48259] text-[#B48259]" />
-                            <span className="font-bold font-mono text-[#221912] text-xs">
-                              {Number(op.averageSkillRating || 3).toFixed(1)}
+                            <SkillLevelIcon rating={op.averageSkillRating || DEFAULT_REQUIRED_RATING} size={14} decorative />
+                            <span className="font-bold font-mono text-[#221912] text-xs" title={skillLevelName(op.averageSkillRating || DEFAULT_REQUIRED_RATING)}>
+                              {Number(op.averageSkillRating || DEFAULT_REQUIRED_RATING).toFixed(1)}
                             </span>
                           </div>
                         </td>
@@ -437,9 +401,7 @@ export function OperatorPoolStep({
                                           Cycle: {q.cycleTimeSeconds || 30}s
                                         </span>
                                       </div>
-                                      <span className="px-2 py-0.5 rounded-lg bg-[#B48259]/15 text-[#B48259] font-bold font-mono text-xs">
-                                        R{q.rating}
-                                      </span>
+                                      <SkillLevelBadge rating={q.rating} />
                                     </div>
                                   ))
                                 ) : (

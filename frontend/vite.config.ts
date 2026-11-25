@@ -8,4 +8,13 @@ export default defineConfig({
     tailwindcss(),
     react()
   ],
+  server: {
+    // Same-origin API in development (mirrors nginx in production) so session + CSRF cookies just work.
+    proxy: {
+      '/api': {
+        target: process.env.VITE_DEV_API_TARGET || 'http://localhost:8085',
+        changeOrigin: false,
+      },
+    },
+  },
 })

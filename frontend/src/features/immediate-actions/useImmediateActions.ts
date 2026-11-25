@@ -4,8 +4,10 @@ import type { Shift } from "../shifts/types";
 import type { ShiftAssignment } from "../shift-assignments/api";
 import { attendanceApi, type AttendanceRecord } from "../attendance/api";
 import type { SkillAssessment } from "../skill-matrix/api";
+import { INDEPENDENT_RATING } from "../skill-matrix/skillScale";
 import type { Operation } from "../operations/api";
 import type { LinePlan } from "../line-balance/api";
+import { toLocalDateString } from "../../utils/date";
 
 export interface ReplacementCandidate {
   operator: Operator;
@@ -71,7 +73,7 @@ export function useImmediateActions({
   onRefresh,
 }: UseImmediateActionsProps) {
   const todayStr = useMemo(() => {
-    return currentTime.toISOString().split("T")[0];
+    return toLocalDateString(currentTime);
   }, [currentTime]);
 
   // 1. Identify all operators currently assigned to any active line plan / production order
@@ -102,7 +104,7 @@ export function useImmediateActions({
       );
       if (att && (att.status === "PRESENT" || att.status === "LATE")) {
         const skills = skillMatrix
-          .filter(s => String(s.operatorId) === String(op.id) && s.rating >= 3)
+          .filter(s => String(s.operatorId) === String(op.id) && s.rating >= INDEPENDENT_RATING)
           .map(s => {
             const opObj = operations.find(o => String(o.id) === String(s.operationId));
             return {
@@ -211,7 +213,7 @@ export function useImmediateActions({
       // If operator is not assigned to a specific line plan station, fallback to their #1 primary certified operation
       if (assignedOps.length === 0) {
         const topSkill = skillMatrix
-          .filter(s => String(s.operatorId) === String(op.id) && s.rating >= 3)
+          .filter(s => String(s.operatorId) === String(op.id) && s.rating >= INDEPENDENT_RATING)
           .sort((a, b) => b.rating - a.rating)[0];
         if (topSkill) {
           const matchedOp = operations.find(o => String(o.id) === String(topSkill.operationId));
@@ -223,7 +225,7 @@ export function useImmediateActions({
 
       const targetOpIds = assignedOps.map(o => String(o.id));
 
-      // Match free present replacement candidates who are certified (rating >= 3) for the assigned operations
+      // Match free present replacement candidates who are certified (rating >= 3, Independent) for the assigned operations
       const replacementCandidates: ReplacementCandidate[] = [];
 
       unallocatedPresentOperators.forEach(unalloc => {
@@ -232,7 +234,7 @@ export function useImmediateActions({
         const matched = skillMatrix.filter(
           s => String(s.operatorId) === String(unalloc.operator.id) &&
                targetOpIds.includes(String(s.operationId)) &&
-               s.rating >= 3
+               s.rating >= INDEPENDENT_RATING
         );
 
         if (matched.length > 0) {

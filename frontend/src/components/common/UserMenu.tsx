@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Settings, Check, ShieldCheck, ChevronDown, RefreshCw } from "lucide-react";
+import { LogOut, Settings, ShieldCheck, ChevronDown, KeyRound, Users } from "lucide-react";
 import { useAuth } from "../../features/auth/AuthContext";
-import { DEMO_PROFILES } from "../../features/auth/types";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 import { motion, AnimatePresence } from "framer-motion";
 
 export const UserMenu: React.FC = () => {
-  const { user, logout, loginWithProfile } = useAuth();
+  const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
+  const [isPasswordOpen, setIsPasswordOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -16,7 +16,6 @@ export const UserMenu: React.FC = () => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsOpen(false);
-        setIsSwitching(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -25,20 +24,10 @@ export const UserMenu: React.FC = () => {
 
   if (!user) return null;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsOpen(false);
-    logout();
-    navigate("/login");
-  };
-
-  const handleRoleSwitch = async (profile: typeof DEMO_PROFILES[0]) => {
-    setIsSwitching(true);
-    await loginWithProfile(profile);
-    setIsSwitching(false);
-    setIsOpen(false);
-    if (profile.defaultRoute) {
-      navigate(profile.defaultRoute);
-    }
+    await logout();
+    navigate("/login", { replace: true });
   };
 
   return (
@@ -47,7 +36,9 @@ export const UserMenu: React.FC = () => {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2.5 p-1 sm:px-2.5 sm:py-1.5 rounded-full hover:bg-[#FAF7F2] border border-transparent hover:border-[#E8E2D9] transition-all cursor-pointer group"
-        title="User profile & role switcher"
+        title="User profile"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
       >
         <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#9C5B3C] to-[#7D462E] text-white flex items-center justify-center font-bold text-xs shadow-xs">
           {user.initials}
@@ -90,44 +81,6 @@ export const UserMenu: React.FC = () => {
               </div>
             </div>
 
-            {/* Quick Demo Role Switcher */}
-            <div className="p-3 border-b border-[#E8E2D9] bg-white">
-              <div className="flex items-center justify-between mb-2 px-1">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3 text-[#9C5B3C]" /> Switch Active Role
-                </span>
-                <span className="text-[9.5px] text-[#A6998A]">Demo Persona</span>
-              </div>
-              <div className="space-y-1">
-                {DEMO_PROFILES.map((p) => {
-                  const isCurrent = user.email.toLowerCase() === p.email.toLowerCase();
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => handleRoleSwitch(p)}
-                      disabled={isSwitching}
-                      className={`w-full text-left p-2 rounded-xl text-xs transition-all flex items-center justify-between cursor-pointer ${
-                        isCurrent
-                          ? "bg-[#FAF7F2] border border-[#E8E2D9] text-[#9C5B3C] font-bold shadow-2xs"
-                          : "hover:bg-slate-50 text-[#33251A] hover:text-[#221912]"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${p.badgeColor}`}>
-                          {p.initials}
-                        </div>
-                        <div className="truncate">
-                          <div className="font-semibold leading-tight truncate">{p.name}</div>
-                          <div className="text-[10px] text-[#8C7E6E] leading-tight truncate">{p.roleTitle}</div>
-                        </div>
-                      </div>
-                      {isCurrent && <Check className="w-4 h-4 text-[#9C5B3C] shrink-0 ml-1" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* Navigation & Actions */}
             <div className="p-2 space-y-1 bg-[#FAF7F2]/50">
               <button
@@ -142,6 +95,30 @@ export const UserMenu: React.FC = () => {
               </button>
 
               <button
+                onClick={() => {
+                  setIsOpen(false);
+                  setIsPasswordOpen(true);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[#33251A] hover:text-[#221912] hover:bg-white rounded-xl transition-colors cursor-pointer"
+              >
+                <KeyRound className="w-4 h-4 text-[#8C7E6E]" />
+                <span>Change Password</span>
+              </button>
+
+              {user.role === "SYSTEM_ADMIN" && (
+                <button
+                  onClick={() => {
+                    setIsOpen(false);
+                    navigate("/settings/users");
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-[#33251A] hover:text-[#221912] hover:bg-white rounded-xl transition-colors cursor-pointer"
+                >
+                  <Users className="w-4 h-4 text-[#8C7E6E]" />
+                  <span>User Accounts</span>
+                </button>
+              )}
+
+              <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
               >
@@ -152,6 +129,8 @@ export const UserMenu: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ChangePasswordModal isOpen={isPasswordOpen} onClose={() => setIsPasswordOpen(false)} />
     </div>
   );
 };

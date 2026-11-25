@@ -3,18 +3,29 @@ import { useParams, Link } from "react-router-dom";
 import { ChevronRight, Paperclip, FileText, Plus, X, PlusCircle, FileSpreadsheet, Clock, CheckCircle2, Send, Trash2, RotateCcw, Download, User } from "lucide-react";
 import { motion } from "framer-motion";
 import { operationsApi, type Operation } from "../../features/operations/api";
-import { operatorsApi, type Operator } from "../../features/operators/api";
+import { operatorsApi, type Operator, type OperatorAttachment, type OperatorPlacement } from "../../features/operators/api";
 import { skillApi, cycleTimeToRating, type PerformanceLog } from "../../features/skill-matrix/api";
-import { getBenchmarkForOperation } from "../../features/operations/ratingBenchmarks";
+import { getBenchmarkForOperation, getRatingRangeLabel, tierKey } from "../../features/operations/ratingBenchmarks";
+import { SKILL_LEVELS, clampRating, skillLevelName } from "../../features/skill-matrix/skillScale";
+import { SkillLevelIcon } from "../../components/ui/SkillLevelIcon";
 import { exportToExcel } from "../../utils/excel";
-import { API_BASE_URL } from "../../lib/api";
+import { API_BASE_URL, getErrorMessage } from "../../lib/api";
 import { ToggleSwitch } from "../../components/ui/ToggleSwitch";
 import { RecentActivityLog } from "../../components/ui/PremiumUI";
 import { RecordPerformanceTestModal } from "./RecordPerformanceTestModal";
 import { UploadPerformanceExcelModal } from "./UploadPerformanceExcelModal";
 import { OperationTestHistoryModal } from "./OperationTestHistoryModal";
+import { toLocalDateString } from "../../utils/date";
+import { loadFailed } from "../../components/common/GlobalErrorToaster";
 
 type Tab = "Overview" | "Connections" | "Skill Matrix";
+
+/** Short badge text for a line code, e.g. "LINE-07" -> "L7". */
+function lineBadge(code: string | null): string {
+  if (!code) return "—";
+  const n = code.match(/(\d+)\s*$/);
+  return n ? `L${parseInt(n[1], 10)}` : code.slice(0, 3).toUpperCase();
+}
 
 export function OperatorDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -25,7 +36,10 @@ export function OperatorDetailPage() {
   const [skills, setSkills] = useState<Record<string, number>>({});
   
   // Real data states
-  const [attachments, setAttachments] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<OperatorAttachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  // undefined = loading, null = failed to load
+  const [placement, setPlacement] = useState<OperatorPlacement | null | undefined>(undefined);
   const [performanceLogs, setPerformanceLogs] = useState<PerformanceLog[]>([]);
 
   // Modals for Performance Tests
@@ -56,6 +70,7 @@ export function OperatorDetailPage() {
 
         // Load specific connections
         operatorsApi.getAttachments(found.id).then(setAttachments).catch(console.error);
+        operatorsApi.getPlacement(found.id).then(setPlacement).catch(() => setPlacement(null));
 
         const allOps = await operationsApi.getOperations();
         setOperations(allOps);
@@ -70,7 +85,7 @@ export function OperatorDetailPage() {
         // Load skills directly matching Sewing Skill Matrix based on average cycle time
         const [currentSkills, perfLogs] = await Promise.all([
           skillApi.getCurrentMatrix(found.id),
-          skillApi.getPerformanceLogs(found.id).catch(() => []),
+          skillApi.getPerformanceLogs(found.id).catch(loadFailed([])),
         ]);
         setPerformanceLogs(perfLogs);
 
@@ -153,9 +168,9 @@ export function OperatorDetailPage() {
             await skillApi.addAssessment({
               operatorId: Number(operator.id),
               operationId: Number(opId),
-              rating: derivedRating as 1 | 2 | 3 | 4 | 5,
+              rating: derivedRating,
               cycleTimeSeconds: Math.round(avg),
-              effectiveDate: new Date().toISOString().split("T")[0],
+              effectiveDate: toLocalDateString(),
               notes: `Submitted ${times.length} performance run(s) with average cycle time ${avg.toFixed(1)}s`,
             }).catch(console.warn);
           }
@@ -197,22 +212,6 @@ export function OperatorDetailPage() {
   const handleExportSkillMatrix = () => {
     if (!operator) return;
 
-    const ratingLabels: Record<number, string> = {
-      5: "Expert (0-10 sec)",
-      4: "Good (11-20 sec)",
-      3: "Standard (21-30 sec)",
-      2: "Basic (31-40 sec)",
-      1: "Beginner (41-50+ sec)",
-    };
-
-    const ratingBands: Record<number, string> = {
-      5: "0-10 SEC",
-      4: "11-20 SEC",
-      3: "21-30 SEC",
-      2: "31-40 SEC",
-      1: "41-50+ SEC",
-    };
-
     const exportRows = operations.map((op) => {
       const rating = skills[String(op.id)] || 0;
       const opLogs = performanceLogs.filter(
@@ -229,8 +228,8 @@ export function OperatorDetailPage() {
         "Operation Code": op.operationCode || (op as any).code || `OP-${op.id}`,
         "Operation Name": op.name,
         "Current Rating": rating > 0 ? rating : "Unrated",
-        "Rating Band": rating > 0 ? (ratingBands[rating] || "-") : "-",
-        "Skill Level": rating > 0 ? (ratingLabels[rating] || "-") : "Unrated",
+        "Rating Band": rating > 0 ? getRatingRangeLabel(rating, op.name, op.standardSmv) : "-",
+        "Skill Level": rating > 0 ? `${skillLevelName(rating)} (${SKILL_LEVELS[clampRating(rating)].band})` : "Unrated",
         "Avg Tested Cycle Time (s)": avgSec,
         "Tests Recorded": opLogs.length,
       };
@@ -263,28 +262,30 @@ export function OperatorDetailPage() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || !e.target.files[0] || !operator) return;
     const file = e.target.files[0];
+    setUploading(true);
     try {
       await operatorsApi.uploadAttachment(operator.id, file);
       const newAttachments = await operatorsApi.getAttachments(operator.id);
       setAttachments(newAttachments);
     } catch (err) {
       console.error("Upload failed", err);
-      alert("Failed to upload file.");
+      alert(getErrorMessage(err, "Failed to upload file."));
     } finally {
+      setUploading(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
   };
 
-  const handleDeleteAttachment = async (attachmentId: string) => {
-    if (!operator) return;
+  const handleDeleteAttachment = async (file: OperatorAttachment) => {
+    if (!operator || !window.confirm(`Delete "${file.fileName}"?`)) return;
     try {
-      await operatorsApi.deleteAttachment(attachmentId);
-      setAttachments(attachments.filter(a => a.id !== attachmentId));
+      await operatorsApi.deleteAttachment(String(file.id));
+      setAttachments(prev => prev.filter(a => a.id !== file.id));
     } catch (err) {
       console.error("Delete failed", err);
-      alert("Failed to delete attachment.");
+      alert(getErrorMessage(err, "Failed to delete attachment."));
     }
   };
 
@@ -342,53 +343,122 @@ export function OperatorDetailPage() {
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-[10px] font-bold tracking-widest text-[#8C7E6E] uppercase mb-2">
-                {isMachine ? "Assigned To" : "Workforce Role"}
+          <div className="space-y-5">
+            {/* Placement: from saved line plans (Planned Balancing) and shift assignments */}
+            <section aria-labelledby="placement-heading">
+              <h3 id="placement-heading" className="text-[10px] font-bold tracking-widest text-[#8C7E6E] uppercase mb-2">
+                Assigned To
               </h3>
-              <div className="flex items-center gap-2 p-2.5 bg-white border border-[#E6DDCE] rounded-xl shadow-2xs">
-                <span className="w-5 h-5 rounded-md bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE] text-[10px] font-bold flex items-center justify-center">
-                  {isMachine ? "L1" : "NM"}
-                </span>
-                <span className="text-xs font-bold text-[#221912]">
-                  {isMachine ? "Line 1 (Sewing)" : "Non-Machine Workforce"}
-                </span>
-              </div>
-            </div>
+              {placement === undefined ? (
+                <div className="h-12 rounded-xl bg-white border border-[#E6DDCE] animate-pulse" aria-label="Loading placement" />
+              ) : placement === null ? (
+                <p className="text-[11px] text-[#8C7E6E]">Could not load where this person is placed.</p>
+              ) : (
+                <div className="space-y-2">
+                  {placement.lines.map(p => (
+                    <Link
+                      key={p.orderId}
+                      to={`/line-balance?orderId=${p.orderId}`}
+                      className="block p-2.5 bg-white border border-[#E6DDCE] rounded-xl shadow-2xs hover:border-[#9C5B3C]/50 transition-colors"
+                      title="Open this plan in Planned Balancing"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="min-w-6 h-5 px-1 rounded-md bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE] text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {lineBadge(p.lineCode)}
+                        </span>
+                        <span className="text-xs font-bold text-[#221912] truncate">
+                          {p.lineName || p.lineCode || "No line set"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[10.5px] text-[#8C7E6E] leading-snug">
+                        {p.orderNo}{p.planShift ? ` · ${p.planShift}` : ""}
+                        {p.orderStatus === "ON_HOLD" && <span className="text-amber-700 font-semibold"> · on hold</span>}
+                      </p>
+                      {p.operations.length > 0 && (
+                        <p className="text-[10.5px] text-[#221912] leading-snug truncate" title={p.operations.join(", ")}>
+                          {p.operations.join(", ")}
+                        </p>
+                      )}
+                    </Link>
+                  ))}
+                  {placement.lines.length === 0 && (
+                    <div className="p-2.5 bg-white border border-dashed border-[#E6DDCE] rounded-xl">
+                      <p className="text-xs font-semibold text-[#221912]">{isMachine ? "Not on a line" : "Non-machine workforce"}</p>
+                      <p className="text-[10.5px] text-[#8C7E6E] leading-snug">
+                        {isMachine
+                          ? <>Not placed in any open order's line plan. <Link to="/line-balance" className="text-[#9C5B3C] font-semibold hover:underline">Planned Balancing</Link></>
+                          : "Not placed on sewing stations."}
+                      </p>
+                    </div>
+                  )}
+                  <p className="text-[10.5px] text-[#8C7E6E] flex items-center gap-1.5">
+                    <Clock className="w-3 h-3" />
+                    {placement.currentShift ? <>Shift: <span className="font-semibold text-[#221912]">{placement.currentShift}</span></> : "No shift assigned today"}
+                  </p>
+                </div>
+              )}
+            </section>
 
-            <div>
+            <section aria-labelledby="attachments-heading">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-[10px] font-bold tracking-widest text-[#8C7E6E] uppercase flex items-center gap-1.5">
+                <h3 id="attachments-heading" className="text-[10px] font-bold tracking-widest text-[#8C7E6E] uppercase flex items-center gap-1.5">
                   <Paperclip className="w-3.5 h-3.5" /> Attachments
+                  {attachments.length > 0 && <span className="font-mono">({attachments.length})</span>}
                 </h3>
-                <button onClick={() => fileInputRef.current?.click()} className="text-[#8C7E6E] hover:text-[#9C5B3C]">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="text-[#8C7E6E] hover:text-[#9C5B3C] p-0.5 rounded disabled:opacity-50 cursor-pointer"
+                  title="Upload a document"
+                  aria-label="Upload a document"
+                >
                   <Plus className="w-3.5 h-3.5" />
                 </button>
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
               </div>
-              <ul className="space-y-1.5">
-                {(attachments.length > 0 ? attachments : [
-                  { id: "att-1", fileName: "Aadhar_Card.pdf" },
-                  { id: "att-2", fileName: "Employment_Contract.pdf" },
-                  { id: "att-3", fileName: "Bank_Passbook.pdf" },
-                  { id: "att-4", fileName: "Stitching_Skill_Certificate.pdf" },
-                  { id: "att-5", fileName: "Medical_Fitness_Report.pdf" },
-                ]).map((file: any) => (
-                  <li key={file.id} className="flex items-center justify-between group text-[11.5px] text-[#8C7E6E] hover:text-[#9C5B3C]">
-                    <a href={`${API_BASE_URL}/operators/attachments/${file.id}/download`} target="_blank" rel="noreferrer" className="flex items-center gap-2 truncate cursor-pointer flex-1">
-                      <FileText className="w-3 h-3 text-[#8C7E6E]" />
-                      <span className="truncate" title={file.fileName}>{file.fileName}</span>
-                    </a>
-                    {attachments.length > 0 && (
-                      <button onClick={() => handleDeleteAttachment(file.id)} className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-700 p-0.5">
+              {attachments.length === 0 && !uploading ? (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full p-3 rounded-xl border border-dashed border-[#E6DDCE] bg-white text-center hover:border-[#9C5B3C]/50 cursor-pointer"
+                >
+                  <span className="block text-xs font-semibold text-[#221912]">No documents yet</span>
+                  <span className="block text-[10.5px] text-[#8C7E6E]">Upload ID proof, contract, certificates…</span>
+                </button>
+              ) : (
+                <ul className="space-y-1">
+                  {attachments.map(file => (
+                    <li key={file.id} className="flex items-center gap-1 group rounded-lg hover:bg-white px-1.5 py-1 -mx-1.5">
+                      <a
+                        href={`${API_BASE_URL}/operators/attachments/${file.id}/download`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2 min-w-0 flex-1 text-[11.5px] text-[#221912] hover:text-[#9C5B3C]"
+                        title={file.uploadedAt ? `${file.fileName} · uploaded ${new Date(file.uploadedAt).toLocaleDateString()}` : file.fileName}
+                      >
+                        <FileText className="w-3.5 h-3.5 text-[#8C7E6E] shrink-0" />
+                        <span className="truncate">{file.fileName}</span>
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAttachment(file)}
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-rose-500 hover:text-rose-700 p-0.5 rounded cursor-pointer"
+                        title={`Delete ${file.fileName}`}
+                        aria-label={`Delete ${file.fileName}`}
+                      >
                         <X className="w-3 h-3" />
                       </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
+                    </li>
+                  ))}
+                  {uploading && (
+                    <li className="flex items-center gap-2 px-1.5 py-1 text-[11.5px] text-[#8C7E6E]">
+                      <span className="w-3 h-3 border-2 border-[#9C5B3C] border-t-transparent rounded-full animate-spin" /> Uploading…
+                    </li>
+                  )}
+                </ul>
+              )}
+            </section>
           </div>
         </aside>
 
@@ -453,9 +523,9 @@ export function OperatorDetailPage() {
                   <div>
                     <label className="text-[#8C7E6E] text-[11px] font-bold uppercase tracking-wide">Age</label>
                     {isEditing ? (
-                      <input type="number" value={editData.age || ""} onChange={e => setEditData({...editData, age: Number(e.target.value)})} className="mt-1 block w-full px-3 py-1.5 border border-[#E6DDCE] rounded-xl bg-white focus:outline-none focus:border-[#9C5B3C]" />
+                      <input type="number" value={editData.age || ""} onChange={e => setEditData({...editData, age: e.target.value === "" ? null : Number(e.target.value)})} className="mt-1 block w-full px-3 py-1.5 border border-[#E6DDCE] rounded-xl bg-white focus:outline-none focus:border-[#9C5B3C]" />
                     ) : (
-                      <p className="font-semibold text-[#221912] mt-1">{operator.age} years</p>
+                      <p className="font-semibold text-[#221912] mt-1">{operator.age ? `${operator.age} years` : "—"}</p>
                     )}
                   </div>
                   <div>
@@ -610,7 +680,7 @@ export function OperatorDetailPage() {
                       <div className="p-3.5 bg-white rounded-xl border border-[#E6DDCE] shadow-2xs">
                         <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Average Proficiency</div>
                         <div className="text-base font-bold text-[#9C5B3C] mt-1 font-mono">
-                          {avgRating !== "—" ? `Grade ${avgRating}` : "Not Rated"}
+                          {avgRating !== "—" ? `Level ${avgRating} / 4` : "Not Rated"}
                         </div>
                         <div className="text-[10px] text-[#8C7E6E] mt-0.5">
                           Across all qualified ops
@@ -619,11 +689,12 @@ export function OperatorDetailPage() {
 
                       <div className="p-3.5 bg-white rounded-xl border border-[#E6DDCE] shadow-2xs">
                         <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Highest Skill Tier</div>
-                        <div className="text-base font-bold text-[#221912] mt-1">
-                          {highestRating > 0 ? `Grade ${highestRating}` : "—"}
+                        <div className="text-base font-bold text-[#221912] mt-1 flex items-center gap-1.5">
+                          {highestRating > 0 && <SkillLevelIcon rating={highestRating} size={18} decorative />}
+                          {highestRating > 0 ? `Level ${highestRating}` : "—"}
                         </div>
                         <div className="text-[10px] text-[#8C7E6E] mt-0.5">
-                          {highestRating === 5 ? "Expert" : highestRating === 4 ? "Skilled" : highestRating === 3 ? "Intermediate" : highestRating === 2 ? "Basic" : highestRating === 1 ? "Beginner" : "No ratings recorded"}
+                          {highestRating > 0 ? `${skillLevelName(highestRating)} · ${SKILL_LEVELS[clampRating(highestRating)].band}` : "No ratings recorded"}
                         </div>
                       </div>
 
@@ -658,7 +729,7 @@ export function OperatorDetailPage() {
                       <tbody className="divide-y divide-[#F0EAE0] text-xs font-semibold">
                         {operations.map((op, index) => {
                           const currentSkill = skills[String(op.id)] || 0;
-                          const benchmark = getBenchmarkForOperation(op.name);
+                          const benchmark = getBenchmarkForOperation(op.name, op.standardSmv);
                           const smv = Number(op.standardSmv || benchmark?.defaultSmv || 0.5);
                           const smvSec = smv * 60;
 
@@ -670,16 +741,8 @@ export function OperatorDetailPage() {
                             ? opLogs.reduce((a, b) => a + b.actualCycleTimeSeconds, 0) / opLogs.length
                             : null;
 
-                          const qualifiedRange = currentSkill === 5
-                            ? benchmark?.rating5?.label
-                            : currentSkill === 4
-                            ? benchmark?.rating4?.label
-                            : currentSkill === 3
-                            ? benchmark?.rating3?.label
-                            : currentSkill === 2
-                            ? benchmark?.rating2?.label
-                            : currentSkill === 1
-                            ? benchmark?.rating1?.label
+                          const qualifiedRange = currentSkill > 0
+                            ? benchmark?.[tierKey(clampRating(currentSkill))]?.label
                             : null;
 
                           return (
@@ -726,27 +789,14 @@ export function OperatorDetailPage() {
                               <td className="py-3.5 px-4 align-middle">
                                 {currentSkill > 0 ? (
                                   <div className="flex items-center gap-2.5">
-                                    <span
-                                      className={`inline-flex items-center justify-center w-7 h-7 rounded-lg font-mono font-bold text-xs text-white shadow-2xs shrink-0 ${
-                                        currentSkill === 5 ? "bg-[#77876F]" :
-                                        currentSkill === 4 ? "bg-[#9C5B3C]" :
-                                        currentSkill === 3 ? "bg-[#B48259]" :
-                                        currentSkill === 2 ? "bg-[#C0462B]" :
-                                        "bg-rose-600"
-                                      }`}
-                                    >
-                                      {currentSkill}
-                                    </span>
+                                    <SkillLevelIcon rating={currentSkill} size={26} className="shrink-0" />
                                     <div>
                                       <span className="font-bold text-xs text-[#221912] block">
-                                        {currentSkill === 5 ? "Grade 5 · Expert" :
-                                         currentSkill === 4 ? "Grade 4 · Skilled" :
-                                         currentSkill === 3 ? "Grade 3 · Intermediate" :
-                                         currentSkill === 2 ? "Grade 2 · Basic" :
-                                         "Grade 1 · Beginner"}
+                                        Level {clampRating(currentSkill)} · {skillLevelName(currentSkill)}
                                       </span>
                                       <span className="text-[10px] text-[#8C7E6E] font-mono">
-                                        {qualifiedRange ? `Target: ${qualifiedRange}` : "Standard SMV"}
+                                        {SKILL_LEVELS[clampRating(currentSkill)].band}
+                                        {qualifiedRange ? ` · Target: ${qualifiedRange}` : " · Standard SMV"}
                                       </span>
                                     </div>
                                   </div>
@@ -823,7 +873,8 @@ export function OperatorDetailPage() {
 
                     const testGroups = Array.from(map.entries()).map(([key, data]) => {
                       const avg = data.times.reduce((a, b) => a + b, 0) / data.times.length;
-                      const rating = cycleTimeToRating(avg, data.opName);
+                      const opSmv = operations.find(o => String(o.id) === String(data.operationId))?.standardSmv;
+                      const rating = cycleTimeToRating(avg, data.opName, opSmv);
                       return {
                         key,
                         ...data,
@@ -844,7 +895,7 @@ export function OperatorDetailPage() {
                         await skillApi.addAssessment({
                           operatorId: Number(operator.id),
                           operationId: Number(group.operationId),
-                          rating: group.rating as 1 | 2 | 3 | 4 | 5,
+                          rating: group.rating,
                           cycleTimeSeconds: Math.round(Number(group.avgTime)),
                           effectiveDate: group.date,
                           notes: `Submitted ${group.count} test run(s) with daily average ${group.avgTime}s`,
@@ -863,7 +914,7 @@ export function OperatorDetailPage() {
                           await skillApi.addAssessment({
                             operatorId: Number(operator.id),
                             operationId: Number(group.operationId),
-                            rating: group.rating as 1 | 2 | 3 | 4 | 5,
+                            rating: group.rating,
                             cycleTimeSeconds: Math.round(Number(group.avgTime)),
                             effectiveDate: group.date,
                             notes: `Submitted ${group.count} test run(s) with daily average ${group.avgTime}s`,
@@ -966,14 +1017,17 @@ export function OperatorDetailPage() {
                                         {isDraft ? (
                                           <div className="inline-flex flex-col items-center">
                                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-md font-bold text-[10px]">
-                                              Draft (Rating {group.rating} Pending)
+                                              <SkillLevelIcon rating={group.rating} size={12} decorative />
+                                              Draft (Level {group.rating} · {skillLevelName(group.rating)} pending)
                                             </span>
                                             <span className="text-[9px] text-[#8C7E6E] mt-0.5">Not in matrix until submitted</span>
                                           </div>
                                         ) : (
                                           <div className="inline-flex flex-col items-center">
                                             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#221912] text-white font-bold rounded-md text-[11px] shadow-2xs">
-                                              <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Rating {group.rating} · Submitted
+                                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                              <SkillLevelIcon rating={group.rating} size={12} mono decorative />
+                                              Level {group.rating} · {skillLevelName(group.rating)} · Submitted
                                             </span>
                                           </div>
                                         )}

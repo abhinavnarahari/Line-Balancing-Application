@@ -20,7 +20,6 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/operator-allocation")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "*")
 public class OperatorAllocationController {
 
     private final OperatorPoolService operatorPoolService;
@@ -54,14 +53,14 @@ public class OperatorAllocationController {
     }
 
     @PostMapping("/validate")
-    public ApiResponse<PreflightValidationDTO> validate(@RequestBody OptimizationRequestDTO request) {
+    public ApiResponse<PreflightValidationDTO> validate(@jakarta.validation.Valid @RequestBody OptimizationRequestDTO request) {
         List<LineRequirementDTO> lineReqs = lineRequirementService.getLineRequirements(request.getLineIds());
         List<OperatorPoolDTO> pool = operatorPoolService.getOperatorPool(request.getPlanningDate(), request.getShiftId());
         return ApiResponse.success(validator.validate(request, lineReqs, pool));
     }
 
     @PostMapping("/optimize")
-    public ApiResponse<OptimizationResponseDTO> optimize(@RequestBody OptimizationRequestDTO request) {
+    public ApiResponse<OptimizationResponseDTO> optimize(@jakarta.validation.Valid @RequestBody OptimizationRequestDTO request) {
         log.info("Running Multi-Line Operator Allocation Optimizer for {} lines on date {}",
                 request.getLineIds() != null ? request.getLineIds().size() : "default", request.getPlanningDate());
 

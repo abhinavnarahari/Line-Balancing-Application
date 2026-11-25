@@ -17,6 +17,12 @@ import java.util.Set;
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class OperationBulletin extends AuditableEntity {
 
+    /** Optimistic-lock counter; incremented by JPA on every update. */
+    @Version
+    @Column(name = "row_version", nullable = false)
+    @Builder.Default
+    private Long rowVersion = 0L;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

@@ -17,7 +17,7 @@ public class OperatorRequest {
     @Size(max = 150, message = "Name must not exceed 150 characters")
     private String name;
 
-    @NotNull(message = "Age is required")
+    // Optional; when given it must be 16-70
     @Min(value = 16, message = "Age must be at least 16")
     @Max(value = 70, message = "Age must not exceed 70")
     private Integer age;

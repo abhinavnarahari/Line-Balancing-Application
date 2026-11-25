@@ -50,7 +50,7 @@ public class LinePlanService {
     }
 
     public LinePlanResponse getPlanForOrder(Long orderId) {
-        return linePlanRepository.findByOrderId(orderId)
+        return linePlanRepository.findFirstByOrderIdOrderByIdAsc(orderId)
                 .map(this::mapToResponse)
                 .orElse(null);
     }
@@ -67,7 +67,7 @@ public class LinePlanService {
             line = sewingLineRepository.findById(request.getLineId()).orElse(null);
         }
 
-        LinePlan plan = linePlanRepository.findByOrderId(order.getId()).orElse(new LinePlan());
+        LinePlan plan = linePlanRepository.findFirstByOrderIdOrderByIdAsc(order.getId()).orElse(new LinePlan());
         
         plan.setOrder(order);
         plan.setShift(shift);
@@ -82,7 +82,12 @@ public class LinePlanService {
         plan.setTargetOutput(request.getTargetOutput() != null && request.getTargetOutput() > 0 
                 ? request.getTargetOutput() 
                 : (order.getTotalQuantity() != null && order.getTotalQuantity() > 0 ? order.getTotalQuantity() : 480));
-        plan.setStatus("active");
+        // Save only (release=false): a new plan stays a draft, a released plan stays released
+        if (request.getRelease() == null || Boolean.TRUE.equals(request.getRelease())) {
+            plan.setStatus("active");
+        } else if (plan.getId() == null || plan.getStatus() == null) {
+            plan.setStatus("draft");
+        }
         
         // Clear existing assignments to replace with new ones
         plan.getAssignments().clear();

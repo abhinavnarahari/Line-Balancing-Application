@@ -23,17 +23,32 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
     @Query("SELECT sa FROM ShiftAssignment sa WHERE sa.operator.id = :operatorId AND sa.effectiveTo IS NULL")
     List<ShiftAssignment> findActiveAssignmentsByOperator(@Param("operatorId") Long operatorId);
 
-    /**
-     * Find the current active assignment for an operator on a given date.
-     */
+    /** Assignments of one operator covering a date, most recent start first. */
     @Query("""
             SELECT sa FROM ShiftAssignment sa
             WHERE sa.operator.id = :operatorId
               AND sa.effectiveFrom <= :date
               AND (sa.effectiveTo IS NULL OR sa.effectiveTo >= :date)
-            ORDER BY sa.effectiveFrom DESC
+            ORDER BY sa.effectiveFrom DESC, sa.id DESC
             """)
-    Optional<ShiftAssignment> findCurrentAssignment(
+    List<ShiftAssignment> findAssignmentsCovering(
             @Param("operatorId") Long operatorId,
             @Param("date") java.time.LocalDate date);
+
+    /**
+     * The operator's assignment on a given date. If legacy data has overlapping assignments, the most recently
+     * started one wins (a single-result query would throw IncorrectResultSizeDataAccessException instead).
+     */
+    default Optional<ShiftAssignment> findCurrentAssignment(Long operatorId, java.time.LocalDate date) {
+        return findAssignmentsCovering(operatorId, date).stream().findFirst();
+    }
+
+    /** All assignments covering a date, most recent start first (one query for the operator pool). */
+    @Query("""
+            SELECT sa FROM ShiftAssignment sa
+            WHERE sa.effectiveFrom <= :date
+              AND (sa.effectiveTo IS NULL OR sa.effectiveTo >= :date)
+            ORDER BY sa.effectiveFrom DESC, sa.id DESC
+            """)
+    List<ShiftAssignment> findAllCovering(@Param("date") java.time.LocalDate date);
 }

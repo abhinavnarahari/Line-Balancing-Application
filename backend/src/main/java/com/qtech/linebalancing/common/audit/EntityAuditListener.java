@@ -42,7 +42,7 @@ public class EntityAuditListener {
                         .entityId(entityId)
                         .action(action)
                         .details(details)
-                        .performedBy("Admin")
+                        .performedBy(currentUserName())
                         .timestamp(LocalDateTime.now())
                         .build();
                 
@@ -51,6 +51,16 @@ public class EntityAuditListener {
         } catch (Exception e) {
             // Ignore audit log failures
         }
+    }
+
+    /** Name of the signed-in user making the change, or "System" for startup/background work. */
+    private static String currentUserName() {
+        org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof com.qtech.linebalancing.auth.service.AppUserPrincipal p) {
+            return p.getFullName();
+        }
+        return "System";
     }
 
     private String buildDetailedExplanation(Object entity, String entityName, String entityId, String action) {

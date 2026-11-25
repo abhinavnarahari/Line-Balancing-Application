@@ -11,7 +11,6 @@ import {
   AlertTriangle,
   Layers,
   Sparkles,
-  GitBranch,
   ShieldCheck,
   Tag,
   Sliders,
@@ -24,6 +23,8 @@ import type { Style } from "../styles/api";
 import type { Operation } from "../operations/api";
 import { machinesApi, type Machine } from "../machines/api";
 import { parseLinesForBulletinForm, exportBulletinsDetailed } from "./bulletinExcel";
+import { clampRating, DEFAULT_REQUIRED_RATING, MAX_SKILL_RATING, SKILL_LEVELS, SKILL_RATINGS } from "../skill-matrix/skillScale";
+import { SkillLevelIcon } from "../../components/ui/SkillLevelIcon";
 
 export const GARMENT_SECTIONS: { id: string; label: string; color: string }[] = [];
 
@@ -84,7 +85,7 @@ export function BulletinForm({
         isParallelizable: l.isParallelizable ?? false,
         splitAllowed: l.splitAllowed ?? true,
         splitType: l.splitType || "RATIO",
-        skillRatingRequired: l.skillRatingRequired || 3,
+        skillRatingRequired: l.skillRatingRequired ? clampRating(l.skillRatingRequired) : DEFAULT_REQUIRED_RATING,
         predecessorIds: l.predecessorIds || "",
       }));
     }
@@ -185,7 +186,7 @@ export function BulletinForm({
         operationName: op.name,
         smv: Number(op.standardSmv || op.defaultSmv) || 0.5,
         machineType: op.machineType || op.defaultMachineType || "SNLS",
-        skillRatingRequired: (op.skillLevelRequired || op.skillLevel || op.defaultSkillRating || 3) as any,
+        skillRatingRequired: clampRating(Number(op.skillLevelRequired || op.skillLevel || op.defaultSkillRating) || DEFAULT_REQUIRED_RATING),
         section: "MAIN_ASSEMBLY",
         isParallelizable: false,
         splitAllowed: true,
@@ -211,7 +212,7 @@ export function BulletinForm({
       operationName: firstOp ? firstOp.name : "Custom Sewing Operation",
       smv: firstOp ? Number(firstOp.standardSmv || firstOp.defaultSmv) || 0.5 : 0.5,
       machineType: firstOp?.machineType || firstOp?.defaultMachineType || "SNLS",
-      skillRatingRequired: (firstOp?.skillLevelRequired || firstOp?.skillLevel || firstOp?.defaultSkillRating || 3) as any,
+      skillRatingRequired: clampRating(Number(firstOp?.skillLevelRequired || firstOp?.skillLevel || firstOp?.defaultSkillRating) || DEFAULT_REQUIRED_RATING),
       section: "MAIN_ASSEMBLY",
       isParallelizable: false,
       splitAllowed: true,
@@ -249,7 +250,7 @@ export function BulletinForm({
       bulletinCode: formData.bulletinCode || "BULLETIN",
       name: formData.name || "Operation Bulletin",
       description: formData.description,
-      version: formData.version,
+      version: formData.version ?? 1,
       revisionNumber: formData.revisionNumber,
       status: formData.status as any,
       effectiveFrom: formData.effectiveFrom,
@@ -278,7 +279,7 @@ export function BulletinForm({
           updates.machineType = foundOp.machineType || foundOp.defaultMachineType;
         }
         if (!updates.skillRatingRequired && (foundOp.skillLevelRequired || foundOp.skillLevel || foundOp.defaultSkillRating)) {
-          updates.skillRatingRequired = (foundOp.skillLevelRequired || foundOp.skillLevel || foundOp.defaultSkillRating) as any;
+          updates.skillRatingRequired = clampRating(Number(foundOp.skillLevelRequired || foundOp.skillLevel || foundOp.defaultSkillRating));
         }
       }
     }
@@ -335,7 +336,7 @@ export function BulletinForm({
           operationId: l.operationId,
           smv: Number(l.smv) || 0.1,
           machineType: l.machineType || "SNLS",
-          skillRatingRequired: Number(l.skillRatingRequired) || 3,
+          skillRatingRequired: clampRating(Number(l.skillRatingRequired) || DEFAULT_REQUIRED_RATING),
           section: "MAIN_ASSEMBLY",
           predecessorIds: "",
           isParallelizable: l.isParallelizable ?? false,
@@ -513,9 +514,9 @@ export function BulletinForm({
           </span>
           <p className="text-2xl font-black font-mono text-amber-700 mt-1">
             {lines.length > 0 
-              ? (lines.reduce((a, b) => a + (Number(b.skillRatingRequired) || 3), 0) / lines.length).toFixed(1)
-              : "3.0"
-            } <span className="text-xs font-bold text-amber-600">/ 5</span>
+              ? (lines.reduce((a, b) => a + clampRating(Number(b.skillRatingRequired) || DEFAULT_REQUIRED_RATING), 0) / lines.length).toFixed(1)
+              : DEFAULT_REQUIRED_RATING.toFixed(1)
+            } <span className="text-xs font-bold text-amber-600">/ {MAX_SKILL_RATING}</span>
           </p>
           <span className="text-[10px] text-[#8C7E6E]">Sewing complexity index</span>
         </div>
@@ -833,20 +834,18 @@ export function BulletinForm({
                       </select>
                     </div>
 
-                    {/* Skill Rating (1-5) */}
+                    {/* Skill level required (factory 4-level scale) */}
                     <div className="flex items-center gap-1.5 bg-[#FAF7F2] px-2.5 py-1 rounded-xl border border-[#E6DDCE] shadow-2xs" title="Skill Rating required">
-                      <ShieldCheck className="w-3.5 h-3.5 text-[#9C5B3C] shrink-0" />
+                      <SkillLevelIcon rating={line.skillRatingRequired} size={14} decorative />
                       <span className="text-[10px] font-bold text-[#8C7E6E] uppercase">Skill:</span>
                       <select
-                        value={line.skillRatingRequired}
-                        onChange={(e) => handleUpdateLine(index, { skillRatingRequired: parseInt(e.target.value, 10) as any })}
+                        value={clampRating(Number(line.skillRatingRequired) || DEFAULT_REQUIRED_RATING)}
+                        onChange={(e) => handleUpdateLine(index, { skillRatingRequired: clampRating(parseInt(e.target.value, 10)) })}
                         className="bg-white px-2 py-0.5 rounded-lg border border-[#E6DDCE] font-bold text-[#221912] text-xs hover:border-[#9C5B3C] focus:outline-hidden focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 cursor-pointer transition-colors"
                       >
-                        <option value={1}>★ 1 Basic</option>
-                        <option value={2}>★★ 2 Semi-Skilled</option>
-                        <option value={3}>★★★ 3 Skilled</option>
-                        <option value={4}>★★★★ 4 High Skill</option>
-                        <option value={5}>★★★★★ 5 Master</option>
+                        {[...SKILL_RATINGS].reverse().map(r => (
+                          <option key={r} value={r}>{r} · {SKILL_LEVELS[r].name}</option>
+                        ))}
                       </select>
                     </div>
 

@@ -1,4 +1,5 @@
 import { api } from "../../lib/api";
+import type { SkillRating } from "./skillScale";
 
 export interface SkillAssessment {
   id: string | number;
@@ -8,11 +9,13 @@ export interface SkillAssessment {
   operationId: string | number;
   operationName?: string;
   operationCode?: string;
-  rating: 1 | 2 | 3 | 4 | 5;
+  /** Factory 4-level scale (see skillScale.ts). */
+  rating: SkillRating;
   cycleTimeSeconds: number;
   revision: number;
   effectiveDate: string;
   notes?: string;
+  createdAt?: string;
 }
 
 export interface PerformanceLog {
@@ -47,7 +50,7 @@ export function cycleTimeToRating(
   seconds: number,
   operationNameOrCode?: string,
   defaultSmv?: number
-): 1 | 2 | 3 | 4 | 5 {
+): SkillRating {
   return getRatingForOperationCycleTime(seconds, operationNameOrCode, defaultSmv);
 }
 

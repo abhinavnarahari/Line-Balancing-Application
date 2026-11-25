@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 
+@org.springframework.validation.annotation.Validated
 @RestController
 @RequestMapping("/api/piece-production")
 @RequiredArgsConstructor
@@ -27,10 +28,24 @@ public class PieceProductionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    /** Excel import: all runs are recorded together, or none are. */
+    @PostMapping("/batch")
+    public ResponseEntity<List<PieceProductionLogResponse>> recordPieceLogsBatch(
+            @RequestBody @jakarta.validation.constraints.Size(min = 1, max = 5000, message = "must contain between 1 and 5000 runs")
+            List<@Valid PieceProductionLogRequest> requests) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(pieceProductionService.recordPieceLogsBatch(requests));
+    }
+
     @GetMapping("/logs")
     public ResponseEntity<List<PieceProductionLogResponse>> getLogs(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(pieceProductionService.getLogsByDate(date));
+    }
+
+    /** Days with production recorded: [{date, runs, goodQty}] */
+    @GetMapping("/days")
+    public ResponseEntity<List<java.util.Map<String, Object>>> getProductionDays() {
+        return ResponseEntity.ok(pieceProductionService.getProductionDays());
     }
 
     @GetMapping("/order/{orderId}")

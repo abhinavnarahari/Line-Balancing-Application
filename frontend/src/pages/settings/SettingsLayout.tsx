@@ -1,6 +1,8 @@
+import { Suspense } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { cn } from "../../utils/cn";
-import { Clock, Users, Scissors, Layers, BookOpen, Settings, Activity, Cpu } from "lucide-react";
+import { Clock, Users, Scissors, Layers, BookOpen, Settings, Activity, Cpu, UserCog } from "lucide-react";
+import { useAuth } from "../../features/auth/AuthContext";
 
 const tabs = [
   { name: "Shifts & Breaks", href: "/settings/shifts", icon: Clock, description: "Shift timings & break schedules" },
@@ -12,8 +14,14 @@ const tabs = [
   { name: "Style Catalog", href: "/settings/styles", icon: BookOpen, description: "Garment styles & buyers" },
 ];
 
+const adminTabs = [
+  { name: "User Accounts", href: "/settings/users", icon: UserCog, description: "Sign-in accounts & roles" },
+];
+
 export function SettingsLayout() {
   const location = useLocation();
+  const { user } = useAuth();
+  const visibleTabs = user?.role === "SYSTEM_ADMIN" ? [...tabs, ...adminTabs] : tabs;
 
   return (
     <div className="space-y-6 w-full p-6 lg:p-8 bg-[#F6F1E8] min-h-screen">
@@ -38,7 +46,7 @@ export function SettingsLayout() {
         {/* Segmented Master Tab Bar */}
         <div className="bg-white p-1.5 rounded-2xl border border-[#E6DDCE] shadow-[0_1px_3px_rgba(34,25,18,0.05)]">
           <nav className="flex flex-wrap gap-1" aria-label="Settings Tabs">
-            {tabs.map((tab) => {
+            {visibleTabs.map((tab) => {
               const active = location.pathname.startsWith(tab.href);
               const Icon = tab.icon;
 
@@ -64,7 +72,15 @@ export function SettingsLayout() {
 
       {/* ── Nested Master Pages Outlet ─────────────────────────────── */}
       <div className="w-full">
-        <Outlet />
+        <Suspense
+              fallback={
+                <div className="flex items-center justify-center py-24" role="status" aria-label="Loading page">
+                  <div className="w-8 h-8 border-3 border-[#9C5B3C] border-t-transparent rounded-full animate-spin" />
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
       </div>
     </div>
   );

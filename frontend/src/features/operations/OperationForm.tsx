@@ -125,16 +125,6 @@ export function OperationForm({ existingOperations = [], initialData, onSubmit, 
     }
   };
 
-  const handleSmvMinutesChange = (valStr: string) => {
-    setSmvVal(valStr);
-    const min = parseFloat(valStr);
-    if (!isNaN(min) && min > 0) {
-      const sec = Math.round(min * 60 * 10) / 10;
-      setSecondsVal(sec);
-      setFormData(prev => ({ ...prev, standardSmv: min }));
-    }
-  };
-
   const setSecondsPreset = (sec: number) => {
     setSecondsVal(sec);
     const min = Math.round((sec / 60) * 1000) / 1000;

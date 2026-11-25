@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import * as XLSX from "xlsx";
+import { saveWorkbook } from "../../utils/excel";
 import {
   Layers,
   Users,
@@ -33,6 +34,7 @@ import {
   type LineStationCoverage,
   type LineOperationsSummary,
 } from "./lineLevelMetrics";
+import { toLocalDateString } from "../../utils/date";
 
 export interface LineLevelDashboardProps {
   lines: SewingLine[];
@@ -106,7 +108,7 @@ export function LineLevelDashboard({
         const matchesName = l.lineName.toLowerCase().includes(q);
         const matchesStyle = l.activeStyleName.toLowerCase().includes(q);
         const matchesOrder = l.activeOrderNo.toLowerCase().includes(q);
-        const matchesBuyer = l.buyer.toLowerCase().includes(q);
+        const matchesBuyer = (l.buyer || "").toLowerCase().includes(q);
         const matchesSupervisor = l.supervisorName.toLowerCase().includes(q);
         return matchesCode || matchesName || matchesStyle || matchesOrder || matchesBuyer || matchesSupervisor;
       }
@@ -261,8 +263,8 @@ export function LineLevelDashboard({
       XLSX.utils.book_append_sheet(wb, wsSummary, "Line Operations Review");
       XLSX.utils.book_append_sheet(wb, wsStations, "Workstation Manning Details");
 
-      const todayStr = new Date().toISOString().split("T")[0];
-      XLSX.writeFile(wb, `Line_Operations_Planned_vs_Actual_${todayStr}.xlsx`);
+      const todayStr = toLocalDateString();
+      void saveWorkbook(wb, `Line_Operations_Planned_vs_Actual_${todayStr}.xlsx`);
     } catch (err) {
       console.error("Failed to export Excel report:", err);
       alert("Export failed. Please try again.");

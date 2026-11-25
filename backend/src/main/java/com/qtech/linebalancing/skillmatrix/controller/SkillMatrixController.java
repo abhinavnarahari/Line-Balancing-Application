@@ -10,10 +10,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Validated
 @RestController
 @RequestMapping("/api/skill-matrix")
 @RequiredArgsConstructor
@@ -53,6 +55,16 @@ public class SkillMatrixController {
                 .body(ApiResponse.success("Skill assessment recorded", skillMatrixService.addAssessment(request)));
     }
 
+    /** Excel import: all ratings are recorded together, or none are. */
+    @PostMapping("/batch")
+    public ResponseEntity<ApiResponse<List<SkillAssessmentResponse>>> addAssessmentsBatch(
+            @RequestBody @jakarta.validation.constraints.Size(min = 1, max = 20000, message = "must contain between 1 and 20000 ratings")
+            List<@Valid SkillAssessmentRequest> requests) {
+        List<SkillAssessmentResponse> saved = skillMatrixService.addAssessmentsBatch(requests);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(saved.size() + " skill ratings imported", saved));
+    }
+
     // ── Performance Logs ──────────────────────────────────────────────────────
 
     /** Get all daily performance logs. Optionally filter by operatorId. */
@@ -73,7 +85,7 @@ public class SkillMatrixController {
     /** Batch upload multiple performance logs (from multi-run test or Excel import). */
     @PostMapping("/performance-logs/batch")
     public ResponseEntity<ApiResponse<List<PerformanceLogResponse>>> batchAddPerformanceLogs(
-            @RequestBody List<PerformanceLogRequest> requests) {
+            @RequestBody List<@Valid PerformanceLogRequest> requests) {
         List<PerformanceLogResponse> result = skillMatrixService.batchAddPerformanceLogs(requests);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Batch performance logs recorded and skill ratings updated", result));

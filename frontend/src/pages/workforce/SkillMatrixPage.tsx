@@ -10,42 +10,41 @@ import { CustomSelect } from "../../components/ui/CustomSelect";
 import { skillApi, cycleTimeToRating, type SkillAssessment } from "../../features/skill-matrix/api";
 import { operationsApi, type Operation } from "../../features/operations/api";
 import { operatorsApi, type Operator } from "../../features/operators/api";
-import { exportToExcel } from "../../utils/excel";
+import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { parseSkillMatrixRows, skillMatrixTemplate } from "../../features/skill-matrix/skillMatrixImport";
+import { saveSkillRatings } from "../../features/skill-matrix/batchApi";
+import { getErrorMessage } from "../../lib/api";
+import { notifyMasterDataUpdated } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
+import { loadFailed } from "../../components/common/GlobalErrorToaster";
+import { SkillLevelIcon } from "../../components/ui/SkillLevelIcon";
+import { SKILL_LEVELS, SKILL_RATINGS, clampRating, type SkillRating } from "../../features/skill-matrix/skillScale";
 
-// Read-only skill badge for sewing machine operators
+// Read-only skill cell for sewing machine operators: the factory's quarter-filled skill circle + level number
 function SkillBadge({ rating }: { rating?: number }) {
   if (!rating) {
     return (
-      <div className="w-full h-10 flex items-center justify-center">
+      <div className="w-full h-10 flex items-center justify-center" title="Not rated">
         <span className="w-2 h-2 rounded-full bg-[#E6DDCE]" />
       </div>
     );
   }
-  const config: Record<number, { bg: string; text: string; label: string }> = {
-    1: { bg: "bg-[#F6F1E8]", text: "text-[#8C7E6E]", label: "Beginner" },
-    2: { bg: "bg-[#fffbeb]", text: "text-[#b45309]", label: "Basic" },
-    3: { bg: "bg-[#EFE9DF]", text: "text-[#8B5E3C]", label: "Intermediate" },
-    4: { bg: "bg-[#F6F1E8]", text: "text-[#9C5B3C]", label: "Skilled" },
-    5: { bg: "bg-[#F3F5F2]", text: "text-[#77876F]", label: "Expert" },
-  };
-  const c = config[rating] || config[1];
+  const level = clampRating(rating);
+  const info = SKILL_LEVELS[level];
   return (
     <div className="w-full h-10 flex items-center justify-center">
-      <div className={`w-8 h-8 rounded-xl ${c.bg} ${c.text} border border-[#E6DDCE] flex items-center justify-center text-xs font-black shadow-2xs`} title={c.label}>
-        {rating}
+      <div
+        className="inline-flex items-center gap-1 px-1.5 py-1 rounded-xl bg-white border border-[#E6DDCE] shadow-2xs"
+        title={`Level ${level} · ${info.name} (${info.band}) — ${info.description}`}
+      >
+        <SkillLevelIcon rating={level} size={20} decorative />
+        <span className="text-[11px] font-black font-mono" style={{ color: info.color }}>
+          {level}
+        </span>
       </div>
     </div>
   );
 }
-
-// Rating level legend
-const RATING_LEGEND = [
-  { rating: 1, label: "Beginner",     color: "bg-[#F6F1E8] text-[#8C7E6E] border border-[#E6DDCE]" },
-  { rating: 2, label: "Basic",        color: "bg-[#fffbeb] text-[#b45309] border border-[#fde68a]" },
-  { rating: 3, label: "Intermediate", color: "bg-[#EFE9DF] text-[#8B5E3C] border border-[#D8C9B8]" },
-  { rating: 4, label: "Skilled",      color: "bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE]" },
-  { rating: 5, label: "Expert",       color: "bg-[#F3F5F2] text-[#77876F] border border-[#d1d8cd]" },
-];
 
 // Helper to determine if workforce member works directly on sewing machines
 export function worksOnMachines(op: any): boolean {
@@ -370,7 +369,7 @@ export function SkillMatrixPage() {
   // Daily Performance Log modal
   const [isPerfModalOpen, setIsPerfModalOpen] = useState(false);
   const [perfForm, setPerfForm] = useState({
-    operatorId: "", operationId: "", logDate: new Date().toISOString().split("T")[0],
+    operatorId: "", operationId: "", logDate: toLocalDateString(),
     actualCycleTimeSeconds: "", recordedBy: "", notes: ""
   });
   const [perfSaving, setPerfSaving] = useState(false);
@@ -383,7 +382,7 @@ export function SkillMatrixPage() {
         skillApi.getCurrentMatrix(),
         operationsApi.getOperations(),
         operatorsApi.getOperators(),
-        skillApi.getPerformanceLogs().catch(() => []),
+        skillApi.getPerformanceLogs().catch(loadFailed([])),
       ]);
       setMatrix(mat);
       setPerformanceLogs(perfLogs);
@@ -397,6 +396,44 @@ export function SkillMatrixPage() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Import a skill matrix in the export layout (Employee ID + one column per operation, levels 1–4).
+  // Every row is checked first; ratings are saved together or not at all.
+  const importTemplate = useMemo(() => skillMatrixTemplate(operations as any[]), [operations]);
+  const handleImport = async (file: File) => {
+    let rows: Record<string, unknown>[];
+    let latestOperators: any[];
+    let latestOperations: any[];
+    try {
+      rows = await readFromExcel<Record<string, unknown>>(file);
+      [latestOperators, latestOperations] = await Promise.all([operatorsApi.getOperators(), operationsApi.getOperations()]);
+    } catch (err) {
+      alert(`Could not read the file: ${getErrorMessage(err)}`);
+      return;
+    }
+    const { ratings, errors, operatorCount, unknownColumns } = parseSkillMatrixRows(rows, latestOperators, latestOperations);
+    const usedUnknown = unknownColumns.filter(h => rows.some(r => r[h] !== undefined && String(r[h]).trim() !== "" && String(r[h]).trim() !== "-"));
+    if (usedUnknown.length > 0) {
+      alert(`Nothing was imported. These columns don't match any operation in the Operations master (use "Name (CODE)" headers from the template):\n\n${usedUnknown.slice(0, 12).join("\n")}`);
+      return;
+    }
+    if (!errors.ok) {
+      alert(`Nothing was imported. Fix these rows and try again:\n\n${errors.summary()}`);
+      return;
+    }
+    if (ratings.length === 0) {
+      alert("The file has no skill levels to import (all operation cells are blank or -).");
+      return;
+    }
+    try {
+      await saveSkillRatings(ratings);
+      notifyMasterDataUpdated("all");
+      await loadData();
+      alert(`Imported ${ratings.length} skill level${ratings.length === 1 ? "" : "s"} for ${operatorCount} operator${operatorCount === 1 ? "" : "s"}. Previous levels are kept in each operator's history.`);
+    } catch (err) {
+      alert(`Nothing was imported: ${getErrorMessage(err)}`);
     }
   };
 
@@ -440,7 +477,7 @@ export function SkillMatrixPage() {
         notes: perfForm.notes,
       });
       setIsPerfModalOpen(false);
-      setPerfForm({ operatorId: "", operationId: "", logDate: new Date().toISOString().split("T")[0], actualCycleTimeSeconds: "", recordedBy: "", notes: "" });
+      setPerfForm({ operatorId: "", operationId: "", logDate: toLocalDateString(), actualCycleTimeSeconds: "", recordedBy: "", notes: "" });
       alert("Performance log saved!");
     } catch (err) {
       console.error(err);
@@ -534,6 +571,20 @@ export function SkillMatrixPage() {
   const filledCells = matrix.length;
   const coveragePct = totalMachineCells > 0 ? Math.round((filledCells / totalMachineCells) * 100) : 0;
 
+  // How many rated cells sit at each level (operators currently shown in the grid)
+  const levelCounts = useMemo(() => {
+    const counts: Record<SkillRating, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
+    filteredMachineOperators.forEach((operator: any) => {
+      operations.forEach((op: any) => {
+        const r = getEffectiveRating(operator.id, op.id);
+        if (r && r > 0) counts[clampRating(r)]++;
+      });
+    });
+    return counts;
+    // getEffectiveRating reads matrix, performanceLogs and operations
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredMachineOperators, operations, matrix, performanceLogs]);
+
   const handleExportFullMatrix = () => {
     if (activeSection === "NON_MACHINE") {
       // Export Non-Machine Workforce Roster (No operation skill ratings)
@@ -553,7 +604,7 @@ export function SkillMatrixPage() {
           "Status": person.active ? "Active" : "Inactive",
         };
       });
-      exportToExcel(rows, `Non_Machine_Workforce_Roster_${new Date().toISOString().split("T")[0]}`);
+      exportToExcel(rows, `Non_Machine_Workforce_Roster_${toLocalDateString()}`);
     } else {
       // Export Sewing Machine Operators Skill Matrix
       const rows = filteredMachineOperators.map((operator: any) => {
@@ -572,7 +623,7 @@ export function SkillMatrixPage() {
         });
         return row;
       });
-      exportToExcel(rows, `Sewing_Machine_Skill_Matrix_${new Date().toISOString().split("T")[0]}`);
+      exportToExcel(rows, `Sewing_Machine_Skill_Matrix_${toLocalDateString()}`);
     }
   };
 
@@ -581,17 +632,24 @@ export function SkillMatrixPage() {
       <PageHeader
         eyebrow="Workforce"
         title="Sewing Skill Matrix"
+        showImportExport={activeSection !== "NON_MACHINE"}
+        onExport={handleExportFullMatrix}
+        onImport={handleImport}
+        importTemplate={importTemplate}
         action={
           <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="md"
-              onClick={handleExportFullMatrix}
-              className="border-[#E6DDCE] text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8]"
-            >
-              <Download className="h-4 w-4 mr-1.5" />
-              Export Excel
-            </Button>
+            {/* The roster tab has no import; its export stays here (the matrix tab uses the header's Import / Export) */}
+            {activeSection === "NON_MACHINE" && (
+              <Button
+                variant="outline"
+                size="md"
+                onClick={handleExportFullMatrix}
+                className="border-[#E6DDCE] text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8]"
+              >
+                <Download className="h-4 w-4 mr-1.5" />
+                Export Excel
+              </Button>
+            )}
             <Link to="/skill-matrix/logs">
               <Button variant="outline" size="md" className="border-[#E6DDCE] text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8]">
                 <Activity className="h-4 w-4 mr-1.5" />
@@ -643,24 +701,46 @@ export function SkillMatrixPage() {
         </div>
       </div>
 
-      {/* ── Rating Legend Bar (Only shown for Machine Operators) ──────── */}
+      {/* ── Skill Level Legend (Only shown for Machine Operators) ────── */}
       {activeSection === "MACHINE_OPERATORS" && (
-        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white border border-[#E6DDCE] rounded-2xl shadow-2xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-bold text-[#8C7E6E] mr-1">Rating Legend:</span>
-            {RATING_LEGEND.map(l => (
-              <span key={l.rating} className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${l.color}`}>
-                <span className="font-mono">{l.rating}</span> {l.label}
-              </span>
-            ))}
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F6F1E8] text-[#8C7E6E] border border-[#E6DDCE]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#8C7E6E] inline-block" /> Not Rated
-            </span>
+        <div className="p-3.5 bg-white border border-[#E6DDCE] rounded-2xl shadow-2xs space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Skill Level Legend</span>
+            <div className="text-[11px] text-[#8C7E6E] flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 inline-block" />
+              <span>Each quarter of the circle is one level · % = share of the operation's target output</span>
+            </div>
           </div>
-
-          <div className="text-[11px] text-[#8C7E6E] flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 inline-block" />
-            <span>Ratings evaluate operator cycle times against standard operation SMV</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+            {SKILL_RATINGS.map(r => {
+              const info = SKILL_LEVELS[r];
+              return (
+                <div key={r} className="flex items-start gap-2.5 p-2.5 rounded-xl border border-[#E6DDCE] bg-[#FAF7F2]/60">
+                  <SkillLevelIcon rating={r} size={28} className="shrink-0" />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-extrabold text-[#221912]">
+                        <span className="font-mono">{r}</span> · {info.name}
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded-md border text-[10px] font-bold font-mono ${info.badge}`}>
+                        {info.band}
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-[#8C7E6E] leading-snug mt-0.5">{info.description}</p>
+                    <p className="text-[10px] font-mono font-bold text-[#9C5B3C] mt-0.5">{levelCounts[r]} rated cells</p>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex items-start gap-2.5 p-2.5 rounded-xl border border-dashed border-[#E6DDCE] bg-white">
+              <span className="w-7 h-7 shrink-0 flex items-center justify-center">
+                <span className="w-2 h-2 rounded-full bg-[#E6DDCE]" />
+              </span>
+              <div className="min-w-0">
+                <span className="text-xs font-extrabold text-[#221912]">Not rated</span>
+                <p className="text-[10.5px] text-[#8C7E6E] leading-snug mt-0.5">No assessment or submitted timing test yet</p>
+              </div>
+            </div>
           </div>
         </div>
       )}

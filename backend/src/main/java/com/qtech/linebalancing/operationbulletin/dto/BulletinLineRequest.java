@@ -22,8 +22,8 @@ public class BulletinLineRequest {
     @Size(max = 100, message = "Machine type must not exceed 100 characters")
     private String machineType;
 
-    @Min(value = 1, message = "Skill rating required must be between 1 and 5")
-    @Max(value = 5, message = "Skill rating required must be between 1 and 5")
+    @Min(value = 1, message = "Skill rating required must be between 1 and 4")
+    @Max(value = 4, message = "Skill rating required must be between 1 and 4")
     private Integer skillRatingRequired;
 
     private String section;

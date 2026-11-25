@@ -3,12 +3,13 @@ import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import type { Machine, MachineStatus } from "./api";
 import type { SewingLine } from "../lines/api";
+import { useSubmitGuard } from "../../utils/useSubmitGuard";
 
 interface MachineFormProps {
   existingMachines?: Machine[];
   initialData?: Machine | null;
   lines: SewingLine[];
-  onSubmit: (data: Omit<Machine, "id" | "createdAt" | "updatedAt">) => void;
+  onSubmit: (data: Omit<Machine, "id" | "createdAt" | "updatedAt">) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -81,17 +82,22 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
     }));
   };
 
+  const submit = useSubmitGuard();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
+    submit.run(() => onSubmit({
       ...formData,
       quantity: Number(formData.quantity) || 1,
       lineId: formData.lineId ? Number(formData.lineId) : null,
-    });
+    }));
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {submit.error && (
+        <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold">{submit.error}</div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Input
           label="Machine Code / Asset ID"
@@ -221,7 +227,7 @@ export function MachineForm({ existingMachines = [], initialData, lines, onSubmi
 
       <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#E6DDCE]">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" variant="primary">
+        <Button type="submit" variant="primary" loading={submit.saving} disabled={submit.saving}>
           {initialData ? "Update Machine" : "Register Machine"}
         </Button>
       </div>

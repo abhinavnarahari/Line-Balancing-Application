@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
+import { saveWorkbook } from "../../utils/excel";
 import {
   Users,
   UserCheck,
@@ -27,9 +28,12 @@ import type { OperationBulletin } from "../bulletins/api";
 import type { Operator } from "../operators/api";
 import type { SkillAssessment } from "../skill-matrix/api";
 import type { Operation } from "../operations/api";
+import { SKILL_LEVELS, SKILL_RATINGS, clampRating, skillLevelName } from "../skill-matrix/skillScale";
+import { SkillLevelIcon } from "../../components/ui/SkillLevelIcon";
 import type { SewingLine } from "../lines/api";
 import type { LinePlan } from "../line-balance/api";
 import { computeForwardSkillGapAnalysis } from "./forwardSkillGap";
+import { toLocalDateString } from "../../utils/date";
 
 export interface PlantManagementDashboardProps {
   orders: Order[];
@@ -143,9 +147,9 @@ export function PlantManagementDashboard({
         id: s.id,
         operationId: s.operationId,
         operationName: s.operationName || "Sewing Operation",
-        machineType: s.machineType || "Single Needle Lockstitch",
+        machineType: operations.find((o) => String(o.id) === String(s.operationId))?.machineType || "Single Needle Lockstitch",
         rating: Number(s.rating) || 3,
-        certifiedDate: s.assessmentDate || s.createdAt || "Active",
+        certifiedDate: s.effectiveDate || s.createdAt || "Active",
       }));
 
       const isAllocated = !!assignment;
@@ -192,9 +196,9 @@ export function PlantManagementDashboard({
     const avgSkillRating =
       ratedMachineOps.length > 0
         ? Math.round((ratedMachineOps.reduce((sum, d) => sum + (d.skillRating || 0), 0) / ratedMachineOps.length) * 10) / 10
-        : 3.8;
+        : 0;
 
-    const masterReservesCount = unallocatedList.filter((d) => !d.isNonMachine && d.skillRating != null && d.skillRating >= 4).length;
+    const masterReservesCount = unallocatedList.filter((d) => !d.isNonMachine && d.skillRating != null && d.skillRating >= 4).length; // Expert (level 4)
 
     // Multi-skilling versatility ratio (% with >= 2 certified skills among machine operators)
     const multiSkilledCount = machineDeployments.filter((d) => d.certifiedOperations.length >= 2).length;
@@ -309,7 +313,7 @@ export function PlantManagementDashboard({
         const matchesSkill = op.certifiedOperations.some(
           (c) => c.operationName.toLowerCase() === selectedOperationFilter.toLowerCase()
         );
-        const matchesPrimary = op.primarySkill.toLowerCase() === selectedOperationFilter.toLowerCase();
+        const matchesPrimary = (op.primarySkill || "").toLowerCase() === selectedOperationFilter.toLowerCase();
         if (!matchesAssigned && !matchesSkill && !matchesPrimary) return false;
       }
 
@@ -383,8 +387,8 @@ export function PlantManagementDashboard({
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(exportData);
       XLSX.utils.book_append_sheet(wb, ws, "Plant Workforce Deployment");
-      const todayStr = new Date().toISOString().split("T")[0];
-      XLSX.writeFile(wb, `Plant_Workforce_Roster_${todayStr}.xlsx`);
+      const todayStr = toLocalDateString();
+      void saveWorkbook(wb, `Plant_Workforce_Roster_${todayStr}.xlsx`);
     } catch (err) {
       console.error("Failed to export workforce roster:", err);
       alert("Failed to export roster. Please try again.");
@@ -566,8 +570,8 @@ export function PlantManagementDashboard({
             </div>
           </div>
           <div className="text-[11px] text-[#8C7E6E] font-medium flex items-center justify-between">
-            <span>Avg Plant Rating: <strong className="font-mono text-[#221912] font-bold">L{workforce.avgSkillRating}</strong></span>
-            <span>Master Reserves: <strong className="font-mono text-indigo-800 font-bold">{workforce.masterReservesCount}</strong></span>
+            <span>Avg Plant Rating: <strong className="font-mono text-[#221912] font-bold">{workforce.avgSkillRating > 0 ? `L${workforce.avgSkillRating} / 4` : "—"}</strong></span>
+            <span>Expert Reserves: <strong className="font-mono text-indigo-800 font-bold">{workforce.masterReservesCount}</strong></span>
           </div>
         </div>
 
@@ -811,11 +815,11 @@ export function PlantManagementDashboard({
               className="w-full py-1.5 px-2.5 bg-white rounded-lg border border-[#E6DDCE] text-xs text-[#221912] font-medium focus:outline-none focus:border-[#9C5B3C] cursor-pointer"
             >
               <option value="ALL">All Skill Ratings</option>
-              <option value="5">Level 5 — Master Operator</option>
-              <option value="4">Level 4 — Expert Operator</option>
-              <option value="3">Level 3 — Competent Operator</option>
-              <option value="2">Level 2 — Developing Operator</option>
-              <option value="1">Level 1 — Novice Trainee</option>
+              {SKILL_RATINGS.map((r) => (
+                <option key={r} value={String(r)}>
+                  Level {r} — {SKILL_LEVELS[r].name} ({SKILL_LEVELS[r].band})
+                </option>
+              ))}
             </select>
           </div>
 
@@ -952,30 +956,14 @@ export function PlantManagementDashboard({
                           </span>
                         ) : (
                           <span
-                            className={`inline-flex items-center gap-1 font-mono font-bold text-xs px-2.5 py-1 rounded-lg border shadow-2xs ${
-                              (op.skillRating ?? 0) >= 5
-                                ? "bg-amber-50 text-amber-900 border-amber-300"
-                                : (op.skillRating ?? 0) >= 4
-                                  ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                  : (op.skillRating ?? 0) >= 3
-                                    ? "bg-sky-50 text-sky-800 border-sky-200"
-                                    : "bg-slate-100 text-slate-700 border-slate-200"
+                            className={`inline-flex items-center gap-1.5 font-mono font-bold text-xs px-2.5 py-1 rounded-lg border shadow-2xs ${
+                              op.skillRating ? SKILL_LEVELS[clampRating(op.skillRating)].badge : "bg-slate-100 text-slate-700 border-slate-200"
                             }`}
+                            title={op.skillRating ? `${skillLevelName(op.skillRating)} (${SKILL_LEVELS[clampRating(op.skillRating)].band}) — ${SKILL_LEVELS[clampRating(op.skillRating)].description}` : "Not rated"}
                           >
-                            <Star
-                              className={`w-3 h-3 ${
-                                (op.skillRating ?? 0) >= 4 ? "fill-amber-400 text-amber-500" : "text-slate-400"
-                              }`}
-                            />
+                            <SkillLevelIcon rating={op.skillRating} size={14} decorative />
                             <span>
-                              L{op.skillRating}{" "}
-                              {(op.skillRating ?? 0) >= 5
-                                ? "Master"
-                                : (op.skillRating ?? 0) >= 4
-                                  ? "Expert"
-                                  : (op.skillRating ?? 0) >= 3
-                                    ? "Competent"
-                                    : "Developing"}
+                              L{op.skillRating} {skillLevelName(op.skillRating)}
                             </span>
                           </span>
                         )}
@@ -1083,20 +1071,12 @@ export function PlantManagementDashboard({
                     ) : (
                       <span
                         className={`inline-flex items-center gap-1 font-mono font-bold text-[11px] px-2 py-0.2 rounded border ${
-                          (op.skillRating ?? 0) >= 5
-                            ? "bg-amber-50 text-amber-900 border-amber-300"
-                            : (op.skillRating ?? 0) >= 4
-                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                              : "bg-sky-50 text-sky-800 border-sky-200"
+                          op.skillRating ? SKILL_LEVELS[clampRating(op.skillRating)].badge : "bg-slate-100 text-slate-700 border-slate-200"
                         }`}
                       >
-                        <Star
-                          className={`w-2.5 h-2.5 ${
-                            (op.skillRating ?? 0) >= 4 ? "fill-amber-400 text-amber-500" : "text-slate-400"
-                          }`}
-                        />
+                        <SkillLevelIcon rating={op.skillRating} size={12} decorative />
                         <span>
-                          L{op.skillRating} {(op.skillRating ?? 0) >= 5 ? "Master" : (op.skillRating ?? 0) >= 4 ? "Expert" : "Competent"}
+                          L{op.skillRating} {skillLevelName(op.skillRating)}
                         </span>
                       </span>
                     )}
@@ -1335,7 +1315,9 @@ export function PlantManagementDashboard({
                   <div className="text-[10px] text-[#8C7E6E] font-mono">
                     <span>{cand.employeeId}</span>
                     <span className="mx-1">·</span>
-                    <span>Current: L{cand.currentRating}</span>
+                    <span className="inline-flex items-center gap-1 align-middle">
+                      Current: <SkillLevelIcon rating={cand.currentRating} size={11} decorative /> L{cand.currentRating}
+                    </span>
                   </div>
                   <div className="text-[11px] text-[#221912] pt-1 border-t border-[#F6F1E8] flex items-center justify-between">
                     <span>Target: <strong>{cand.targetCategory}</strong></span>
@@ -1521,20 +1503,11 @@ export function PlantManagementDashboard({
                           <div className="text-[10.5px] text-[#8C7E6E]">{c.machineType}</div>
                         </div>
                         <span
-                          className={`inline-flex items-center gap-1 font-mono font-bold text-xs px-2.5 py-1 rounded-lg border ${
-                            c.rating >= 5
-                              ? "bg-amber-50 text-amber-900 border-amber-300"
-                              : c.rating >= 4
-                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                                : "bg-sky-50 text-sky-800 border-sky-200"
-                          }`}
+                          className={`inline-flex items-center gap-1.5 font-mono font-bold text-xs px-2.5 py-1 rounded-lg border ${SKILL_LEVELS[clampRating(c.rating)].badge}`}
+                          title={`${SKILL_LEVELS[clampRating(c.rating)].band} — ${SKILL_LEVELS[clampRating(c.rating)].description}`}
                         >
-                          <Star
-                            className={`w-3 h-3 ${
-                              c.rating >= 4 ? "fill-amber-400 text-amber-500" : "text-slate-400"
-                            }`}
-                          />
-                          <span>Level {c.rating}</span>
+                          <SkillLevelIcon rating={c.rating} size={14} decorative />
+                          <span>Level {c.rating} · {skillLevelName(c.rating)}</span>
                         </span>
                       </div>
                     ))

@@ -9,7 +9,6 @@ import {
   Search, 
   ChevronDown, 
   ChevronRight, 
-  ChevronLeft, 
   Edit2, 
   Trash2, 
   Layers, 
@@ -17,9 +16,15 @@ import {
   TrendingUp, 
   Cpu, 
   ShieldCheck, 
-  Gauge
+  Gauge, Upload
 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { saveWorkbook, readFromExcel } from "../../utils/excel";
+import { ExcelImportDialog } from "../../components/ui/ExcelImportDialog";
+import { ProductionDatePicker, type ProductionDay } from "../../components/ui/ProductionDatePicker";
+import { flowThroughStations } from "../../features/line-balance/stationFlow";
+import { PRODUCTION_TEMPLATE, parseProductionRows } from "../../features/production-logs/productionImport";
+import { getErrorMessage } from "../../lib/api";
 import { ordersApi, type Order } from "../../features/orders/api";
 import { shiftsApi as shiftApi } from "../../features/shifts/api";
 import { operatorsApi, type Operator } from "../../features/operators/api";
@@ -28,6 +33,8 @@ import { linesApi, type SewingLine } from "../../features/lines/api";
 import { linePlanApi, type LinePlan } from "../../features/line-balance/api";
 import { lineDesignApi, type LineDesign } from "../../features/linedesign/api";
 import { skillApi, cycleTimeToRating, type SkillAssessment } from "../../features/skill-matrix/api";
+import { clampRating } from "../../features/skill-matrix/skillScale";
+import { SkillLevelBadge } from "../../components/ui/SkillLevelIcon";
 import { bulletinsApi, type OperationBulletin } from "../../features/bulletins/api";
 import { pieceProductionApi, type OperatorTimesheet24h, type PieceProductionLog } from "../../features/production-logs/api";
 import { RecordPieceModal } from "../../features/production-logs/RecordPieceModal";
@@ -35,6 +42,9 @@ import type { Shift } from "../../features/shifts/types";
 import { DataCard, DataCardHeader, EmptyState } from "../../components/ui/PremiumUI";
 import { CustomSelect } from "../../components/ui/CustomSelect";
 import { useMasterDataSubscription } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
+import { loadFailed } from "../../components/common/GlobalErrorToaster";
+import { usePolling } from "../../utils/usePolling";
 
 // 24 Hours array (0 to 23)
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => i);
@@ -49,7 +59,7 @@ export function ProductionMonitoringPage() {
   const [activeTab, setActiveTab] = useState<"24h-timesheet" | "line-monitoring">(
     paramTab === "line-monitoring" ? "line-monitoring" : "24h-timesheet"
   );
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => toLocalDateString());
 
   // Master data
   const [orders, setOrders] = useState<Order[]>([]);
@@ -85,20 +95,67 @@ export function ProductionMonitoringPage() {
 
   const currentLiveHour = new Date().getHours();
 
-  const loadData = async () => {
-    setLoading(true);
+  // showSpinner=false for background refreshes (window focus, other-tab updates): the full-page
+  // spinner unmounts the page, which would close an open RecordPieceModal and lose typed entries.
+  // ── Import production runs from Excel: every row is checked first, then all are saved together ──
+  const [productionImportOpen, setProductionImportOpen] = useState(false);
+  const handleImportProduction = async (file: File) => {
+    let rows: Record<string, unknown>[];
+    try {
+      rows = await readFromExcel<Record<string, unknown>>(file);
+    } catch (err) {
+      alert(`Could not read the file: ${getErrorMessage(err)}`);
+      return;
+    }
+    try {
+      const [ops, opers, ords] = await Promise.all([
+        operationsApi.getOperations(), operatorsApi.getOperators(), ordersApi.getOrders(),
+      ]);
+      const activeOperators = (opers as Operator[]).filter(o => o.active);
+      // First pass finds the dates in the file, so runs already recorded on them can be detected
+      const firstPass = parseProductionRows(rows, activeOperators, ops as Operation[], ords as Order[], [], selectedDate);
+      const existing = (await Promise.all(firstPass.dates.map(d => pieceProductionApi.getLogs(d).catch(() => [])))).flat()
+        .map(l => ({ operatorId: l.operatorId, logDate: l.logDate, startTime: l.startTime, operationId: l.operationId }));
+      const { runs, errors } = parseProductionRows(rows, activeOperators, ops as Operation[], ords as Order[], existing, selectedDate);
+      if (!errors.ok) {
+        alert(`Nothing was imported. Fix these rows and try again:\n\n${errors.summary()}`);
+        return;
+      }
+      if (runs.length === 0) {
+        alert("The file has no production rows.");
+        return;
+      }
+      await pieceProductionApi.recordBatch(runs);
+      const pieces = runs.reduce((n, r) => n + r.goodQty, 0);
+      const dates = [...new Set(runs.map(r => r.logDate))];
+      await loadData(false);
+      refreshProductionDays();
+      alert(`Imported ${runs.length} run${runs.length === 1 ? "" : "s"} (${pieces.toLocaleString()} good pieces) for ${dates.join(", ")}.`
+        + (dates.includes(selectedDate) ? "" : "\n\nThe page shows " + selectedDate + "; pick the imported date to see them."));
+    } catch (err) {
+      alert(`Nothing was imported: ${getErrorMessage(err)}`);
+    }
+  };
+
+  // Days with production recorded (marked in the date pickers)
+  const [productionDays, setProductionDays] = useState<ProductionDay[]>([]);
+  const refreshProductionDays = () => pieceProductionApi.getProductionDays().then(setProductionDays).catch(() => {});
+  useEffect(() => { refreshProductionDays(); }, []);
+
+  const loadData = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
       const [ords, shfts, oprsList, opsList, lns, ts, bulls, skills, plans, designs] = await Promise.all([
         ordersApi.getOrders(),
         shiftApi.getShifts(),
         operatorsApi.getOperators(),
         operationsApi.getOperations(),
-        linesApi.getLines().catch(() => []),
-        pieceProductionApi.get24hTimesheet(selectedDate).catch(() => []),
-        bulletinsApi.getBulletins().catch(() => []),
-        skillApi.getCurrentMatrix().catch(() => []),
-        linePlanApi.getAllPlans().catch(() => []),
-        lineDesignApi.getDesigns().catch(() => []),
+        linesApi.getLines().catch(loadFailed([])),
+        pieceProductionApi.get24hTimesheet(selectedDate).catch(loadFailed([])),
+        bulletinsApi.getBulletins().catch(loadFailed([])),
+        skillApi.getCurrentMatrix().catch(loadFailed([])),
+        linePlanApi.getAllPlans().catch(loadFailed([])),
+        lineDesignApi.getDesigns().catch(loadFailed([])),
       ]);
       setOrders(ords);
       setShifts(shfts.filter(s => s.active));
@@ -124,28 +181,27 @@ export function ProductionMonitoringPage() {
     } catch (err) {
       console.error("Failed to load production monitoring data:", err);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
   // Auto-subscribe to live master data updates across the entire application
-  useMasterDataSubscription(["shift", "line", "operator", "bulletin", "order", "all"], loadData);
+  useMasterDataSubscription(["shift", "line", "operator", "bulletin", "order", "all"], () => loadData(false));
 
   useEffect(() => {
     loadData();
-
-    // Background live polling every 8s for timesheets and master data
-    const pollInterval = setInterval(() => {
-      pieceProductionApi.get24hTimesheet(selectedDate)
-        .then(ts => setTimesheetData(ts || []))
-        .catch(() => {});
-      shiftApi.getShifts()
-        .then(shfts => setShifts(shfts.filter(s => s.active)))
-        .catch(() => {});
-    }, 8000);
-
-    return () => clearInterval(pollInterval);
   }, [selectedDate]);
+
+  // Live timesheet refresh (paused while hidden; stale responses for a previous date are ignored)
+  usePolling(async (isCurrent) => {
+    const [ts, shfts] = await Promise.all([
+      pieceProductionApi.get24hTimesheet(selectedDate),
+      shiftApi.getShifts(),
+    ]);
+    if (!isCurrent()) return;
+    setTimesheetData(ts || []);
+    setShifts(shfts.filter(s => s.active));
+  }, 15000, [selectedDate]);
 
   useEffect(() => {
     const fetchPlan = async () => {
@@ -174,23 +230,6 @@ export function ProductionMonitoringPage() {
     };
     fetchPlan();
   }, [selectedOrderId, selectedLineId, allLinePlans]);
-
-  // Date Navigation Helpers
-  const handlePrevDay = () => {
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() - 1);
-    setSelectedDate(d.toISOString().split("T")[0]);
-  };
-
-  const handleNextDay = () => {
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + 1);
-    setSelectedDate(d.toISOString().split("T")[0]);
-  };
-
-  const handleToday = () => {
-    setSelectedDate(new Date().toISOString().split("T")[0]);
-  };
 
   // Selected Order & Line Details
   const selectedOrder = useMemo(() => orders.find(o => String(o.id) === String(selectedOrderId)), [orders, selectedOrderId]);
@@ -245,6 +284,13 @@ export function ProductionMonitoringPage() {
   }, [activeLineDesign, targetOutput, shiftHours]);
 
   const taktTimeSecs = useMemo(() => {
+    if (activeLineDesign?.targetHourlyOutput && Number(activeLineDesign.targetHourlyOutput) > 0) {
+      return Math.round((3600 / Number(activeLineDesign.targetHourlyOutput)) * 10) / 10;
+    }
+    // From the daily target directly, not from the rounded hourly target
+    if (targetOutput > 0 && dailyAvailableTimeSecs > 0) {
+      return Math.round((dailyAvailableTimeSecs / targetOutput) * 10) / 10;
+    }
     if (plannedHourlyTarget > 0) {
       return Math.round((3600 / plannedHourlyTarget) * 10) / 10;
     }
@@ -456,6 +502,62 @@ export function ProductionMonitoringPage() {
     return 27.0;
   }, [activeLineDesign, maxStationCycleTime]);
 
+  // ── Is the saved plan's daily target still what the order needs? (delivery date / quantity can change after saving) ──
+  const [orderLogs, setOrderLogs] = useState<PieceProductionLog[] | null>(null);
+  useEffect(() => {
+    setOrderLogs(null);
+    if (!selectedOrderId || selectedOrderId === "ALL") return;
+    let cancelled = false;
+    pieceProductionApi.getLogsByOrder(selectedOrderId)
+      .then(logs => { if (!cancelled) setOrderLogs(logs); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedOrderId]);
+  // Finished pieces of the order so far (all dates): what passed every station, i.e. the lowest station total
+  const orderGoodSoFar = useMemo(() => {
+    if (!orderLogs) return null;
+    const opIds = [...new Set(plannedStations.map(st => String(st.operationId)))];
+    if (opIds.length === 0) return 0;
+    return Math.min(...opIds.map(id => orderLogs.filter(l => String(l.operationId) === id).reduce((n, l) => n + (l.goodQty || 0), 0)));
+  }, [orderLogs, plannedStations]);
+
+  const planTargetCheck = useMemo(() => {
+    if (!linePlan?.targetOutput || !selectedOrder || orderGoodSoFar === null) return null;
+    const due = selectedOrder.plannedCompletionDate || selectedOrder.deliveryDate;
+    if (!due) return null;
+    const today = toLocalDateString();
+    const left = Math.max(0, (selectedOrder.totalQuantity || 0) - orderGoodSoFar);
+    if (due < today) return { kind: "overdue" as const, due, left, perDay: 0 };
+    const [eh = 17, em = 0] = (activeShiftObj?.endTime || "17:00").split(":").map(Number);
+    const now = new Date();
+    const shiftOver = now.getHours() * 60 + now.getMinutes() >= eh * 60 + em;
+    let days = 0;
+    for (const d = new Date(today + "T00:00:00"); toLocalDateString(d) <= due; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() === 0) continue; // 6-day week, as in Planned Balancing
+      if (toLocalDateString(d) === today && shiftOver) continue;
+      days++;
+    }
+    if (days === 0) return { kind: "overdue" as const, due, left, perDay: 0 };
+    const perDay = Math.ceil(left / days);
+    const off = perDay > 0 && Math.abs(perDay - linePlan.targetOutput) / perDay > 0.15;
+    return off ? { kind: "stale" as const, due, left, perDay } : null;
+  }, [linePlan, selectedOrder, orderGoodSoFar, activeShiftObj]);
+
+  // Pieces counted in the station table on this date that were recorded without an order
+  const orderlessOnDate = useMemo(() => {
+    if (!selectedOrderId || selectedOrderId === "ALL") return { runs: 0, pieces: 0 };
+    const ops = new Set(plannedStations.map(st => String(st.operationId)));
+    const people = new Set(plannedStations.flatMap(st => st.operatorIds.map(String)));
+    let runs = 0, pieces = 0;
+    for (const row of timesheetData) {
+      if (!people.has(String(row.operatorId))) continue;
+      for (const log of row.rawLogs || []) {
+        if (!log.orderId && ops.has(String(log.operationId))) { runs++; pieces += log.goodQty || 0; }
+      }
+    }
+    return { runs, pieces };
+  }, [timesheetData, plannedStations, selectedOrderId]);
+
   // Station Execution Matrix with Live Actual Performance from Floor Logs & Flow Precedence
   const stationLiveExecution = useMemo(() => {
     // 1. Sort stations in strict physical sequential order (1 -> 2 -> ... -> N)
@@ -475,7 +577,10 @@ export function ProductionMonitoringPage() {
         if (assignedOpIds.includes(String(row.operatorId)) || assignedOpIds.length === 0) {
           if (row.rawLogs && row.rawLogs.length > 0) {
             row.rawLogs.forEach(log => {
-              if (String(log.operationId) === opIdStr || (!log.operationId && row.department === st.operationName)) {
+              // What the line did on this date: runs for this order and runs recorded without an order count;
+              // runs recorded against a different order don't (so nothing is counted for two orders)
+              const logForOrder = !selectedOrderId || selectedOrderId === "ALL" || !log.orderId || String(log.orderId) === String(selectedOrderId);
+              if (logForOrder && (String(log.operationId) === opIdStr || (!log.operationId && row.department === st.operationName))) {
                 totalGood += log.goodQty || 0;
                 totalReject += log.rejectQty || 0;
                 totalWorkMins += Number(log.actualTimeMinutes || 0);
@@ -491,17 +596,17 @@ export function ProductionMonitoringPage() {
       rawMap.set(st.stationNum, { good: totalGood, reject: totalReject, workMins: totalWorkMins });
     });
 
-    // 3. Flow-bound constraint: Station k output cannot exceed predecessor Station k-1 output
-    let prevGood = Infinity;
+    // 3. Flow through the line; stations with no records at all are "not recorded", not blockages
+    const flow = flowThroughStations(sorted.map(st => (rawMap.get(st.stationNum) || { good: 0 }).good));
     const stationExecutionResults = [];
 
     for (let idx = 0; idx < sorted.length; idx++) {
       const st = sorted[idx];
       const opIdStr = String(st.operationId);
       const raw = rawMap.get(st.stationNum) || { good: 0, reject: 0, workMins: 0 };
-      const boundedGood = Math.min(raw.good, prevGood);
-      const queueWip = idx > 0 && prevGood !== Infinity ? Math.max(0, prevGood - boundedGood) : 0;
-      prevGood = boundedGood;
+      const boundedGood = flow.good[idx];
+      const queueWip = flow.wip[idx];
+      const outputNotRecorded = flow.notRecorded[idx];
 
       const allocatedOps = Math.max(1, st.operatorIds.length);
       const plannedCycleSecs = st.smvSeconds / allocatedOps;
@@ -519,7 +624,7 @@ export function ProductionMonitoringPage() {
       const operatorDetails = st.operatorIds.map(id => {
         const op = operators.find(o => String(o.id) === String(id));
         const assessment = skillAssessments.find(a => String(a.operatorId) === String(id) && String(a.operationId) === opIdStr);
-        let rating = assessment?.rating || null;
+        let rating: number | null = assessment?.rating ? clampRating(assessment.rating) : null;
         if (assessment?.cycleTimeSeconds && assessment.cycleTimeSeconds > 0) {
           const targetOp = operations.find(o => String(o.id) === opIdStr);
           rating = cycleTimeToRating(assessment.cycleTimeSeconds, targetOp?.name, targetOp?.standardSmv);
@@ -538,6 +643,7 @@ export function ProductionMonitoringPage() {
         plannedCycleSecs,
         plannedCapacityPerHour,
         totalGood: boundedGood,
+        outputNotRecorded,
         rawGood: raw.good,
         queueWip,
         wipThreshold,
@@ -570,24 +676,33 @@ export function ProductionMonitoringPage() {
 
   const remainingShiftBalance = Math.max(0, targetOutput - endLineOutput);
 
-  // Active columns to render based on shift timings
+  // Hour columns: only the hours covered by the Shift Master (one shift, or every active shift for "All Shifts")
   const displayedHours = useMemo(() => {
-    const selectedShiftObj = selectedShiftId !== "ALL"
-      ? shifts.find(s => String(s.id) === selectedShiftId || s.shiftCode === selectedShiftId)
-      : null;
+    const hoursOfShift = (shift: Shift): number[] => {
+      const [sh = 8] = (shift.startTime || "08:00").split(":").map(Number);
+      const [eh = 17, em = 0] = (shift.endTime || "17:00").split(":").map(Number);
+      const endH = em > 0 ? (eh + 1) % 24 : eh; // a shift ending 17:30 still uses the 17:00 hour
+      const hrs: number[] = [];
+      if (sh < endH) {
+        for (let h = sh; h < endH; h++) hrs.push(h);
+      } else {
+        for (let h = sh; h < 24; h++) hrs.push(h); // overnight shift
+        for (let h = 0; h < endH; h++) hrs.push(h);
+      }
+      return hrs;
+    };
 
-    if (!selectedShiftObj) return HOURS_24;
-    const [sh = 8] = (selectedShiftObj.startTime || "08:00").split(":").map(Number);
-    const [eh = 17, em = 0] = (selectedShiftObj.endTime || "17:00").split(":").map(Number);
-    const endH = em > 0 ? (eh + 1) % 24 : eh;
-    const hrs: number[] = [];
-    if (sh <= endH) {
-      for (let h = sh; h < endH; h++) hrs.push(h);
-    } else {
-      for (let h = sh; h < 24; h++) hrs.push(h);
-      for (let h = 0; h < endH; h++) hrs.push(h);
+    if (selectedShiftId !== "ALL") {
+      const selectedShiftObj = shifts.find(s => String(s.id) === selectedShiftId || s.shiftCode === selectedShiftId);
+      if (selectedShiftObj) return hoursOfShift(selectedShiftObj);
     }
-    return hrs.length > 0 ? hrs : HOURS_24;
+    // All shifts: their hours in shift-start order, each hour once; hours no shift covers are not shown
+    const ordered = [...shifts].sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+    const hrs: number[] = [];
+    for (const shift of ordered) {
+      for (const h of hoursOfShift(shift)) if (!hrs.includes(h)) hrs.push(h);
+    }
+    return hrs;
   }, [shifts, selectedShiftId]);
 
   // Dynamic Shift Bands Super-Headers
@@ -821,7 +936,7 @@ export function ProductionMonitoringPage() {
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, `Timesheet_${selectedDate}`);
-    XLSX.writeFile(workbook, `Production_Monitoring_Timesheet_${selectedDate}.xlsx`);
+    void saveWorkbook(workbook, `Production_Monitoring_Timesheet_${selectedDate}.xlsx`);
   };
 
   if (loading) {
@@ -869,6 +984,23 @@ export function ProductionMonitoringPage() {
 
           <button
             type="button"
+            onClick={() => setProductionImportOpen(true)}
+            className="h-9 px-3.5 inline-flex items-center gap-1.5 text-xs font-bold text-[#8C7E6E] hover:text-[#221912] bg-white hover:bg-[#FAF8F5] border border-[#E6DDCE] rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
+            title="Import piece runs (production) from Excel"
+          >
+            <Upload className="w-3.5 h-3.5 text-[#9C5B3C]" />
+            <span className="whitespace-nowrap">Import Production</span>
+          </button>
+          <ExcelImportDialog
+            isOpen={productionImportOpen}
+            onClose={() => setProductionImportOpen(false)}
+            title="Import Production Runs"
+            template={PRODUCTION_TEMPLATE}
+            onImport={handleImportProduction}
+          />
+
+          <button
+            type="button"
             onClick={handleExport24hExcel}
             className="h-9 px-3.5 inline-flex items-center gap-1.5 text-xs font-bold text-[#8C7E6E] hover:text-[#221912] bg-white hover:bg-[#FAF8F5] border border-[#E6DDCE] rounded-xl shadow-2xs transition-colors cursor-pointer shrink-0"
             title="Export full timesheet data to Excel"
@@ -907,7 +1039,7 @@ export function ProductionMonitoringPage() {
           }`}
         >
           <Clock className={`w-4 h-4 ${activeTab === "24h-timesheet" ? "text-[#9C5B3C]" : "text-[#7C6E5E]"}`} />
-          <span className="tracking-wide">24-Hour Operator Timesheet</span>
+          <span className="tracking-wide">Hourly Operator Timesheet</span>
         </button>
 
         <button
@@ -944,37 +1076,9 @@ export function ProductionMonitoringPage() {
           <div className="bg-[#FDFBF7] border border-[#E6DDCE] rounded-2xl p-4 sm:p-5 shadow-[0_1px_3px_rgba(34,25,18,0.05)] flex flex-col xl:flex-row xl:items-center justify-between gap-3.5">
             {/* Left Controls: Date Picker + Shift Filter + Line Filter */}
             <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-              {/* Date Controls */}
-              <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#E6DDCE] shadow-2xs shrink-0">
-                <button
-                  type="button"
-                  onClick={handlePrevDay}
-                  className="p-1.5 rounded-lg hover:bg-[#F6F1E8] text-[#8C7E6E] hover:text-[#221912] transition-colors cursor-pointer"
-                  title="Previous Day"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={e => setSelectedDate(e.target.value)}
-                  className="bg-transparent border-0 text-xs font-bold text-[#221912] focus:outline-none cursor-pointer font-mono px-1.5"
-                />
-                <button
-                  type="button"
-                  onClick={handleNextDay}
-                  className="p-1.5 rounded-lg hover:bg-[#F6F1E8] text-[#8C7E6E] hover:text-[#221912] transition-colors cursor-pointer"
-                  title="Next Day"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleToday}
-                  className="px-2.5 py-1 rounded-lg bg-[#FAF7F2] text-[10px] font-extrabold text-[#9C5B3C] border border-[#E6DDCE] hover:bg-white transition-colors cursor-pointer"
-                >
-                  Today
-                </button>
+              {/* Date */}
+              <div className="shrink-0">
+                <ProductionDatePicker value={selectedDate} onChange={setSelectedDate} productionDays={productionDays} />
               </div>
 
               {/* Shift Filter */}
@@ -983,7 +1087,7 @@ export function ProductionMonitoringPage() {
                   value={selectedShiftId}
                   onChange={val => setSelectedShiftId(val)}
                   options={[
-                    { value: "ALL", label: "All Shifts (24 Hours)" },
+                    { value: "ALL", label: "All Shifts" },
                     ...shifts.map(s => ({
                       value: String(s.id),
                       label: `${s.shiftName} (${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)})`
@@ -1080,8 +1184,14 @@ export function ProductionMonitoringPage() {
             </div>
           </div>
 
-          {/* 24h Timesheet Table */}
+          {/* Hourly timesheet: one column per hour of the Shift Master */}
           <DataCard noPad>
+            {displayedHours.length === 0 && (
+              <div role="status" className="px-5 py-3 border-b border-[#F0EAE0] bg-amber-50 text-[11.5px] text-amber-900">
+                No active shifts in the Shift Master, so there are no hour columns.{" "}
+                <Link to="/settings/shifts" className="font-bold underline">Add a shift</Link> to see hourly production.
+              </div>
+            )}
             <div className="overflow-x-auto custom-scrollbar">
               <table className="w-full text-left border-collapse text-xs" style={{ minWidth: "1200px" }}>
                 <thead>
@@ -1591,7 +1701,7 @@ export function ProductionMonitoringPage() {
                       value: String(o.id),
                       label: o.orderNo,
                       sublabel: o.buyer || "General",
-                      badge: `${o.totalQuantity.toLocaleString()} pcs`
+                      badge: `${(o.totalQuantity ?? 0).toLocaleString()} pcs`
                     }))
                   ]}
                   size="lg"
@@ -1652,13 +1762,7 @@ export function ProductionMonitoringPage() {
 
               {/* 4. Monitoring Date */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#221912] block">Execution Date</label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={e => setSelectedDate(e.target.value)}
-                  className="w-full h-11 bg-white border border-[#E6DDCE] rounded-2xl px-3 text-xs font-mono font-bold text-[#221912] focus:outline-none focus:border-[#9C5B3C] shadow-2xs cursor-pointer"
-                />
+                <ProductionDatePicker label="Execution Date" variant="field" value={selectedDate} onChange={setSelectedDate} productionDays={productionDays} />
               </div>
             </div>
           </div>
@@ -1681,6 +1785,23 @@ export function ProductionMonitoringPage() {
             </DataCard>
           ) : (
             <>
+              {planTargetCheck && (
+                <div role="status" className="mb-4 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 leading-relaxed">
+                  {planTargetCheck.kind === "stale" ? (
+                    <>
+                      This plan was saved with a target of <strong>{linePlan?.targetOutput} pcs/day</strong>, but {selectedOrder?.orderNo} now needs
+                      about <strong>{planTargetCheck.perDay.toLocaleString()} pcs/day</strong> ({planTargetCheck.left.toLocaleString()} pcs left, due {planTargetCheck.due}).
+                      The order changed after the plan was saved. <Link to={`/line-balance?orderId=${selectedOrderId}&lineId=${selectedLineId}`} className="font-bold underline">Open it in Planned Balancing</Link> and save the plan again.
+                    </>
+                  ) : (
+                    <>
+                      {selectedOrder?.orderNo} is due {planTargetCheck.due} with {planTargetCheck.left.toLocaleString()} pcs left and no working time remaining, so this
+                      plan's target of {linePlan?.targetOutput} pcs/day can't meet it. Set a new completion date in Production Orders.
+                    </>
+                  )}
+                </div>
+              )}
+
               {/* ── 2. Live Calculation Summary Cards (Synced with Planned Lines & Balancing) ── */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Card 1: TAKT & PITCH PACING */}
@@ -1693,7 +1814,7 @@ export function ProductionMonitoringPage() {
                       </span>
                     </div>
                     <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-[#9C5B3C] bg-white px-2.5 py-0.5 rounded-lg border border-[#E6DDCE] shrink-0 shadow-2xs">
-                      Pitch: {designedPitchTimeSecs.toFixed(1)}s
+                      Slowest station: {designedPitchTimeSecs.toFixed(1)}s
                     </span>
                   </div>
 
@@ -1706,7 +1827,7 @@ export function ProductionMonitoringPage() {
 
                   <div className="text-[10.5px] text-[#8C7E6E] font-mono border-t border-[#E6DDCE]/60 pt-1.5 truncate flex items-center justify-between">
                     <span>
-                      Pitch: <strong className="text-[#221912] font-bold">{designedPitchTimeSecs.toFixed(1)}s</strong> (@ {plannedEfficiency}% Plan Eff)
+                      Slowest station: <strong className="text-[#221912] font-bold">{designedPitchTimeSecs.toFixed(1)}s</strong>
                     </span>
                     <span className="text-emerald-700 font-bold font-sans">
                       Target: {targetOutput} pcs
@@ -1761,7 +1882,7 @@ export function ProductionMonitoringPage() {
                   </div>
 
                   <div className="text-[10.5px] text-[#8C7E6E] flex items-center justify-between border-t border-slate-100 pt-1.5">
-                    <span>Pitch: {designedPitchTimeSecs.toFixed(1)}s</span>
+                    <span>Slowest station: {designedPitchTimeSecs.toFixed(1)}s</span>
                     <span>Stations: {plannedStations.length}</span>
                   </div>
                 </div>
@@ -1801,6 +1922,13 @@ export function ProductionMonitoringPage() {
               </div>
 
               {/* ── 3. Station-by-Station Execution vs Balanced Capacity Table ── */}
+              {orderlessOnDate.runs > 0 && (
+                <div role="status" className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 leading-relaxed">
+                  {orderlessOnDate.pieces.toLocaleString()} of the pieces shown for {selectedDate} ({orderlessOnDate.runs} runs) were recorded
+                  <strong> without an order</strong>. They are shown here as this line's output, but they don't count toward {selectedOrder?.orderNo}'s
+                  progress until they are recorded with its Order No.
+                </div>
+              )}
               <DataCard noPad>
                 <DataCardHeader 
                   title="Station Workstation Allocations & Live Execution Tracking" 
@@ -1894,13 +2022,7 @@ export function ProductionMonitoringPage() {
                                       <span className="font-bold text-slate-800 text-xs">{opItem.name}</span>
                                       <span className="text-[10px] text-slate-500 font-mono">({opItem.empId})</span>
                                       {opItem.rating ? (
-                                        <span className={`px-1.5 py-0.2 rounded text-[9.5px] font-bold border font-mono ${
-                                          opItem.rating >= 4 
-                                            ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
-                                            : "bg-amber-50 text-amber-800 border-amber-200"
-                                        }`}>
-                                          ★ {opItem.rating}
-                                        </span>
+                                        <SkillLevelBadge rating={opItem.rating} size={11} />
                                       ) : (
                                         <span className="text-[9px] text-slate-400">Unrated</span>
                                       )}
@@ -1926,7 +2048,11 @@ export function ProductionMonitoringPage() {
                             <td className={`py-3 px-4 text-center align-middle whitespace-nowrap font-mono ${
                               plannedStations.length > 1 && idx === plannedStations.length - 1 ? "bg-amber-50/50" : ""
                             }`}>
-                              {st.totalGood > 0 ? (
+                              {st.outputNotRecorded ? (
+                                <span className="text-[11px] font-semibold text-amber-700 font-sans" title="No production is recorded for this station on this date; it takes the output of the next recorded station">
+                                  Not recorded
+                                </span>
+                              ) : st.totalGood > 0 ? (
                                 <div className="flex flex-col items-center">
                                   <div className="flex items-center gap-1 font-bold">
                                     <span className={plannedStations.length > 1 && idx === plannedStations.length - 1 ? "text-amber-900 font-extrabold text-sm" : "text-emerald-700 text-sm"}>
@@ -2021,7 +2147,7 @@ export function ProductionMonitoringPage() {
             setIsRecordModalOpen(false);
             setEditingLog(null);
           }}
-          onSuccess={loadData}
+          onSuccess={() => loadData(false)}
           onDelete={handleDeletePieceLog}
           operators={operators}
           operations={operations}

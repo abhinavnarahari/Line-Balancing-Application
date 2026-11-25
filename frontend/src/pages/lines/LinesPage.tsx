@@ -9,7 +9,9 @@ import { LineList } from "../../features/lines/LineList";
 import { LineForm } from "../../features/lines/LineForm";
 import { LineDetailModal } from "../../features/lines/LineDetailModal";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { LINES_TEMPLATE } from "../../utils/importTemplates";
 import { notifyMasterDataUpdated } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
 
 export function LinesPage() {
   const [lines, setLines] = useState<SewingLine[]>([]);
@@ -89,6 +91,7 @@ export function LinesPage() {
       loadData();
     } catch (err) {
       console.error("Failed to save sewing line:", err);
+      throw err; // shown inside the form (useSubmitGuard)
     }
   };
 
@@ -146,7 +149,7 @@ export function LinesPage() {
       "Notes": l.notes || "",
     }));
 
-    exportToExcel(exportData, `Sewing_Lines_Master_${new Date().toISOString().split("T")[0]}`);
+    exportToExcel(exportData, `Sewing_Lines_Master_${toLocalDateString()}`);
   };
 
   // Import from Excel
@@ -159,14 +162,14 @@ export function LinesPage() {
         if (!lineName && !lineCode) continue;
 
         await linesApi.createLine({
-          lineCode: lineCode.trim(),
-          lineName: lineName.trim() || `Line ${lineCode}`,
+          lineCode: String(lineCode).trim(),
+          lineName: String(lineName).trim() || `Line ${lineCode}`,
           lineType: (row["Line Type"] || row["lineType"] || "PBS") as LineType,
-          floor: row["Floor / Location"] || row["floor"] || "Unit 1 - Floor 1",
-          department: row["Department"] || row["department"] || "Knit Assembly",
+          floor: row["Floor / Location"] || row["floor"] || "",
+          department: row["Department"] || row["department"] || "",
           supervisorName: row["Line Supervisor"] || row["supervisorName"] || "",
-          ieInCharge: row["IE In-Charge"] || row["ieInCharge"] || "Priya Sharma",
-          qcInspector: row["QC Lead"] || row["qcInspector"] || "Naresh Soni",
+          ieInCharge: row["IE In-Charge"] || row["ieInCharge"] || "",
+          qcInspector: row["QC Lead"] || row["qcInspector"] || "",
           workstationCount: parseInt(row["Workstations"] || row["workstationCount"]) || 24,
           operatorCount: parseInt(row["No. of Operators"] || row["operatorCount"]) || 20,
           helperCount: parseInt(row["Floaters / Helpers"] || row["helperCount"]) || 2,
@@ -197,6 +200,7 @@ export function LinesPage() {
         showImportExport={true}
         onExport={handleExport}
         onImport={handleImport}
+        importTemplate={LINES_TEMPLATE}
         eyebrow="Physical Factory Floor Setup"
         title="Sewing Lines Master"
 

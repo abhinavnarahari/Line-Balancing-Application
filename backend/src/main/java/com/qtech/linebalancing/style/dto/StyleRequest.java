@@ -10,7 +10,7 @@ public class StyleRequest {
     @Size(max = 50, message = "Style number must not exceed 50 characters")
     private String styleNo;
 
-    @NotBlank(message = "Buyer is required")
+    // Optional
     @Size(max = 150, message = "Buyer name must not exceed 150 characters")
     private String buyer;
 

@@ -26,6 +26,7 @@ public class ShiftService {
 
     private final ShiftRepository shiftRepository;
     private final AuditLogRepository auditLogRepository;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     public List<ShiftResponse> getAllShifts(Boolean active) {
         List<Shift> shifts = (active != null)
@@ -134,6 +135,7 @@ public class ShiftService {
     public void delete(Long id) {
         Shift shift = findOrThrow(id);
         String name = shift.getShiftName();
+        assertNotInUse(shift);
         try {
             shiftRepository.delete(shift);
             shiftRepository.flush();
@@ -154,6 +156,30 @@ public class ShiftService {
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
+
+    /** Records whose foreign keys block deleting a shift (other references are set to null by the database). */
+    private static final List<String[]> SHIFT_REFERENCES = List.of(
+            new String[]{"shift_assignments", "shift assignment"},
+            new String[]{"attendance_records", "attendance record"},
+            new String[]{"line_plans", "line plan"});
+
+    /**
+     * A shift with history cannot be deleted without losing that history, so say exactly what uses it and point to
+     * deactivation, which hides it from new planning but keeps the records.
+     */
+    private void assertNotInUse(Shift shift) {
+        List<String> uses = new java.util.ArrayList<>();
+        for (String[] ref : SHIFT_REFERENCES) {
+            Long n = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + ref[0] + " WHERE shift_id = ?", Long.class, shift.getId());
+            if (n != null && n > 0) uses.add(n + " " + ref[1] + (n == 1 ? "" : "s"));
+        }
+        if (!uses.isEmpty()) {
+            String list = uses.size() == 1 ? uses.get(0)
+                    : String.join(", ", uses.subList(0, uses.size() - 1)) + " and " + uses.get(uses.size() - 1);
+            throw new BusinessRuleException("\"" + shift.getShiftName() + "\" can't be deleted because it is used by "
+                    + list + ". Deactivate it instead to stop using it for new planning while keeping its history.");
+        }
+    }
 
     private Shift findOrThrow(Long id) {
         return shiftRepository.findById(id)

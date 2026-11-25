@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Plus, Search, ChevronDown, ShoppingBag, Activity,
   Clock, Package, Layers,
-  Download, Copy, Check, AlertTriangle, Tag, X, RotateCcw,
+  Copy, Check, AlertTriangle, Tag, X, RotateCcw,
   Edit2, Trash2, CalendarClock
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,10 +14,23 @@ import { ordersApi, type Order, type CreateOrderDTO, type OrderStatus } from "..
 import { OrderForm } from "../../features/orders/OrderForm";
 import { stylesApi, type Style } from "../../features/styles/api";
 import { sizesApi, type Size } from "../../features/sizes/api";
-import { exportToExcel } from "../../utils/excel";
+import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { ORDERS_TEMPLATE, parseOrderRows } from "../../features/orders/orderImport";
+import { getErrorMessage } from "../../lib/api";
 import { notifyMasterDataUpdated, useMasterDataSubscription } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
 
 // Helper for Color Swatch
+/** Colours of an order in first-seen order (each size line has one; older orders fall back to the order's colour). */
+function orderColours(order: Order): string[] {
+  const seen = new Map<string, string>();
+  for (const l of order.sizeLines || []) {
+    const c = (l.color ?? order.color ?? "").trim();
+    if (c && !seen.has(c.toUpperCase())) seen.set(c.toUpperCase(), c);
+  }
+  return seen.size ? [...seen.values()] : [order.color].filter(Boolean);
+}
+
 function getColorHex(colorName: string): string {
   const c = colorName.toLowerCase().trim();
   if (c.includes("navy")) return "#1E3A8A";
@@ -118,9 +131,10 @@ export function OrdersPage() {
   const handleSubmit = async (data: CreateOrderDTO) => {
     try {
       if (editingOrder && editingOrder.id) {
-        await ordersApi.updateOrder(editingOrder.id, data);
+        await ordersApi.updateOrder(editingOrder.id, { ...data, rowVersion: editingOrder.rowVersion });
       } else {
-        await ordersApi.createOrder(data);
+        const created = await ordersApi.createOrder(data);
+        if (!data.orderNo?.trim() && created?.orderNo) showToast(`✓ Order created as ${created.orderNo}`);
       }
       setIsFormOpen(false);
       setEditingOrder(null);
@@ -171,7 +185,7 @@ export function OrdersPage() {
 
   // Distinct Buyers for dropdown filter
   const distinctBuyers = useMemo(() => {
-    const buyers = Array.from(new Set(orders.map(o => o.buyer).filter(Boolean)));
+    const buyers = Array.from(new Set(orders.map(o => o.buyer).filter((b): b is string => !!b)));
     return buyers.sort();
   }, [orders]);
 
@@ -207,7 +221,7 @@ export function OrdersPage() {
         const q = search.toLowerCase();
         return (
           o.orderNo.toLowerCase().includes(q) ||
-          o.buyer.toLowerCase().includes(q) ||
+          (o.buyer || "").toLowerCase().includes(q) ||
           (o.color && o.color.toLowerCase().includes(q)) ||
           getStyleName(o.styleId).toLowerCase().includes(q)
         );
@@ -227,8 +241,49 @@ export function OrdersPage() {
       });
   }, [orders, statusFilter, buyerFilter, search, sortBy, getStyleName]);
 
+  // Import from Excel: every row is checked first; nothing is saved unless the whole file is valid
+  const handleImport = async (file: File) => {
+    let rows: Record<string, unknown>[];
+    let latestStyles = styles;
+    let latestSizes = sizes;
+    let latestOrders = orders;
+    try {
+      rows = await readFromExcel<Record<string, unknown>>(file);
+      // Check against the current masters, not what was loaded when the page opened
+      [latestOrders, latestStyles, latestSizes] = await Promise.all([
+        ordersApi.getOrders(), stylesApi.getStyles(), sizesApi.getSizes(),
+      ]);
+    } catch (err) {
+      alert(`Could not read the file: ${getErrorMessage(err)}`);
+      return;
+    }
+    const { orders: parsed, errors } = parseOrderRows(
+      rows, latestStyles, latestSizes, latestOrders.map(o => o.orderNo), toLocalDateString());
+    if (!errors.ok) {
+      alert(`Nothing was imported. Fix these rows and try again:\n\n${errors.summary()}`);
+      return;
+    }
+    if (parsed.length === 0) {
+      alert("The file has no order rows.");
+      return;
+    }
+    try {
+      await ordersApi.createOrdersBatch(parsed);
+      notifyMasterDataUpdated("order");
+      await loadData();
+      const pieces = parsed.reduce((n, o) => n + o.sizeLines.reduce((m, l) => m + l.quantity, 0), 0);
+      showToast(`✓ Imported ${parsed.length} order${parsed.length === 1 ? "" : "s"} (${pieces.toLocaleString()} pcs)`);
+    } catch (err) {
+      alert(`Nothing was imported: ${getErrorMessage(err)}`);
+    }
+  };
+
   // Export to Excel
   const handleExport = () => {
+    if (filteredOrders.length === 0) {
+      alert("There are no orders to export.");
+      return;
+    }
     const exportData = filteredOrders.map(o => {
       const style = getStyle(o.styleId);
       const countdown = getDeliveryCountdown(o.deliveryDate);
@@ -236,6 +291,7 @@ export function OrdersPage() {
         "Order No": o.orderNo,
         "Style No": style?.styleNo || "N/A",
         "Style Description": style?.description || "",
+        "Order Type": o.orderType === "MULTI_COLOR" ? "Multiple colours" : "Single colour",
         "Color": o.color,
         "Buyer": o.buyer,
         "Total Quantity": o.totalQuantity,
@@ -246,7 +302,7 @@ export function OrdersPage() {
         "Status": o.status,
       };
     });
-    exportToExcel(exportData, `Order_Register_${new Date().toISOString().split("T")[0]}`);
+    exportToExcel(exportData, `Order_Register_${toLocalDateString()}`);
   };
 
   return (
@@ -255,18 +311,13 @@ export function OrdersPage() {
       <PageHeader
         eyebrow="Production Management"
         title="Order Register & Breakdown"
+        showImportExport={true}
+        onExport={handleExport}
+        onImport={handleImport}
+        importTemplate={ORDERS_TEMPLATE}
 
         action={
           <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={orders.length === 0}
-              className="h-9 px-3.5 rounded-xl border border-[#E6DDCE] bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            >
-              <Download className="w-3.5 h-3.5 text-[#9C5B3C]" />
-              <span>Export</span>
-            </button>
             <Button
               onClick={() => {
                 setEditingOrder(null);
@@ -360,9 +411,10 @@ export function OrdersPage() {
       {/* ── Main Data Card & Filter Controls ──────────────────────── */}
       <DataCard noPad className="border border-[#E6DDCE] shadow-[0_1px_3px_rgba(34,25,18,0.05)] rounded-2xl overflow-hidden bg-white">
         {/* Controls Toolbar */}
-        <div className="p-4 sm:p-5 border-b border-[#F0EAE0] flex flex-col xl:flex-row xl:items-center justify-between gap-3.5 bg-[#FDFBF7]">
+        {/* Tabs and filters share one row when they fit; otherwise the filters wrap below (nothing is clipped) */}
+        <div className="p-4 sm:p-5 border-b border-[#F0EAE0] flex flex-wrap items-center justify-between gap-3 bg-[#FDFBF7]">
           {/* Status Segmented Tabs */}
-          <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#E6DDCE] shadow-2xs overflow-x-auto max-w-full shrink-0">
+          <div role="tablist" aria-label="Order status" className="flex items-center gap-1 bg-white p-1 rounded-xl border border-[#E6DDCE] shadow-2xs overflow-x-auto max-w-full min-w-0">
             {[
               { id: "ALL", label: "All Orders", count: orders.length },
               { id: "PLANNED", label: "Planned", count: orders.filter(o => o.status === "PLANNED").length },
@@ -374,6 +426,9 @@ export function OrdersPage() {
               return (
                 <button
                   key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
                   onClick={() => setStatusFilter(tab.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                     active
@@ -395,9 +450,9 @@ export function OrdersPage() {
           </div>
 
           {/* Search & Select Filters */}
-          <div className="flex items-center gap-2.5 w-full xl:w-auto flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap flex-1 min-w-0 basis-full lg:basis-[520px] justify-end">
             {/* Search Input */}
-            <div className="relative flex-1 sm:w-60 min-w-[180px]">
+            <div className="relative flex-1 min-w-[180px] max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C7E6E]" />
               <input
                 type="text"
@@ -408,6 +463,8 @@ export function OrdersPage() {
               />
               {search && (
                 <button
+                  type="button"
+                  aria-label="Clear search"
                   onClick={() => setSearch("")}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#8C7E6E] hover:text-[#221912]"
                 >
@@ -549,13 +606,24 @@ export function OrdersPage() {
                             </span>
                           </div>
                           <div className="flex items-center gap-2 text-[11px] text-[#8C7E6E] font-medium">
-                            <span className="flex items-center gap-1.5">
-                              <span
-                                className="w-2.5 h-2.5 rounded-full border border-[#E6DDCE] shadow-2xs inline-block"
-                                style={{ backgroundColor: colorHex }}
-                              />
-                              {order.color || "Standard"}
-                            </span>
+                            {order.orderType === "MULTI_COLOR" ? (
+                              <span className="flex items-center gap-1.5" title={orderColours(order).join(", ")}>
+                                <span className="flex -space-x-1">
+                                  {orderColours(order).slice(0, 5).map(c => (
+                                    <span key={c} className="w-2.5 h-2.5 rounded-full border border-white ring-1 ring-[#E6DDCE] inline-block" style={{ backgroundColor: getColorHex(c) }} />
+                                  ))}
+                                </span>
+                                <span className="font-semibold text-[#9C5B3C]">{orderColours(order).length} colours</span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1.5">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full border border-[#E6DDCE] shadow-2xs inline-block"
+                                  style={{ backgroundColor: colorHex }}
+                                />
+                                {order.color || "Standard"}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -753,7 +821,7 @@ export function OrdersPage() {
                         Size Distribution Breakdown — <span className="font-mono text-[#9C5B3C] font-bold">{expOrder.orderNo}</span>
                       </h4>
                       <p className="text-xs text-[#8C7E6E]">
-                        Style: <strong className="text-[#221912]">{style?.styleNo}</strong> ({style?.description || "No description"}) · Buyer: <strong className="text-[#221912]">{expOrder.buyer}</strong>
+                        Style: <strong className="text-[#221912]">{style?.styleNo}</strong> ({style?.description || "No description"}) · Buyer: <strong className="text-[#221912]">{expOrder.buyer || "—"}</strong>
                       </p>
                     </div>
                   </div>
@@ -769,13 +837,50 @@ export function OrdersPage() {
                   </div>
                 </div>
 
-                {/* Size Cards Grid */}
+                {expOrder.orderType === "MULTI_COLOR" && (() => {
+                  const colours = orderColours(expOrder);
+                  const usedSizes = sizes.filter(sz => (expOrder.sizeLines || []).some(sl => String(sl.sizeId) === String(sz.id)));
+                  const qtyOf = (c: string, sizeId: string | number) => (expOrder.sizeLines || [])
+                    .filter(sl => String(sl.sizeId) === String(sizeId) && (sl.color ?? "").trim().toUpperCase() === c.toUpperCase())
+                    .reduce((n, sl) => n + sl.quantity, 0);
+                  return (
+                    <div className="mb-3 overflow-x-auto bg-white rounded-xl border border-[#E6DDCE]">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-[10.5px] uppercase text-[#8C7E6E] border-b border-[#F0EAE0]">
+                            <th className="text-left px-3 py-2">Colour</th>
+                            {usedSizes.map(sz => <th key={sz.id} className="px-3 py-2 text-right font-mono">{sz.code}</th>)}
+                            <th className="px-3 py-2 text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {colours.map(c => {
+                            const rowTotal = usedSizes.reduce((n, sz) => n + qtyOf(c, sz.id), 0);
+                            return (
+                              <tr key={c} className="border-b border-[#F7F3EC] last:border-0">
+                                <td className="px-3 py-2 font-semibold text-[#221912]">
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <span className="w-2.5 h-2.5 rounded-full border border-[#E6DDCE]" style={{ backgroundColor: getColorHex(c) }} />{c}
+                                  </span>
+                                </td>
+                                {usedSizes.map(sz => <td key={sz.id} className="px-3 py-2 text-right font-mono">{qtyOf(c, sz.id) ? qtyOf(c, sz.id).toLocaleString() : "—"}</td>)}
+                                <td className="px-3 py-2 text-right font-mono font-bold">{rowTotal.toLocaleString()}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+
+                {/* Size Cards Grid (all colours together) */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                   {sizes
                     .filter(s => (expOrder.sizeLines || []).some(sl => String(sl.sizeId) === String(s.id)))
                     .map(size => {
-                      const line = expOrder.sizeLines?.find(sl => String(sl.sizeId) === String(size.id));
-                      const qty = line?.quantity || 0;
+                      // A size can appear once per colour: add them up
+                      const qty = (expOrder.sizeLines || []).filter(sl => String(sl.sizeId) === String(size.id)).reduce((n, sl) => n + sl.quantity, 0);
                       const percent = totalQty > 0 ? Math.round((qty / totalQty) * 100) : 0;
 
                       return (

@@ -5,7 +5,7 @@
  * - Plant Executive KPIs (Active Orders, Line Efficiency, Manning %, Planned PCs)
  * - Order Pipeline Analysis with Multi-Key OB & Plan Matching and Delivery Urgency
  * - Production Line Status Grid (Manning fulfillment, Design Efficiency, Active Style & Order)
- * - Workforce & Skill Matrix Snapshot (Seated vs Unallocated Floaters, L1–L5 Distribution)
+ * - Workforce & Skill Matrix Snapshot (Seated vs Unallocated Floaters, L1–L4 Distribution)
  * - Machine Fleet & Asset Availability (Running, Available Pool, Maintenance)
  * - Critical Plant Alerts (Unplanned lines, missing OBs, critical delivery deadlines)
  */
@@ -14,6 +14,7 @@ import type { Order } from "../orders/api";
 import type { OperationBulletin } from "../bulletins/api";
 import type { Operator } from "../operators/api";
 import type { SkillAssessment } from "../skill-matrix/api";
+import { clampRating, INDEPENDENT_RATING, SKILL_LEVELS, SKILL_RATINGS } from "../skill-matrix/skillScale";
 import type { SewingLine } from "../lines/api";
 import type { LinePlan } from "../line-balance/api";
 import type { Machine } from "../machines/api";
@@ -581,24 +582,28 @@ export function computeWorkforceSnapshot(
   const floaterPoolCount = Math.max(floaterRoleCount, unallocatedCount);
 
   // Average skill rating
-  const ratings = skillMatrix.map((s) => Number(s.rating) || 0).filter((r) => r > 0);
+  // Ratings use the factory 4-level scale; any legacy out-of-range value is clamped to 1–4
+  const ratings = skillMatrix
+    .map((s) => Number(s.rating) || 0)
+    .filter((r) => r > 0)
+    .map((r) => clampRating(r));
   const avgSkillRating =
     ratings.length > 0
       ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 10) / 10
-      : 3.8;
+      : INDEPENDENT_RATING;
 
   // Total certified operation ratings recorded
   const totalCertifiedOperations = ratings.length;
 
   // Skill distribution
   const totalRatings = ratings.length || 1;
-  const skillDistribution = [5, 4, 3, 2, 1].map((r) => {
+  const skillDistribution = SKILL_RATINGS.map((r) => {
     const count = ratings.filter((rv) => rv === r).length;
     return {
       rating: r,
       count,
       percentage: Math.round((count / totalRatings) * 100),
-      label: r === 5 ? "Expert (L5)" : r === 4 ? "Advanced (L4)" : r === 3 ? "Skilled (L3)" : r === 2 ? "Semi-Skilled (L2)" : "Trainee (L1)",
+      label: `${SKILL_LEVELS[r].name} (L${r})`,
     };
   });
 

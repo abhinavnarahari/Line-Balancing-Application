@@ -10,6 +10,7 @@
  */
 
 import type { SewingLine } from "../lines/api";
+import { clampRating, DEFAULT_REQUIRED_RATING } from "../skill-matrix/skillScale";
 import type { Order } from "../orders/api";
 import type { OperationBulletin } from "../bulletins/api";
 import type { LinePlan } from "../line-balance/api";
@@ -352,7 +353,7 @@ export function computeLineLevelOperationsData(
         deployedOperators: depCount,
         assignedOperatorName: assignedOp ? assignedOp.name : null,
         assignedEmployeeId: assignedOp ? assignedOp.employeeId : null,
-        assignedOperatorRating: op.skillRatingRequired || 3,
+        assignedOperatorRating: op.skillRatingRequired ? clampRating(op.skillRatingRequired) : DEFAULT_REQUIRED_RATING,
         isBottleneck: isBottleneckStation,
         actualPiecesLogged: piecesLogged,
         status: stStatus,
@@ -511,7 +512,7 @@ export function computeLineLevelOperationsData(
   // Total Active Orders Quantity vs. Completed Till Now
   const totalOrderQuantity =
     calculatedLines.reduce((s, l) => s + (l.orderQuantity || 0), 0) ||
-    orders.filter((o) => o.status !== "COMPLETED" && o.status !== "CANCELLED").reduce((s, o) => s + (Number(o.totalQuantity) || 0), 0) ||
+    orders.filter((o) => o.status !== "COMPLETED").reduce((s, o) => s + (Number(o.totalQuantity) || 0), 0) ||
     orders.reduce((s, o) => s + (Number(o.totalQuantity) || 0), 0);
 
   const totalCompletedTillNow = totalActualGoodOutput;

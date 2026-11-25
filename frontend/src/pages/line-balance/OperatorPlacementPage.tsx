@@ -9,6 +9,7 @@ import { linePlanApi, type LinePlan } from "../../features/line-balance/api";
 import { skillApi, cycleTimeToRating, type SkillAssessment, type PerformanceLog } from "../../features/skill-matrix/api";
 import { PageHeader, DataCard, EmptyState } from "../../components/ui/PremiumUI";
 import { CustomSelect } from "../../components/ui/CustomSelect";
+import { loadFailed } from "../../components/common/GlobalErrorToaster";
 
 export function OperatorPlacementPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -32,9 +33,9 @@ export function OperatorPlacementPage() {
           operatorsApi.getOperators(),
           ordersApi.getOrders(),
           bulletinsApi.getBulletins(),
-          skillApi.getCurrentMatrix().catch(() => []),
-          operationsApi.getAllAffinities().catch(() => []),
-          skillApi.getPerformanceLogs().catch(() => []),
+          skillApi.getCurrentMatrix().catch(loadFailed([])),
+          operationsApi.getAllAffinities().catch(loadFailed([])),
+          skillApi.getPerformanceLogs().catch(loadFailed([])),
         ]);
         setOperations(ops);
         // Only machine operators (dedicated sewers and floaters) can be placed on sewing workstations

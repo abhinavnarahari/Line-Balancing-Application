@@ -9,7 +9,11 @@ import { Button } from "../../components/ui/Button";
 import { PageHeader, RecentActivityLog } from "../../components/ui/PremiumUI";
 import { Modal } from "../../components/ui/Modal";
 import { exportToExcel, readFromExcel } from "../../utils/excel";
+import { SHIFTS_TEMPLATE } from "../../utils/importTemplates";
 import { notifyMasterDataUpdated } from "../../utils/masterDataEvents";
+import { toLocalDateString } from "../../utils/date";
+import { RowErrors, excelTimeToHms } from "../../utils/importParsing";
+import { getErrorMessage } from "../../lib/api";
 
 function getShiftDurationHours(start: string, end: string): number {
   const [sh = 0, sm = 0] = (start || "").split(":").map(Number);
@@ -83,8 +87,17 @@ export function ShiftsPage() {
       notifyMasterDataUpdated("shift");
       loadShifts();
     } catch (err) {
-      console.error(err);
-      alert("Failed to delete shift.");
+      const message = getErrorMessage(err, "Failed to delete shift.");
+      const shift = shifts.find(s => String(s.id) === String(id));
+      const inUse = (err as { response?: { status?: number } })?.response?.status === 409;
+      // A shift with assignments, attendance or plans can't be deleted; offer to deactivate it instead
+      if (inUse && shift?.active) {
+        if (window.confirm(`${message}\n\nDeactivate "${shift.shiftName}" now?`)) {
+          await handleToggleActive(id);
+        }
+      } else {
+        alert(message);
+      }
     }
   };
 
@@ -105,27 +118,52 @@ export function ShiftsPage() {
       "Duration (Hours)": getShiftDurationHours(s.startTime, s.endTime),
       "Status": s.active ? "Active" : "Inactive"
     }));
-    exportToExcel(data, `Shift_Master_${new Date().toISOString().split("T")[0]}`);
+    exportToExcel(data, `Shift_Master_${toLocalDateString()}`);
   };
 
   const handleImport = async (file: File) => {
+    let data: Record<string, unknown>[];
     try {
-      const data = await readFromExcel<any>(file);
-      for (const row of data) {
-        await shiftsApi.createShift({
-          shiftCode: row["Shift Code"],
-          shiftName: row["Name"],
-          startTime: row["Start Time"],
-          endTime: row["End Time"],
-          active: row["Status"] === "Active"
-        });
+      data = await readFromExcel<Record<string, unknown>>(file);
+    } catch (err) {
+      alert(`Could not read the file: ${getErrorMessage(err)}`);
+      return;
+    }
+
+    // Validate every row first (Excel stores times as day fractions, e.g. 0.333 = 08:00)
+    const errors = new RowErrors();
+    const rows = data.map((row, i) => {
+      const shiftCode = String(row["Shift Code"] ?? "").trim();
+      const shiftName = String(row["Name"] ?? "").trim();
+      const startTime = excelTimeToHms(row["Start Time"]);
+      const endTime = excelTimeToHms(row["End Time"]);
+      if (!shiftCode) errors.add(i, "Shift Code is required");
+      if (!shiftName) errors.add(i, "Name is required");
+      if (!startTime) errors.add(i, `Start Time must be HH:mm (got "${row["Start Time"] ?? ""}")`);
+      if (!endTime) errors.add(i, `End Time must be HH:mm (got "${row["End Time"] ?? ""}")`);
+      return { shiftCode, shiftName, startTime: startTime ?? "", endTime: endTime ?? "",
+               active: String(row["Status"] ?? "Active").trim().toLowerCase() !== "inactive" };
+    });
+    if (rows.length === 0) {
+      alert("The file has no data rows.");
+      return;
+    }
+    if (!errors.ok) {
+      alert(`Nothing was imported. Fix these rows and try again:\n\n${errors.summary()}`);
+      return;
+    }
+    let imported = 0;
+    try {
+      for (const row of rows) {
+        await shiftsApi.createShift(row);
+        imported++;
       }
+      alert(`${imported} shifts imported successfully.`);
+    } catch (err) {
+      alert(`Imported ${imported} of ${rows.length} shifts, then stopped at row ${imported + 2}: ${getErrorMessage(err)}`);
+    } finally {
       notifyMasterDataUpdated("shift");
       await loadShifts();
-      alert("Shifts imported successfully!");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to import shifts. Please verify Excel column headers.");
     }
   };
 
@@ -136,6 +174,7 @@ export function ShiftsPage() {
         showImportExport={true}
         onExport={handleExport}
         onImport={handleImport}
+        importTemplate={SHIFTS_TEMPLATE}
         eyebrow="Plant Operations"
         title="Shift Master & Timings"
 

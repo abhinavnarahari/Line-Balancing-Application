@@ -8,7 +8,8 @@ import java.util.Optional;
 
 @Repository
 public interface LinePlanRepository extends JpaRepository<LinePlan, Long> {
-    Optional<LinePlan> findByOrderId(Long orderId);
+    /** One plan per order (unique index from V70); oldest first keeps the result deterministic for legacy duplicates. */
+    Optional<LinePlan> findFirstByOrderIdOrderByIdAsc(Long orderId);
     boolean existsByOrderId(Long orderId);
     void deleteByOrderId(Long orderId);
 }

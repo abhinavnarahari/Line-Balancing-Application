@@ -7,11 +7,14 @@ import {
 import { Button } from "../../components/ui/Button";
 import type { SewingLine, LineType, OperationalStatus } from "./api";
 import { LINE_TYPES, OPERATIONAL_STATUSES } from "./api";
+import { useSubmitGuard } from "../../utils/useSubmitGuard";
+import { stylesApi, type Style } from "../styles/api";
+import { bulletinsApi, type OperationBulletin } from "../bulletins/api";
 
 interface LineFormProps {
   initialData?: SewingLine | null;
   suggestedLineCode?: string;
-  onSubmit: (data: Omit<SewingLine, "id" | "createdAt" | "updatedAt">) => void;
+  onSubmit: (data: Omit<SewingLine, "id" | "createdAt" | "updatedAt">) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -84,9 +87,19 @@ export const LineForm: React.FC<LineFormProps> = ({
     }));
   };
 
+  // Active style / bulletin are chosen from the masters so Planned Balancing can match lines to orders
+  const [styleOptions, setStyleOptions] = useState<Style[]>([]);
+  const [bulletinOptions, setBulletinOptions] = useState<OperationBulletin[]>([]);
+  useEffect(() => {
+    stylesApi.getStyles().then(list => setStyleOptions(list.filter(s => s.active))).catch(() => {});
+    bulletinsApi.getBulletins().then(setBulletinOptions).catch(() => {});
+  }, []);
+
+  const submit = useSubmitGuard();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({
+    submit.run(() => onSubmit({
       ...formData,
       workstationCount: Number(formData.workstationCount) || 24,
       operatorCount: Number(formData.operatorCount) || 20,
@@ -96,12 +109,15 @@ export const LineForm: React.FC<LineFormProps> = ({
       capacityPerDay: Number(formData.capacityPerDay) || 1000,
       targetEfficiencyPercent: Number(formData.targetEfficiencyPercent) || 85.0,
       active: formData.operationalStatus !== "IDLE" && formData.active,
-    });
+    }));
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 text-left font-sans text-xs">
       
+      {submit.error && (
+        <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold">{submit.error}</div>
+      )}
       {/* ── 1. Line Identification & Type ────────────────────────────── */}
       <div className="p-4 bg-white border border-[#E6DDCE] rounded-2xl shadow-2xs space-y-4">
         <div className="flex items-center gap-2 border-b border-[#E8E2D9] pb-2.5">
@@ -366,27 +382,55 @@ export const LineForm: React.FC<LineFormProps> = ({
           </div>
 
           <div className="space-y-1 sm:col-span-2">
-            <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Active Garment Style (Optional)</label>
-            <input
-              type="text"
+            <label htmlFor="line-current-style" className="text-[10px] font-bold uppercase text-[#8C7E6E]">Active Garment Style</label>
+            <select
+              id="line-current-style"
               name="currentStyle"
               value={formData.currentStyle}
-              onChange={handleChange}
-              placeholder="e.g. POLO-800 - Classic Pique Polo"
-              className="w-full px-3 py-2 bg-white border border-[#E6DDCE] rounded-xl text-xs text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-            />
+              onChange={e => {
+                const styleNo = e.target.value;
+                // Keep the bulletin only if it belongs to the new style; with exactly one bulletin, pick it
+                const forStyle = bulletinOptions.filter(b => (b.styles || []).some(s => s.styleNo === styleNo));
+                setFormData(prev => ({
+                  ...prev,
+                  currentStyle: styleNo,
+                  currentBulletin: forStyle.some(b => b.bulletinCode === prev.currentBulletin)
+                    ? prev.currentBulletin
+                    : forStyle.length === 1 ? forStyle[0].bulletinCode : "",
+                }));
+              }}
+              className="w-full px-3 py-2 bg-white border border-[#E6DDCE] rounded-xl text-xs text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer"
+            >
+              <option value="">— Not set —</option>
+              {formData.currentStyle && !styleOptions.some(s => s.styleNo === formData.currentStyle) && (
+                <option value={formData.currentStyle}>{formData.currentStyle} (not in Style Catalog)</option>
+              )}
+              {styleOptions.map(s => (
+                <option key={s.id} value={s.styleNo}>{s.styleNo}{s.description ? ` · ${s.description}` : ""}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-[#8C7E6E]">Planned Balancing suggests this line for orders of this style.</p>
           </div>
 
           <div className="space-y-1 sm:col-span-2">
-            <label className="text-[10px] font-bold uppercase text-[#8C7E6E]">Active Operation Bulletin (Optional)</label>
-            <input
-              type="text"
+            <label htmlFor="line-current-bulletin" className="text-[10px] font-bold uppercase text-[#8C7E6E]">Active Operation Bulletin</label>
+            <select
+              id="line-current-bulletin"
               name="currentBulletin"
               value={formData.currentBulletin}
               onChange={handleChange}
-              placeholder="e.g. OB-POLO-800"
-              className="w-full px-3 py-2 bg-white border border-[#E6DDCE] rounded-xl font-mono text-xs text-[#221912] focus:outline-hidden focus:border-[#9C5B3C]"
-            />
+              className="w-full px-3 py-2 bg-white border border-[#E6DDCE] rounded-xl font-mono text-xs text-[#221912] focus:outline-hidden focus:border-[#9C5B3C] cursor-pointer"
+            >
+              <option value="">— Not set —</option>
+              {formData.currentBulletin && !bulletinOptions.some(b => b.bulletinCode === formData.currentBulletin) && (
+                <option value={formData.currentBulletin}>{formData.currentBulletin} (not found)</option>
+              )}
+              {bulletinOptions
+                .filter(b => !formData.currentStyle || (b.styles || []).some(s => s.styleNo === formData.currentStyle))
+                .map(b => (
+                  <option key={b.id} value={b.bulletinCode}>{b.bulletinCode} · {b.name}</option>
+                ))}
+            </select>
           </div>
         </div>
       </div>
@@ -414,6 +458,8 @@ export const LineForm: React.FC<LineFormProps> = ({
         <Button
           type="submit"
           size="sm"
+          loading={submit.saving}
+          disabled={submit.saving}
           className="bg-[#9C5B3C] hover:bg-[#854B31] text-white font-bold px-5"
         >
           {initialData ? "Save Line Architecture" : "Register Sewing Line"}

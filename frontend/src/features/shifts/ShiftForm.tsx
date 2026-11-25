@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo } from "react";
 import type { Shift, CreateShiftDTO, UpdateShiftDTO } from "./types";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
+import { useSubmitGuard } from "../../utils/useSubmitGuard";
 
 interface ShiftFormProps {
   existingShifts?: Shift[];
   initialData?: Shift | null;
-  onSubmit: (data: CreateShiftDTO | UpdateShiftDTO) => void;
+  onSubmit: (data: CreateShiftDTO | UpdateShiftDTO) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -49,13 +50,18 @@ export function ShiftForm({ existingShifts = [], initialData, onSubmit, onCancel
     }));
   };
 
+  const submit = useSubmitGuard();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    submit.run(() => onSubmit(formData));
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {submit.error && (
+        <div role="alert" className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-semibold">{submit.error}</div>
+      )}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Input 
           label="Shift Code" 
@@ -123,7 +129,7 @@ export function ShiftForm({ existingShifts = [], initialData, onSubmit, onCancel
 
       <div className="flex justify-end space-x-4 pt-6 mt-4 border-t border-[#F1F5F9]">
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" variant="primary">
+        <Button type="submit" variant="primary" loading={submit.saving} disabled={submit.saving}>
           {initialData ? "Update Shift" : "Create Shift"}
         </Button>
       </div>

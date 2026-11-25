@@ -71,6 +71,7 @@ public class PieceProductionService {
         int completed = request.getCompletedQty() != null ? request.getCompletedQty() : entity.getCompletedQty();
         int good = request.getGoodQty() != null ? request.getGoodQty() : completed;
         int reject = request.getRejectQty() != null ? request.getRejectQty() : Math.max(0, completed - good);
+        validateQuantities(completed, good, reject);
 
         String opName = request.getOperationName();
         if ((opName == null || opName.isBlank()) && entity.getOperation() != null) {
@@ -96,6 +97,31 @@ public class PieceProductionService {
 
         PieceProductionLog saved = pieceLogRepository.save(entity);
         return toResponse(saved);
+    }
+
+    /** Same rule the Record Piece modal enforces: every completed piece is either good or rejected. */
+    private void validateQuantities(int completed, int good, int reject) {
+        if (completed < 0 || good < 0 || reject < 0) {
+            throw new IllegalArgumentException("Quantities must not be negative.");
+        }
+        if (good + reject != completed) {
+            throw new IllegalArgumentException(
+                    "Good quantity (" + good + ") + reject quantity (" + reject + ") must equal completed quantity (" + completed + ").");
+        }
+    }
+
+    /** Excel import: every run is recorded in one transaction, or none are (the error names the row). */
+    @Transactional
+    public List<PieceProductionLogResponse> recordPieceLogsBatch(List<PieceProductionLogRequest> requests) {
+        List<PieceProductionLogResponse> saved = new java.util.ArrayList<>();
+        for (int i = 0; i < requests.size(); i++) {
+            try {
+                saved.add(recordPieceLog(requests.get(i)));
+            } catch (IllegalArgumentException e) {
+                throw new com.qtech.linebalancing.common.exception.BusinessRuleException("Run " + (i + 1) + ": " + e.getMessage());
+            }
+        }
+        return saved;
     }
 
     @Transactional
@@ -126,6 +152,7 @@ public class PieceProductionService {
         int completed = request.getCompletedQty() != null ? request.getCompletedQty() : 0;
         int good = request.getGoodQty() != null ? request.getGoodQty() : completed;
         int reject = request.getRejectQty() != null ? request.getRejectQty() : Math.max(0, completed - good);
+        validateQuantities(completed, good, reject);
 
         String opName = request.getOperationName();
         if ((opName == null || opName.isBlank()) && operation != null) {
@@ -156,6 +183,13 @@ public class PieceProductionService {
 
         PieceProductionLog saved = pieceLogRepository.save(entity);
         return toResponse(saved);
+    }
+
+    /** Days that have production recorded, with run count and good pieces (for the date pickers). */
+    public List<java.util.Map<String, Object>> getProductionDays() {
+        return pieceLogRepository.summarizeByDate().stream()
+                .map(r -> java.util.Map.<String, Object>of("date", r[0].toString(), "runs", ((Number) r[1]).longValue(), "goodQty", ((Number) r[2]).longValue()))
+                .toList();
     }
 
     public List<PieceProductionLogResponse> getLogsByDate(LocalDate date) {

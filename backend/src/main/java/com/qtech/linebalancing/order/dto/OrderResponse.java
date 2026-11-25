@@ -9,12 +9,14 @@ import java.util.List;
 
 @Data
 public class OrderResponse {
+    private Long rowVersion;
     private Long id;
     private String orderNo;
     private String buyer;
     private Long styleId;
     private String styleNo;
     private String color;
+    private Order.OrderType orderType;
     private LocalDate orderDate;
     private LocalDate deliveryDate;
     private LocalDate plannedCompletionDate;
@@ -31,5 +33,6 @@ public class OrderResponse {
         private String sizeCode;
         private String sizeLabel;
         private Integer quantity;
+        private String color;
     }
 }

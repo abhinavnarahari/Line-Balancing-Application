@@ -20,6 +20,12 @@ public interface OperatorPerformanceLogRepository extends JpaRepository<Operator
     /** All logs for a specific operator + operation, newest first. */
     List<OperatorPerformanceLog> findByOperatorIdAndOperationIdOrderByLogDateDesc(Long operatorId, Long operationId);
 
+    /** Bulk load for the optimizer: rows of [operatorId, operationId, actualCycleTimeSeconds]. */
+    @Query("SELECT pl.operator.id, pl.operation.id, pl.actualCycleTimeSeconds FROM OperatorPerformanceLog pl " +
+           "WHERE pl.operator.id IN :operatorIds AND pl.operation.id IN :operationIds")
+    List<Object[]> findCycleTimes(@org.springframework.data.repository.query.Param("operatorIds") java.util.Collection<Long> operatorIds,
+                                  @org.springframework.data.repository.query.Param("operationIds") java.util.Collection<Long> operationIds);
+
     /**
      * Returns a list of [operationId, avgCycleTimeSeconds] pairs for a given operator.
      * Used by the auto-update algorithm to derive ratings.

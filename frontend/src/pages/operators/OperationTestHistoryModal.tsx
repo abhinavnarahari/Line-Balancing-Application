@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { Clock, Calendar, CheckCircle2, Award, History } from "lucide-react";
+import { Clock, Calendar, CheckCircle2, History } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { skillApi, cycleTimeToRating, type PerformanceLog, type SkillAssessment } from "../../features/skill-matrix/api";
 import type { Operation } from "../../features/operations/api";
 import type { Operator } from "../../features/operators/api";
 
 import { getRatingRangeLabel } from "../../features/operations/ratingBenchmarks";
+import { SkillLevelBadge, SkillLevelIcon } from "../../components/ui/SkillLevelIcon";
+import { skillLevelName } from "../../features/skill-matrix/skillScale";
 
 interface OperationTestHistoryModalProps {
   isOpen: boolean;
@@ -94,11 +96,11 @@ export function OperationTestHistoryModal({
           <div className="p-3.5 bg-[#FAF7F2] rounded-xl border border-[#E6DDCE]">
             <div className="text-[11px] font-bold text-[#8C7E6E] uppercase tracking-wide">Current Rating</div>
             <div className="text-base font-bold text-[#221912] mt-1 flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-[#9C5B3C]" />
-              {currentRating > 0 ? `Rating ${currentRating}` : "Not Rated"}
+              <SkillLevelIcon rating={currentRating} size={18} decorative />
+              {currentRating > 0 ? `Level ${currentRating} · ${skillLevelName(currentRating)}` : "Not Rated"}
             </div>
             {currentRating > 0 && (
-              <div className="text-[10px] text-[#9C5B3C] font-bold mt-0.5 font-mono">{getRatingRangeLabel(currentRating, operation.name)}</div>
+              <div className="text-[10px] text-[#9C5B3C] font-bold mt-0.5 font-mono">{getRatingRangeLabel(currentRating, operation.name, operation.standardSmv)}</div>
             )}
           </div>
 
@@ -155,7 +157,7 @@ export function OperationTestHistoryModal({
                     <th className="py-2.5 px-3.5">Timed Runs</th>
                     <th className="py-2.5 px-2 text-center">Count</th>
                     <th className="py-2.5 px-2 text-center">Daily Avg</th>
-                    <th className="py-2.5 px-3 text-center">Derived Rating</th>
+                    <th className="py-2.5 px-3 text-center">Derived Level</th>
                     <th className="py-2.5 px-3 text-center">Status</th>
                     <th className="py-2.5 px-3 text-right">Recorded By</th>
                   </tr>
@@ -178,9 +180,7 @@ export function OperationTestHistoryModal({
                         <td className="py-3 px-2 text-center font-bold text-[#221912]">{group.times.length}</td>
                         <td className="py-3 px-2 text-center font-mono font-bold text-[#9C5B3C]">{group.avg}s</td>
                         <td className="py-3 px-3 text-center">
-                          <span className="inline-block px-2 py-0.5 bg-[#221912] text-white font-bold rounded text-[10px] shadow-2xs">
-                            Rating {group.rating}
-                          </span>
+                          <SkillLevelBadge rating={group.rating} size={12} />
                         </td>
                         <td className="py-3 px-3 text-center">
                           {isDraft ? (
@@ -221,9 +221,7 @@ export function OperationTestHistoryModal({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[#9C5B3C] font-bold">{h.cycleTimeSeconds}s</span>
-                    <span className="px-2 py-0.5 bg-[#221912] text-white text-[10px] font-bold rounded">
-                      Rating {h.rating}
-                    </span>
+                    <SkillLevelBadge rating={h.rating} size={12} />
                   </div>
                 </div>
               ))}
