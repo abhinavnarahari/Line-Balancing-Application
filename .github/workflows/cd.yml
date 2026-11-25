@@ -1,0 +1,134 @@
+name: CD
+
+# Deploys to the DigitalOcean droplet after CI passes on main, or on demand from the Actions tab
+# ("Run workflow"). It does exactly what a manual deploy does, plus a database backup first and a health check after:
+#   backup DB  ->  git pull (fast-forward only)  ->  docker compose up -d --build  ->  wait for /actuator/health
+#
+# Repository secrets (GitHub: Settings -> Secrets and variables -> Actions -> New repository secret):
+#   DROPLET_HOST         143.110.178.154
+#   DROPLET_USER         root
+#   DROPLET_SSH_KEY      the PRIVATE deploy key (its .pub line is in the droplet's ~/.ssh/authorized_keys)
+#   DROPLET_KNOWN_HOSTS  output of:  ssh-keyscan -t ed25519 143.110.178.154
+#   DEPLOY_PATH          /root/Line-Balancing-Application
+# Optional:
+#   DROPLET_PORT         SSH port (default 22)
+#
+# The droplet keeps its own .env (POSTGRES_PASSWORD, APP_ADMIN_PASSWORD, ...). Nothing secret is sent from GitHub
+# except the SSH key, and the database volume is never removed.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push waits instead of interrupting a deploy half-way.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Only after a successful CI run for a push to main (never for pull requests), or when started by hand.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    env:
+      # The exact commit CI tested (or the selected branch head for manual runs)
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Check the deploy secrets are set
+        env:
+          HOST: ${{ secrets.DROPLET_HOST }}
+          USER: ${{ secrets.DROPLET_USER }}
+          KEY: ${{ secrets.DROPLET_SSH_KEY }}
+          KNOWN: ${{ secrets.DROPLET_KNOWN_HOSTS }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          missing=""
+          [ -n "$HOST" ] || missing="$missing DROPLET_HOST"
+          [ -n "$USER" ] || missing="$missing DROPLET_USER"
+          [ -n "$KEY" ] || missing="$missing DROPLET_SSH_KEY"
+          [ -n "$KNOWN" ] || missing="$missing DROPLET_KNOWN_HOSTS"
+          [ -n "$DEPLOY_PATH" ] || missing="$missing DEPLOY_PATH"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see the comments at the top of .github/workflows/cd.yml)"
+            exit 1
+          fi
+
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DROPLET_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy on the droplet
+        env:
+          HOST: ${{ secrets.DROPLET_HOST }}
+          USER: ${{ secrets.DROPLET_USER }}
+          PORT: ${{ secrets.DROPLET_PORT || '22' }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$PORT" -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 \
+            "$USER@$HOST" "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_SHA='$DEPLOY_SHA' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+
+          echo "==> Backing up the database before any migration runs"
+          mkdir -p "$HOME/db-backups"
+          if docker ps --format '{{.Names}}' | grep -qx qtech-postgres; then
+            BACKUP="$HOME/db-backups/pre-deploy_$(date +%Y-%m-%d_%H%M%S).sql.gz"
+            docker exec qtech-postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB"' | gzip > "$BACKUP"
+            echo "    saved $BACKUP ($(du -h "$BACKUP" | cut -f1))"
+            # keep the 14 most recent pre-deploy backups
+            ls -1t "$HOME"/db-backups/pre-deploy_*.sql.gz | tail -n +15 | xargs -r rm --
+          else
+            echo "    postgres container is not running; skipping backup"
+          fi
+
+          echo "==> Updating code to $DEPLOY_SHA"
+          # Fast-forward only: stops (instead of overwriting) if the droplet has local commits.
+          git fetch --prune origin main
+          git merge --ff-only "$DEPLOY_SHA"
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+
+          echo "==> Building and starting containers (the database volume is kept)"
+          docker compose up -d --build --remove-orphans
+
+          echo "==> Waiting for the backend to report healthy"
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8085/actuator/health 2>/dev/null | grep -q '"UP"'; then
+              echo "    backend is UP"
+              break
+            fi
+            if [ "$i" = 60 ]; then
+              echo "Backend did not become healthy within 5 minutes. Recent logs:"
+              docker compose logs --tail=150 backend
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "==> Checking the frontend"
+          curl -fsS -o /dev/null http://127.0.0.1:80/ && echo "    frontend responds"
+
+          echo "==> Removing dangling images to free disk space"
+          docker image prune -f >/dev/null
+          docker compose ps
+          REMOTE
+
+      - name: Remove the SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
