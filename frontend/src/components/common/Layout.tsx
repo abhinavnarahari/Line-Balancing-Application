@@ -126,7 +126,7 @@ export function Layout() {
         </header>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto bg-[#F6F1E8] custom-scrollbar">
+        <main className="flex-1 overflow-y-auto bg-[#F6F1E8] page-scrollbar">
           <div className="min-h-full">
             <Suspense
               fallback={

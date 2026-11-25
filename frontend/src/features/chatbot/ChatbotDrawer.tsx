@@ -77,7 +77,7 @@ export const ChatbotDrawer: React.FC<ChatbotDrawerProps> = ({ isOpen, onClose, c
         id: Date.now() + 1,
         conversationId: activeConversationId || 0,
         sender: "ASSISTANT",
-        messageText: "Sorry, I could not reach the SewNexa server. Please try again in a moment.",
+        messageText: "Sorry, I could not reach the Made2Balance server. Please try again in a moment.",
         dataSource: "APPLICATION_DATA",
         dataAvailable: false,
         createdAt: new Date().toISOString(),

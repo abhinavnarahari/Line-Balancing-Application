@@ -1,9 +1,12 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-heading: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* One font family for the whole application. font-mono / font-heading map to it too, so every
+     class that used to switch fonts now keeps the same typeface (numbers stay aligned via tabular figures). */
+  --font-app: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: var(--font-app);
+  --font-heading: var(--font-app);
+  --font-mono: var(--font-app);
 
   /* Official SewNexa Brand Colors */
   --color-brand-primary: #9C5B3C;
@@ -43,13 +46,13 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-app);
   }
 
   body {
     background-color: #F6F1E8;
     color: #221912;
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-app);
     font-size: 15px;
     line-height: 1.6;
     letter-spacing: -0.01em;
@@ -57,7 +60,7 @@
 
   /* ── Headings: consistent Plus Jakarta Sans everywhere ── */
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-app);
     font-weight: 700;
     letter-spacing: -0.022em;
     color: #221912;
@@ -73,8 +76,8 @@
 
   /* ── Mono: code, kbd, pre, explicit class ── */
   .font-mono, code, kbd, pre {
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-    font-feature-settings: "tnum", "zero";
+    font-family: var(--font-app);
+    font-feature-settings: "tnum";
     font-variant-numeric: tabular-nums;
   }
 
@@ -105,7 +108,7 @@
 
 /* Page / section headings */
 .app-page-title {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-app);
   font-size: 1.625rem;       /* 26px */
   font-weight: 800;
   letter-spacing: -0.025em;
@@ -114,7 +117,7 @@
 }
 
 .app-section-title {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-app);
   font-size: 1.25rem;        /* 20px */
   font-weight: 700;
   letter-spacing: -0.018em;
@@ -123,7 +126,7 @@
 }
 
 .app-card-title {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-app);
   font-size: 1rem;           /* 16px */
   font-weight: 700;
   letter-spacing: -0.012em;
@@ -133,23 +136,23 @@
 
 /* KPI number display (big metric on cards) */
 .app-kpi-value {
-  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-family: var(--font-app);
   font-size: 1.75rem;        /* 28px */
   font-weight: 800;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum", "zero";
+  font-feature-settings: "tnum";
   line-height: 1.1;
   color: #221912;
 }
 
 .app-kpi-value-lg {
-  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-family: var(--font-app);
   font-size: 2.25rem;        /* 36px */
   font-weight: 800;
   letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum", "zero";
+  font-feature-settings: "tnum";
   line-height: 1.05;
   color: #221912;
 }
@@ -164,7 +167,7 @@
 }
 
 .app-data-mono {
-  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-family: var(--font-app);
   font-size: 0.9375rem;      /* 15px */
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -208,10 +211,10 @@
 /* ─── Global Forced Font Inheritance ────────────────────────────────── */
 /* Ensure all elements strictly use Plus Jakarta Sans for cohesive typography */
 #root, body, html {
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-app);
 }
 #root h1, #root h2, #root h3, #root h4, #root h5, #root h6 {
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-app);
 }
 
 /* ─── Numeric & Tabular Alignment ───────────────────────────────────── */
@@ -249,6 +252,24 @@ input[type="number"] {
   background: #C5B9A8;
 }
 
+/* Main page scroll area: a wider, easier-to-grab bar than the small lists use */
+.page-scrollbar::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.page-scrollbar::-webkit-scrollbar-track {
+  background: #F6F1E8;
+}
+.page-scrollbar::-webkit-scrollbar-thumb {
+  background: #D3C7B5;
+  border-radius: 9999px;
+  border: 2px solid #F6F1E8;
+  min-height: 48px;
+}
+.page-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #B3A48F;
+}
+
 /* ─── Selection ─────────────────────────────────────────────────────── */
 ::selection {
   background-color: rgba(156, 91, 60, 0.2);
@@ -271,7 +292,7 @@ select {
   accent-color: #9C5B3C;
   border: 1px solid #E6DDCE;
   border-radius: 0.75rem;
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-app);
   font-size: 0.8125rem;
   font-weight: 600;
   transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
@@ -302,7 +323,7 @@ select:disabled {
 select optgroup {
   background-color: #FAF7F2;
   color: #9C5B3C;
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-app);
   font-size: 11px;
   font-weight: 700;
   padding: 8px 12px;
@@ -313,7 +334,7 @@ select optgroup {
 select option {
   background-color: #FFFFFF;
   color: #221912;
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-app);
   font-size: 13px;
   font-weight: 500;
   padding: 10px 14px;

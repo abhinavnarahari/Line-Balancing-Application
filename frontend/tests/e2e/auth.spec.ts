@@ -40,7 +40,7 @@ test("logout ends the session and clears per-user storage", async ({ page }) => 
   await signIn(page, SUPERVISOR);
   await page.evaluate(() => localStorage.setItem("sewnexa_applied_bulletin_scenario_last_applied", "x"));
   await page.locator('button[title="User profile"]').click();
-  await page.getByText("Sign Out of SewNexa").click();
+  await page.getByText("Sign Out of Made2Balance").click();
   await expect(page).toHaveURL(/\/login$/);
   expect((await api(page, "/auth/me")).status).toBe(401);
   expect(await page.evaluate(() => localStorage.getItem("sewnexa_applied_bulletin_scenario_last_applied"))).toBeNull();

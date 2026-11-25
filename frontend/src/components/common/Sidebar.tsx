@@ -22,6 +22,8 @@ import {
 import { cn } from "../../utils/cn";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../features/auth/AuthContext";
+import { BrandLogo } from "./BrandLogo";
+import { BRAND } from "./brand";
 
 type NavItem = {
   name: string;
@@ -168,35 +170,26 @@ export function Sidebar() {
         {/* Logo & Collapse Toggle Header */}
         <div
           className={cn(
-            "flex h-16 shrink-0 items-center border-b border-[#0A2947] transition-all",
-            isCollapsed ? "justify-center px-2" : "justify-between px-4"
+            "flex shrink-0 items-center border-b border-[#0A2947] transition-all",
+            "h-16",
+            isCollapsed ? "justify-center px-2" : "justify-between pl-5 pr-3"
           )}
         >
           {isCollapsed ? (
             <button
               type="button"
               onClick={toggleSidebar}
-              className="group relative w-10 h-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-[#9C5B3C] to-[#8B5E3C] shadow-md shadow-[#9C5B3C]/30 hover:brightness-110 transition-all cursor-pointer"
+              className="group relative flex items-center justify-center w-12 h-11 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
               title="Expand Sidebar (Ctrl+B)"
               aria-label="Expand Sidebar"
             >
-              <span className="text-white font-bold text-sm tracking-wide group-hover:hidden">S</span>
-              <PanelLeftOpen className="w-4 h-4 text-white hidden group-hover:block transition-all" />
+              <BrandLogo width={44} showTagline={false} variant="reversed" className="group-hover:opacity-0 transition-opacity" />
+              <PanelLeftOpen className="absolute w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
           ) : (
             <>
-              <Link to="/" className="flex items-center gap-3 overflow-hidden group cursor-pointer">
-                <div className="w-9 h-9 flex items-center justify-center rounded-xl bg-gradient-to-br from-[#9C5B3C] to-[#8B5E3C] shadow-md shadow-[#9C5B3C]/30 shrink-0 group-hover:scale-105 transition-transform">
-                  <span className="text-white font-bold text-sm tracking-wide">S</span>
-                </div>
-                <div className="overflow-hidden whitespace-nowrap">
-                  <span className="text-[15px] font-bold text-white tracking-tight block leading-tight">
-                    SewNexa
-                  </span>
-                  <span className="text-[11px] font-medium text-slate-400 tracking-normal leading-tight group-hover:text-slate-200 transition-colors">
-                    Line Balancing Suite
-                  </span>
-                </div>
+              <Link to="/" className="flex items-center cursor-pointer opacity-95 hover:opacity-100 transition-opacity" title={BRAND.name}>
+                <BrandLogo width={96} showTagline={false} variant="reversed" />
               </Link>
 
               <button

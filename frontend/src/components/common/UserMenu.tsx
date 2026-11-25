@@ -123,7 +123,7 @@ export const UserMenu: React.FC = () => {
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
               >
                 <LogOut className="w-4 h-4 text-rose-600" />
-                <span>Sign Out of SewNexa</span>
+                <span>Sign Out of Made2Balance</span>
               </button>
             </div>
           </motion.div>

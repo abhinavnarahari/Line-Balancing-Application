@@ -19,7 +19,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, roles 
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-3 border-[#9C5B3C] border-t-transparent rounded-full animate-spin" />
           <span className="text-xs font-bold text-[#8C7E6E] tracking-wider uppercase">
-            Verifying SewNexa Session...
+            Verifying Made2Balance Session...
           </span>
         </div>
       </div>
