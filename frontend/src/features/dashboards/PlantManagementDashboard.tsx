@@ -1,28 +1,40 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { saveWorkbook } from "../../utils/excel";
 import {
   Users,
-  UserCheck,
   Download,
   Search,
   ChevronRight,
   ChevronLeft,
-  RefreshCw,
-  Star,
   X,
   ArrowUpRight,
+  ArrowRight,
   LayoutGrid,
   List,
   Check,
   Copy,
   Layers,
-  Zap,
   TrendingUp,
-  GraduationCap,
-  AlertCircle,
 } from "lucide-react";
+import { cn } from "../../utils/cn";
+import {
+  DashboardHeader,
+  MetaChip,
+  HeaderButton,
+  KpiCard,
+  Section,
+  SectionLink,
+  StatusPill,
+  CountBadge,
+  Meter,
+  SegmentTabs,
+  EmptyHint,
+  Stat,
+  type Tone,
+} from "./DashboardUI";
+import type { ForwardPlanSkillDemand } from "./forwardSkillGap";
 import type { Order } from "../orders/api";
 import type { OperationBulletin } from "../bulletins/api";
 import type { Operator } from "../operators/api";
@@ -68,7 +80,7 @@ export function PlantManagementDashboard({
   const [selectedSkillRatingFilter, setSelectedSkillRatingFilter] = useState<string>("ALL");
   const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"table" | "grid">("grid");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const pageSize = 10;
 
@@ -395,983 +407,721 @@ export function PlantManagementDashboard({
     }
   };
 
+  type Deployment = (typeof workforce.allDeployments)[number];
+
+  const selectAllocation = (value: "ALL" | "SEATED" | "NON_SEATED") => {
+    setAllocationFilter(value);
+    setCurrentPage(1);
+  };
+
+  const resetFilters = () => {
+    setAllocationFilter("ALL");
+    setSelectedDepartmentFilter("ALL");
+    setSelectedOperationFilter("ALL");
+    setSelectedSkillRatingFilter("ALL");
+    setSearchQuery("");
+    setCurrentPage(1);
+  };
+
+  const filtersActive =
+    allocationFilter !== "ALL" ||
+    selectedDepartmentFilter !== "ALL" ||
+    selectedOperationFilter !== "ALL" ||
+    selectedSkillRatingFilter !== "ALL" ||
+    searchQuery.trim() !== "";
+
+  const openStation = (op: Deployment) => {
+    const params = new URLSearchParams();
+    if (op.assignedOrderId) params.set("orderId", String(op.assignedOrderId));
+    if (op.assignedLineId) params.set("lineId", String(op.assignedLineId));
+    navigate(`/line-balance?${params.toString()}`);
+  };
+
+  const rangeStart = totalItems === 0 ? 0 : (validCurrentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(totalItems, validCurrentPage * pageSize);
+
+  const renderRowActions = (op: Deployment) => (
+    <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setSelectedOperatorForModal(op)}
+        className={SMALL_BTN_GHOST}
+        title="View operator profile"
+      >
+        Profile
+      </button>
+      {op.isAllocated ? (
+        <button
+          type="button"
+          onClick={() => openStation(op)}
+          className={SMALL_BTN}
+          title="Open this operator in Line Balancing"
+        >
+          View station
+          <ArrowUpRight className="w-3.5 h-3.5" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => navigate("/line-balance")}
+          className={SMALL_BTN}
+          title="Allocate this operator to an open workstation"
+        >
+          Deploy
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+
+  const renderStatus = (op: Deployment) =>
+    op.isAllocated ? (
+      <div className="space-y-1 min-w-0">
+        <StatusPill tone="good">Seated · {op.assignedLineCode}</StatusPill>
+        <div className="text-[11.5px] text-[#8C7E6E] tabular-nums truncate">
+          Station {op.assignedStationNum}
+          {op.assignedOrderNo && ` · ${op.assignedOrderNo}`}
+        </div>
+      </div>
+    ) : (
+      <div className="space-y-1 min-w-0">
+        <StatusPill tone="warn">Non-seated</StatusPill>
+        <div className="text-[11.5px] text-[#8C7E6E]">Available</div>
+      </div>
+    );
+
   return (
     <div className="space-y-6 w-full max-w-[1600px] mx-auto">
-      {/* ── 1. Plant Executive Operations Header ───────────────────── */}
-      <div className="bg-white rounded-2xl border border-[#E6DDCE] p-5 sm:p-6 shadow-[0_1px_3px_rgba(34,25,18,0.05)] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="text-[11px] font-black uppercase tracking-wider text-[#9C5B3C] shrink-0">
-              Plant Executive Operations Cockpit
-            </span>
-            <span className="text-[#E6DDCE] hidden sm:inline">/</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-              Plant Floor Active
-            </span>
-            <span className="text-[#E6DDCE] hidden sm:inline">·</span>
-            <span className="text-[11px] font-mono font-bold text-[#221912] shrink-0">
-              {lines.length} Production Lines
-            </span>
-            <span className="text-[#E6DDCE] hidden sm:inline">·</span>
-            <span className="text-[11px] font-mono text-[#8C7E6E] shrink-0">
-              {workforce.totalCount} Active Operators
-            </span>
-          </div>
-
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-[#221912] tracking-tight">
-              Plant Workforce Deployment &amp; Competency Governance
-            </h1>
-          </div>
-        </div>
-
-        {/* Global Toolbar Actions */}
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
-          {/* Export Roster to Excel */}
-          <button
-            type="button"
-            onClick={handleExportRoster}
-            className="h-9 px-3.5 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#221912] border border-[#E6DDCE] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-            title="Download full plant deployment roster in Excel format"
-          >
-            <Download className="w-3.5 h-3.5 text-[#9C5B3C]" />
-            <span className="whitespace-nowrap">Export Roster</span>
-          </button>
-
-          {/* Skill Matrix Link */}
-          <Link
-            to="/skill-matrix"
-            className="h-9 px-3.5 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#221912] border border-[#E6DDCE] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-          >
-            <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
-            <span className="whitespace-nowrap">Skill Matrix</span>
-          </Link>
-
-          {/* Line Balance Link */}
-          <Link
-            to="/line-balance"
-            className="h-9 px-3.5 rounded-xl bg-[#9C5B3C] hover:bg-[#854B2F] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-          >
-            <Zap className="w-3.5 h-3.5 text-[#FFE5BF]" />
-            <span className="whitespace-nowrap">Balance Lines</span>
-          </Link>
-
-          {/* Refresh Button */}
-          {onRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              className="h-9 w-9 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] border border-[#E6DDCE] shadow-2xs flex items-center justify-center transition-colors cursor-pointer shrink-0"
-              title="Refresh Data"
+      {/* ── 1. Header ─────────────────────────────────────────────── */}
+      <DashboardHeader
+        title="Plant Management"
+        subtitle="Workforce deployment, line capacity and skill coverage"
+        meta={
+          <>
+            <MetaChip tone="good">Plant floor active</MetaChip>
+            <MetaChip>
+              <span className="tabular-nums">{lines.length}</span> production lines
+            </MetaChip>
+            <MetaChip>
+              <span className="tabular-nums">{workforce.totalCount}</span> active operators
+            </MetaChip>
+          </>
+        }
+        actions={
+          <>
+            <HeaderButton
+              icon={<Download className="w-3.5 h-3.5" />}
+              onClick={handleExportRoster}
+              title="Download the filtered workforce roster in Excel format"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#9C5B3C]" : ""}`} />
-            </button>
-          )}
-        </div>
+              Export roster
+            </HeaderButton>
+            <HeaderButton to="/skill-matrix">
+              Skill matrix
+            </HeaderButton>
+            <HeaderButton variant="primary" to="/line-balance">
+              Balance lines
+            </HeaderButton>
+          </>
+        }
+        onRefresh={onRefresh}
+        refreshing={loading}
+      />
+
+      {/* ── 2. KPI row ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <KpiCard
+          label="Seated operators"
+          value={workforce.seatedCount}
+          progress={workforce.seatedPercent}
+          caption={`${workforce.seatedPercent}% of ${workforce.totalCount} on a line`}
+          onClick={() => selectAllocation("SEATED")}
+        />
+        <KpiCard
+          label="Non-seated operators"
+          value={workforce.unallocatedCount}
+          progress={workforce.unallocatedPercent}
+          caption={`${workforce.unallocatedPercent}% available to deploy`}
+          onClick={() => selectAllocation("NON_SEATED")}
+        />
+        <KpiCard
+          label="Multi-skilling"
+          value={`${workforce.multiSkilledPercent}%`}
+          progress={workforce.multiSkilledPercent}
+          caption={
+            <span
+              className="block whitespace-normal"
+              title={`${workforce.multiSkilledCount} operators certified on 2+ operations · average plant rating ${workforce.avgSkillRating > 0 ? `L${workforce.avgSkillRating} / 4` : "—"} · ${workforce.masterReservesCount} expert reserves`}
+            >
+              <span className="tabular-nums">{workforce.multiSkilledCount}</span> operators with 2+ skills
+              <span className="block tabular-nums">
+                Avg {workforce.avgSkillRating > 0 ? `L${workforce.avgSkillRating} / 4` : "—"} · {workforce.masterReservesCount} expert reserves
+              </span>
+            </span>
+          }
+        />
+        <KpiCard
+          label="Daily sewing capacity"
+          value={totalPlantCapacityPerDay.toLocaleString()}
+          unit="pcs / day"
+          caption={
+            <span className="block whitespace-normal">
+              Order load <span className="tabular-nums">{totalOrdersPieces.toLocaleString()}</span> pcs
+              <span className="block tabular-nums">Across {linesSummary.length} active lines</span>
+            </span>
+          }
+        />
       </div>
 
-      {/* ── 2. Top Strategic KPI Ribbon ────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Seated Operators */}
-        <div
-          onClick={() => {
-            setAllocationFilter("SEATED");
-            setCurrentPage(1);
-          }}
-          className={`rounded-2xl border p-5 shadow-2xs flex flex-col justify-between space-y-3 cursor-pointer transition-all duration-200 ${
-            allocationFilter === "SEATED"
-              ? "bg-emerald-50/40 border-emerald-500 ring-2 ring-emerald-500/20"
-              : "bg-white border-[#E6DDCE] hover:border-emerald-300 hover:shadow-xs"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">
-              Seated Operators
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-              <UserCheck className="w-4 h-4" />
-            </div>
+      {/* ── 3. Sewing lines & capacity ────────────────────────────── */}
+      <Section
+        title="Sewing lines & capacity"
+        subtitle="Status, active order and manning against the required headcount for each line"
+        badge={<CountBadge>{linesSummary.length}</CountBadge>}
+        actions={<SectionLink to="/line-dashboard">Open line operations</SectionLink>}
+        flush
+      >
+        {linesSummary.length === 0 ? (
+          <EmptyHint icon={<Layers />} title="No active sewing lines">
+            Add sewing lines under Settings to see their capacity and manning here.
+          </EmptyHint>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[880px] text-left text-[13px]">
+              <thead>
+                <tr className="bg-[#FAF7F2] border-b border-[#F0EAE0]">
+                  <th className={cn(TH, "pl-5")}>Line</th>
+                  <th className={TH}>Product</th>
+                  <th className={TH}>Status</th>
+                  <th className={TH}>Supervisor</th>
+                  <th className={TH}>Active order</th>
+                  <th className={cn(TH, "text-right")}>Daily capacity</th>
+                  <th className={cn(TH, "pr-5 w-[230px]")}>Manning</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F0EAE0]">
+                {linesSummary.map((line) => (
+                  <tr key={line.id} className="hover:bg-[#FCFAF7] transition-colors">
+                    <td className={cn(TD, "pl-5")}>
+                      <div className="font-semibold text-[#221912] whitespace-nowrap">{line.lineCode}</div>
+                      <div className="text-[11.5px] text-[#8C7E6E] whitespace-nowrap">{line.floor}</div>
+                    </td>
+                    <td className={TD}>
+                      <div className="text-[#221912] truncate max-w-[220px]" title={line.lineName}>
+                        {productOf(line.lineName)}
+                      </div>
+                    </td>
+                    <td className={TD}>
+                      <StatusPill tone={LINE_STATUS_TONE[line.status] ?? "neutral"}>{sentenceCase(line.status)}</StatusPill>
+                    </td>
+                    <td className={cn(TD, "text-[#5C4D3E] whitespace-nowrap")}>{line.supervisor}</td>
+                    <td className={TD}>
+                      {line.hasPlan ? (
+                        <>
+                          <div className="font-medium text-[#221912] tabular-nums whitespace-nowrap">{line.activeOrderNo}</div>
+                          <div className="text-[11.5px] text-[#8C7E6E] truncate max-w-[180px]">{line.activeStyle}</div>
+                        </>
+                      ) : (
+                        <span className="text-[#8C7E6E]">{line.activeOrderNo}</span>
+                      )}
+                    </td>
+                    <td className={cn(TD, "text-right whitespace-nowrap")}>
+                      <span className="font-semibold text-[#221912] tabular-nums">{line.targetCapacity.toLocaleString()}</span>
+                      <span className="text-[12px] text-[#8C7E6E]"> pcs/day</span>
+                    </td>
+                    <td className={cn(TD, "pr-5")}>
+                      <div
+                        className="flex items-center gap-3"
+                        title={`${line.deployedOperators} of ${line.reqOperators} required operators deployed (${line.manningPercent}%)`}
+                      >
+                        <Meter value={line.manningPercent} className="flex-1 min-w-[70px]" />
+                        <span className="text-[12.5px] whitespace-nowrap tabular-nums w-[84px] text-right">
+                          <span className="font-semibold text-[#221912]">
+                            {line.deployedOperators}/{line.reqOperators}
+                          </span>
+                          <span className="text-[#8C7E6E]"> ops</span>
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono">
-                {workforce.seatedCount}
-              </span>
-              <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
-                {workforce.seatedPercent}% Seated
-              </span>
-            </div>
-          </div>
-          <div className="w-full bg-[#F6F1E8] h-2 rounded-full overflow-hidden border border-[#E6DDCE]">
-            <div
-              className="bg-emerald-600 h-full rounded-full transition-all duration-500"
-              style={{ width: `${workforce.seatedPercent}%` }}
-            />
-          </div>
-        </div>
+        )}
+      </Section>
 
-        {/* Metric 2: Non-Seated Operators */}
-        <div
-          onClick={() => {
-            setAllocationFilter("NON_SEATED");
-            setCurrentPage(1);
-          }}
-          className={`rounded-2xl border p-5 shadow-2xs flex flex-col justify-between space-y-3 cursor-pointer transition-all duration-200 ${
-            allocationFilter === "NON_SEATED"
-              ? "bg-amber-50/40 border-amber-500 ring-2 ring-amber-500/20"
-              : "bg-white border-[#E6DDCE] hover:border-amber-300 hover:shadow-xs"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">
-              Non-Seated Operators
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
-              <Users className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono">
-                {workforce.unallocatedCount}
-              </span>
-              <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
-                {workforce.unallocatedPercent}% Non-Seated
-              </span>
-            </div>
-          </div>
-          <div className="w-full bg-[#F6F1E8] h-2 rounded-full overflow-hidden border border-[#E6DDCE]">
-            <div
-              className="bg-amber-500 h-full rounded-full transition-all duration-500"
-              style={{ width: `${workforce.unallocatedPercent}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Metric 3: Multi-Skilled Workforce Versatility */}
-        <div className="rounded-2xl border border-[#E6DDCE] bg-white p-5 shadow-2xs flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">
-              Multi-Skilling Versatility
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700">
-              <Star className="w-4 h-4 text-indigo-600 fill-indigo-400" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-indigo-900 font-mono">
-                {workforce.multiSkilledPercent}%
-              </span>
-              <span className="text-xs font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-full">
-                {workforce.multiSkilledCount} Operators
-              </span>
-            </div>
-          </div>
-          <div className="text-[11px] text-[#8C7E6E] font-medium flex items-center justify-between">
-            <span>Avg Plant Rating: <strong className="font-mono text-[#221912] font-bold">{workforce.avgSkillRating > 0 ? `L${workforce.avgSkillRating} / 4` : "—"}</strong></span>
-            <span>Expert Reserves: <strong className="font-mono text-indigo-800 font-bold">{workforce.masterReservesCount}</strong></span>
-          </div>
-        </div>
-
-        {/* Metric 4: Total Plant Daily Capacity */}
-        <div className="rounded-2xl border border-[#E6DDCE] bg-white p-5 shadow-2xs flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#8C7E6E]">
-              Plant Daily Sewing Capacity
-            </span>
-            <div className="w-9 h-9 rounded-xl bg-[#FAF8F5] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C]">
-              <Layers className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono">
-                {totalPlantCapacityPerDay.toLocaleString()}
-              </span>
-              <span className="text-xs font-bold text-[#8C7E6E] font-mono">
-                Pcs / Day
-              </span>
-            </div>
-          </div>
-          <div className="text-[11px] text-[#8C7E6E] font-medium flex items-center justify-between">
-            <span>Total Order Load:</span>
-            <span className="font-mono font-bold text-[#221912]">{totalOrdersPieces.toLocaleString()} pcs</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── 3. Active Sewing Lines & Manning Summary ───────────────── */}
-      <div className="bg-white rounded-2xl border border-[#E6DDCE] p-6 shadow-2xs space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-[#E6DDCE]">
-          <div>
-            <h3 className="text-sm font-black uppercase tracking-wider text-[#221912] flex items-center gap-2">
-              <Layers className="w-4 h-4 text-[#9C5B3C]" />
-              <span>Plant Sewing Lines &amp; Manning Capacity Overview</span>
-            </h3>
-          </div>
-          <Link
-            to="/line-dashboard"
-            className="text-xs font-bold text-[#9C5B3C] hover:underline flex items-center gap-1"
-          >
-            <span>Open Line Operations Dashboard</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {linesSummary.map((line) => (
-            <div
-              key={line.id}
-              className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E6DDCE] space-y-2.5 hover:border-[#9C5B3C] transition-all"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-black text-xs px-2 py-0.5 rounded-lg bg-[#221912] text-white">
-                    {line.lineCode}
-                  </span>
-                  <h4 className="font-bold text-xs text-[#221912]">{line.lineName}</h4>
-                </div>
-                <span
-                  className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                    line.status === "Running"
-                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                      : line.status === "Needs Manning"
-                        ? "bg-rose-50 text-rose-800 border-rose-300"
-                        : "bg-zinc-100 text-zinc-700 border-zinc-300"
-                  }`}
-                >
-                  {line.status}
-                </span>
-              </div>
-
-              <div className="text-xs text-[#8C7E6E] space-y-1">
-                <div className="flex items-center justify-between">
-                  <span>Supervisor:</span>
-                  <strong className="text-[#221912]">{line.supervisor}</strong>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Active Order:</span>
-                  <strong className="text-[#221912]">{line.activeOrderNo}</strong>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Daily Capacity:</span>
-                  <strong className="font-mono text-[#9C5B3C]">{line.targetCapacity} pcs/day</strong>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-[#E6DDCE]/60 space-y-1">
-                <div className="flex items-center justify-between text-[10.5px]">
-                  <span className="text-[#8C7E6E]">Manning:</span>
-                  <span className="font-mono font-bold text-[#221912]">
-                    {line.deployedOperators} / {line.reqOperators} Ops ({line.manningPercent}%)
-                  </span>
-                </div>
-                <div className="w-full bg-white h-1.5 rounded-full overflow-hidden border border-[#E6DDCE]">
-                  <div
-                    className={`h-full rounded-full ${
-                      line.manningPercent >= 90 ? "bg-emerald-600" : "bg-amber-500"
-                    }`}
-                    style={{ width: `${line.manningPercent}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── 4. Workforce Deployment & Allocation Roster ─────────────── */}
-      <div className="bg-white rounded-2xl border border-[#E6DDCE] p-6 shadow-2xs space-y-5">
-        {/* Header & Main Tabs */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[#E6DDCE]">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-black uppercase tracking-wider text-[#221912]">
-                Workforce Deployment: Seated vs. Non-Seated Roster
-              </h3>
-              <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE]">
-                {workforce.totalCount} Operators
-              </span>
-            </div>
-          </div>
-
-          {/* Allocation Mode Segmented Tabs */}
-          <div className="flex items-center bg-[#F6F1E8] p-1 rounded-xl border border-[#E6DDCE] text-xs font-bold gap-1 self-start lg:self-auto flex-wrap">
-            <button
-              type="button"
-              onClick={() => {
-                setAllocationFilter("ALL");
-                setCurrentPage(1);
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                allocationFilter === "ALL"
-                  ? "bg-white text-[#9C5B3C] shadow-2xs border border-[#E6DDCE]"
-                  : "text-[#8C7E6E] hover:text-[#221912]"
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>All Workforce ({workforce.totalCount})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setAllocationFilter("SEATED");
-                setCurrentPage(1);
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                allocationFilter === "SEATED"
-                  ? "bg-emerald-600 text-white shadow-2xs"
-                  : "text-emerald-800 hover:text-emerald-950 hover:bg-emerald-50/50"
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${allocationFilter === "SEATED" ? "bg-white" : "bg-emerald-600"}`} />
-              <span>Seated ({workforce.seatedCount})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setAllocationFilter("NON_SEATED");
-                setCurrentPage(1);
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                allocationFilter === "NON_SEATED"
-                  ? "bg-amber-600 text-white shadow-2xs"
-                  : "text-amber-800 hover:text-amber-950 hover:bg-amber-50/50"
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${allocationFilter === "NON_SEATED" ? "bg-white" : "bg-amber-500"}`} />
-              <span>Non-Seated ({workforce.unallocatedCount})</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Multi-Criteria Filters Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 p-3.5 bg-[#FAF8F5] rounded-xl border border-[#E6DDCE]">
-          {/* Search Box */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-[#8C7E6E] absolute left-3 top-1/2 -translate-y-1/2" />
+      {/* ── 4. Workforce roster ───────────────────────────────────── */}
+      <Section
+        title="Workforce roster"
+        subtitle="Where every active operator is deployed, their current operation and skill level"
+        badge={<CountBadge>{workforce.totalCount}</CountBadge>}
+        actions={
+          <SegmentTabs
+            value={allocationFilter}
+            onChange={selectAllocation}
+            options={[
+              { value: "ALL", label: "All", count: workforce.totalCount },
+              { value: "SEATED", label: "Seated", count: workforce.seatedCount },
+              { value: "NON_SEATED", label: "Non-seated", count: workforce.unallocatedCount },
+            ]}
+          />
+        }
+        flush
+      >
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-[#F0EAE0] bg-[#FCFAF7]">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="w-3.5 h-3.5 text-[#8C7E6E] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Search by name, ID, line..."
+              placeholder="Search operators"
+              title="Search by name, employee ID, department, line or operation"
+              aria-label="Search operators"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-8 pr-3 py-1.5 bg-white rounded-lg border border-[#E6DDCE] text-xs text-[#221912] placeholder-[#8C7E6E] focus:outline-none focus:border-[#9C5B3C]"
+              className={cn(CONTROL, "w-full pl-8 pr-3 placeholder:text-[#B5A897]")}
             />
           </div>
 
-          {/* Department Filter */}
-          <div>
-            <select
-              value={selectedDepartmentFilter}
-              onChange={(e) => {
-                setSelectedDepartmentFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full py-1.5 px-2.5 bg-white rounded-lg border border-[#E6DDCE] text-xs text-[#221912] font-medium focus:outline-none focus:border-[#9C5B3C] cursor-pointer"
-            >
-              <option value="ALL">All Departments ({distinctDepartments.length})</option>
-              {distinctDepartments.map((dept) => (
-                <option key={dept} value={dept}>
-                  {dept}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            aria-label="Filter by department"
+            value={selectedDepartmentFilter}
+            onChange={(e) => {
+              setSelectedDepartmentFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            className={cn(CONTROL, SELECT_W)}
+          >
+            <option value="ALL">All departments ({distinctDepartments.length})</option>
+            {distinctDepartments.map((dept) => (
+              <option key={dept} value={dept}>
+                {dept}
+              </option>
+            ))}
+          </select>
 
-          {/* Operation / Skill Filter */}
-          <div>
-            <select
-              value={selectedOperationFilter}
-              onChange={(e) => {
-                setSelectedOperationFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full py-1.5 px-2.5 bg-white rounded-lg border border-[#E6DDCE] text-xs text-[#221912] font-medium focus:outline-none focus:border-[#9C5B3C] cursor-pointer"
-            >
-              <option value="ALL">All Operations ({distinctOperations.length})</option>
-              {distinctOperations.map((opName) => (
-                <option key={opName} value={opName}>
-                  {opName}
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            aria-label="Filter by operation"
+            value={selectedOperationFilter}
+            onChange={(e) => {
+              setSelectedOperationFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            className={cn(CONTROL, SELECT_W)}
+          >
+            <option value="ALL">All operations ({distinctOperations.length})</option>
+            {distinctOperations.map((opName) => (
+              <option key={opName} value={opName}>
+                {opName}
+              </option>
+            ))}
+          </select>
 
-          {/* Skill Level Filter */}
-          <div>
-            <select
-              value={selectedSkillRatingFilter}
-              onChange={(e) => {
-                setSelectedSkillRatingFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full py-1.5 px-2.5 bg-white rounded-lg border border-[#E6DDCE] text-xs text-[#221912] font-medium focus:outline-none focus:border-[#9C5B3C] cursor-pointer"
-            >
-              <option value="ALL">All Skill Ratings</option>
-              {SKILL_RATINGS.map((r) => (
-                <option key={r} value={String(r)}>
-                  Level {r} — {SKILL_LEVELS[r].name} ({SKILL_LEVELS[r].band})
-                </option>
-              ))}
-            </select>
-          </div>
+          <select
+            aria-label="Filter by skill level"
+            value={selectedSkillRatingFilter}
+            onChange={(e) => {
+              setSelectedSkillRatingFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            className={cn(CONTROL, SELECT_W)}
+          >
+            <option value="ALL">All skill levels</option>
+            {SKILL_RATINGS.map((r) => (
+              <option key={r} value={String(r)}>
+                Level {r} — {SKILL_LEVELS[r].name} ({SKILL_LEVELS[r].band})
+              </option>
+            ))}
+          </select>
 
-          {/* View Mode & Reset Controls */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-[#E6DDCE]">
+          <div className="flex items-center gap-2 ml-auto">
+            <div className="inline-flex items-center rounded-lg border border-[#E6DDCE] bg-white p-0.5" role="group" aria-label="View mode">
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
-                className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                  viewMode === "table" ? "bg-[#9C5B3C] text-white" : "text-[#8C7E6E] hover:text-[#221912]"
-                }`}
-                title="Table View"
+                aria-pressed={viewMode === "table"}
+                className={cn(VIEW_BTN, viewMode === "table" ? "bg-[#F6F1E8] text-[#221912]" : "text-[#8C7E6E] hover:text-[#221912]")}
+                title="Table view"
               >
-                <List className="w-3.5 h-3.5" />
+                <List className="w-4 h-4" />
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode("grid")}
-                className={`p-1.5 rounded-md transition-all cursor-pointer ${
-                  viewMode === "grid" ? "bg-[#9C5B3C] text-white" : "text-[#8C7E6E] hover:text-[#221912]"
-                }`}
-                title="Grid View"
+                aria-pressed={viewMode === "grid"}
+                className={cn(VIEW_BTN, viewMode === "grid" ? "bg-[#F6F1E8] text-[#221912]" : "text-[#8C7E6E] hover:text-[#221912]")}
+                title="Card view"
               >
-                <LayoutGrid className="w-3.5 h-3.5" />
+                <LayoutGrid className="w-4 h-4" />
               </button>
             </div>
-
             <button
               type="button"
-              onClick={() => {
-                setAllocationFilter("ALL");
-                setSelectedDepartmentFilter("ALL");
-                setSelectedOperationFilter("ALL");
-                setSelectedSkillRatingFilter("ALL");
-                setSearchQuery("");
-                setCurrentPage(1);
-              }}
-              className="text-xs font-bold text-[#9C5B3C] hover:underline cursor-pointer"
+              onClick={resetFilters}
+              className={cn(
+                "h-9 px-2.5 rounded-lg text-[12.5px] font-semibold whitespace-nowrap transition-colors cursor-pointer",
+                filtersActive ? "text-[#9C5B3C] hover:bg-[#FBF5EF]" : "text-[#B5A897] hover:text-[#8C7E6E]"
+              )}
             >
-              Reset Filters
+              Reset filters
             </button>
           </div>
         </div>
 
-        {/* ── Table View ── */}
-        {viewMode === "table" ? (
-          <div className="overflow-x-auto rounded-xl border border-[#E6DDCE]">
-            <table className="w-full text-left border-collapse text-xs">
+        {/* Roster body */}
+        {paginatedWorkforce.length === 0 ? (
+          <EmptyHint
+            icon={<Users />}
+            title="No operators match these filters"
+            action={
+              <button type="button" onClick={resetFilters} className={SMALL_BTN}>
+                Reset filters
+              </button>
+            }
+          >
+            Try a different search term or clear one of the filters.
+          </EmptyHint>
+        ) : viewMode === "table" ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-[13px]">
               <thead>
-                <tr className="bg-[#FAF8F5] border-b border-[#E6DDCE] text-[10.5px] uppercase font-bold text-[#8C7E6E]">
-                  <th className="py-3 px-4 w-52">Operator</th>
-                  <th className="py-3 px-4 w-44">Deployment Status</th>
-                  <th className="py-3 px-4">Operation</th>
-                  <th className="py-3 px-4 text-center w-36">Skill Rating</th>
-                  <th className="py-3 px-4 text-right w-36">Actions</th>
+                <tr className="bg-[#FAF7F2] border-b border-[#F0EAE0]">
+                  <th className={cn(TH, "pl-5 w-[24%]")}>Operator</th>
+                  <th className={cn(TH, "w-[20%]")}>Deployment</th>
+                  <th className={TH}>Operation</th>
+                  <th className={cn(TH, "w-[150px]")}>Skill level</th>
+                  <th className={cn(TH, "pr-5 text-right w-[190px]")}>
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E6DDCE]">
-                {paginatedWorkforce.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-10 text-center text-xs text-[#8C7E6E] italic">
-                      No operators found matching the selected criteria.
+              <tbody className="divide-y divide-[#F0EAE0]">
+                {paginatedWorkforce.map((op) => (
+                  <tr
+                    key={op.id}
+                    onClick={() => setSelectedOperatorForModal(op)}
+                    className="hover:bg-[#FCFAF7] transition-colors cursor-pointer group"
+                  >
+                    <td className={cn(TD, "pl-5")}>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-8 h-8 rounded-full bg-[#F6F1E8] border border-[#E6DDCE] flex items-center justify-center text-[12px] font-semibold text-[#7A452D] shrink-0">
+                          {initials(op.name)}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-[#221912] truncate group-hover:text-[#7A452D] transition-colors">{op.name}</div>
+                          <div className="text-[11.5px] text-[#8C7E6E] tabular-nums truncate">
+                            {op.employeeId} · {op.department}
+                          </div>
+                        </div>
+                      </div>
                     </td>
+                    <td className={TD}>{renderStatus(op)}</td>
+                    <td className={TD}>
+                      <div className="min-w-0 max-w-[340px]">
+                        <div className="text-[#221912] truncate" title={op.isAllocated ? op.assignedOperationName ?? "" : op.primarySkill}>
+                          {op.isAllocated ? op.assignedOperationName : op.primarySkill}
+                        </div>
+                        <div className="text-[11.5px] text-[#8C7E6E]">
+                          {op.isAllocated ? "Current operation" : "Primary skill"}
+                          {op.certifiedOperations.length > 0 && ` · ${op.certifiedOperations.length} certified`}
+                        </div>
+                      </div>
+                    </td>
+                    <td className={TD}>
+                      <SkillTag rating={op.skillRating} nonMachine={op.isNonMachine} />
+                    </td>
+                    <td className={cn(TD, "pr-5")}>{renderRowActions(op)}</td>
                   </tr>
-                ) : (
-                  paginatedWorkforce.map((op) => (
-                    <tr
-                      key={op.id}
-                      onClick={() => setSelectedOperatorForModal(op)}
-                      className="hover:bg-[#FAF8F5]/80 transition-colors cursor-pointer group"
-                    >
-                      {/* Operator Identity */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-lg bg-[#F6F1E8] border border-[#E6DDCE] flex items-center justify-center text-[#9C5B3C] font-bold text-xs shrink-0">
-                            {op.name.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="font-bold text-xs text-[#221912] group-hover:text-[#9C5B3C] transition-colors">
-                              {op.name}
-                            </div>
-                            <div className="text-[10.5px] text-[#8C7E6E] font-mono font-medium">
-                              {op.employeeId}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Deployment Status */}
-                      <td className="py-3 px-4">
-                        {op.isAllocated ? (
-                          <div className="space-y-0.5">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              Seated on {op.assignedLineCode}
-                            </span>
-                            <div className="text-[10px] text-emerald-700 font-mono font-medium pl-0.5">
-                              Station {op.assignedStationNum} {op.assignedOrderNo && `(${op.assignedOrderNo})`}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-0.5">
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                              Non-Seated
-                            </span>
-                            <div className="text-[10px] text-[#8C7E6E] font-medium pl-0.5">
-                              Available
-                            </div>
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Operation */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-[#221912] text-xs">
-                            {op.isAllocated ? op.assignedOperationName : op.primarySkill}
-                          </span>
-                          {op.isAllocated && (
-                            <span className="text-[9.5px] text-emerald-800 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 font-semibold font-mono">
-                              Active
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Skill Rating Level */}
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
-                        {op.isNonMachine ? (
-                          <span className="inline-flex items-center gap-1 font-sans font-semibold text-[10.5px] px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">
-                            Non-Machine
-                          </span>
-                        ) : (
-                          <span
-                            className={`inline-flex items-center gap-1.5 font-mono font-bold text-xs px-2.5 py-1 rounded-lg border shadow-2xs ${
-                              op.skillRating ? SKILL_LEVELS[clampRating(op.skillRating)].badge : "bg-slate-100 text-slate-700 border-slate-200"
-                            }`}
-                            title={op.skillRating ? `${skillLevelName(op.skillRating)} (${SKILL_LEVELS[clampRating(op.skillRating)].band}) — ${SKILL_LEVELS[clampRating(op.skillRating)].description}` : "Not rated"}
-                          >
-                            <SkillLevelIcon rating={op.skillRating} size={14} decorative />
-                            <span>
-                              L{op.skillRating} {skillLevelName(op.skillRating)}
-                            </span>
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Action Column */}
-                      <td className="py-3 px-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedOperatorForModal(op)}
-                            className="px-2.5 py-1 rounded-xl bg-white hover:bg-[#F6F1E8] text-[#221912] border border-[#E6DDCE] text-[11px] font-bold transition-all cursor-pointer shadow-2xs"
-                            title="View Operator Full Profile"
-                          >
-                            <span>Profile</span>
-                          </button>
-
-                          {op.isAllocated ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const params = new URLSearchParams();
-                                if (op.assignedOrderId) params.set("orderId", String(op.assignedOrderId));
-                                if (op.assignedLineId) params.set("lineId", String(op.assignedLineId));
-                                navigate(`/line-balance?${params.toString()}`);
-                              }}
-                              className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[11px] font-bold transition-all cursor-pointer shadow-2xs"
-                              title="Open this operator in Line Balancing"
-                            >
-                              <span>View Station</span>
-                              <ArrowUpRight className="w-3 h-3" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => navigate("/line-balance")}
-                              className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-[#F6F1E8] hover:bg-[#9C5B3C] text-[#9C5B3C] hover:text-white border border-[#E6DDCE] hover:border-[#9C5B3C] text-[11px] font-bold transition-all cursor-pointer shadow-2xs"
-                              title="Allocate this operator to an open workstation"
-                            >
-                              <span>Deploy</span>
-                              <ChevronRight className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>
         ) : (
-          /* ── Grid View ── */
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 p-5">
             {paginatedWorkforce.map((op) => (
               <div
                 key={op.id}
                 onClick={() => setSelectedOperatorForModal(op)}
-                className="p-4 rounded-xl border border-[#E6DDCE] bg-white shadow-2xs hover:shadow-md hover:border-[#9C5B3C]/40 transition-all cursor-pointer flex flex-col justify-between space-y-3 group"
+                className="rounded-xl border border-[#E6DDCE] bg-white p-4 hover:border-[#D6C7B3] hover:shadow-[0_2px_8px_rgba(34,25,18,0.06)] transition-all cursor-pointer flex flex-col gap-3 min-w-0"
               >
-                {/* Header */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                        op.isAllocated ? "bg-emerald-500" : "bg-amber-500"
-                      }`}
-                    />
-                    <div>
-                      <h4 className="font-bold text-sm text-[#221912] group-hover:text-[#9C5B3C] transition-colors truncate max-w-[150px]">
-                        {op.name}
-                      </h4>
-                      <div className="flex items-center gap-1.5 text-[10px] text-[#8C7E6E] font-mono">
-                        <span className="font-bold text-[#9C5B3C]">{op.employeeId}</span>
-                      </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-8 h-8 rounded-full bg-[#F6F1E8] border border-[#E6DDCE] flex items-center justify-center text-[12px] font-semibold text-[#7A452D] shrink-0">
+                      {initials(op.name)}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold text-[#221912] truncate">{op.name}</div>
+                      <div className="text-[11.5px] text-[#8C7E6E] tabular-nums">{op.employeeId}</div>
                     </div>
                   </div>
-
-                  {/* Status */}
-                  <div>
-                    {op.isAllocated ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        {op.assignedLineCode}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                        Non-Seated
-                      </span>
-                    )}
-                  </div>
+                  {op.isAllocated ? (
+                    <StatusPill tone="good">Seated · {op.assignedLineCode}</StatusPill>
+                  ) : (
+                    <StatusPill tone="warn">Non-seated</StatusPill>
+                  )}
                 </div>
 
-                {/* Body */}
-                <div className="p-3 rounded-xl bg-[#FAF8F5] border border-[#E6DDCE] space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-[10px] font-bold uppercase text-[#8C7E6E]">
-                      {op.isAllocated ? "Active Operation" : "Primary Competency"}
-                    </span>
-                    {op.isNonMachine ? (
-                      <span className="inline-flex items-center gap-1 font-sans font-semibold text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                        Non-Machine Role
-                      </span>
-                    ) : (
-                      <span
-                        className={`inline-flex items-center gap-1 font-mono font-bold text-[11px] px-2 py-0.2 rounded border ${
-                          op.skillRating ? SKILL_LEVELS[clampRating(op.skillRating)].badge : "bg-slate-100 text-slate-700 border-slate-200"
-                        }`}
-                      >
-                        <SkillLevelIcon rating={op.skillRating} size={12} decorative />
-                        <span>
-                          L{op.skillRating} {skillLevelName(op.skillRating)}
-                        </span>
-                      </span>
-                    )}
+                <div className="min-w-0">
+                  <div className="text-[11.5px] text-[#8C7E6E]">
+                    {op.isAllocated ? "Current operation" : "Primary skill"}
                   </div>
-
-                  <div className="font-bold text-xs text-[#221912] truncate">
+                  <div className="text-[13px] text-[#221912] truncate" title={op.isAllocated ? op.assignedOperationName ?? "" : op.primarySkill}>
                     {op.isAllocated ? op.assignedOperationName : op.primarySkill}
                   </div>
-
                   {op.isAllocated && (
-                    <div className="text-[10px] text-emerald-800 font-mono font-medium flex items-center gap-1">
-                      <span>Station {op.assignedStationNum}</span>
-                      {op.assignedOrderNo && <span>· PO: {op.assignedOrderNo}</span>}
+                    <div className="text-[11.5px] text-[#8C7E6E] tabular-nums truncate">
+                      Station {op.assignedStationNum}
+                      {op.assignedOrderNo && ` · ${op.assignedOrderNo}`}
                     </div>
                   )}
                 </div>
 
-                {/* Footer */}
-                <div
-                  className="pt-2 border-t border-[#E6DDCE] flex items-center justify-between gap-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedOperatorForModal(op)}
-                    className="text-xs font-bold text-[#8C7E6E] hover:text-[#9C5B3C] flex items-center gap-1 cursor-pointer"
-                  >
-                    <span>Full Profile</span>
-                    <ChevronRight className="w-3 h-3" />
-                  </button>
-
-                  {op.isAllocated ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const params = new URLSearchParams();
-                        if (op.assignedOrderId) params.set("orderId", String(op.assignedOrderId));
-                        if (op.assignedLineId) params.set("lineId", String(op.assignedLineId));
-                        navigate(`/line-balance?${params.toString()}`);
-                      }}
-                      className="px-3 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
-                    >
-                      <span>View Station</span>
-                      <ArrowUpRight className="w-3 h-3" />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => navigate("/line-balance")}
-                      className="px-3 py-1 rounded-xl bg-[#F6F1E8] hover:bg-[#9C5B3C] text-[#9C5B3C] hover:text-white border border-[#E6DDCE] hover:border-[#9C5B3C] text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shadow-2xs"
-                    >
-                      <span>Deploy to Line</span>
-                      <ChevronRight className="w-3 h-3" />
-                    </button>
-                  )}
+                <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#F0EAE0] mt-auto">
+                  <SkillTag rating={op.skillRating} nonMachine={op.isNonMachine} />
+                  {renderRowActions(op)}
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Pagination Footer */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between pt-3 border-t border-[#E6DDCE] text-xs">
-            <div className="text-[#8C7E6E] font-medium">
-              Page <strong className="text-[#221912] font-mono">{validCurrentPage}</strong> of{" "}
-              <strong className="text-[#221912] font-mono">{totalPages}</strong> ({totalItems} total operators)
+        {/* Pagination */}
+        {totalItems > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-[#F0EAE0]">
+            <div className="text-[12.5px] text-[#8C7E6E] tabular-nums">
+              Showing <span className="font-semibold text-[#221912]">{rangeStart}–{rangeEnd}</span> of{" "}
+              <span className="font-semibold text-[#221912]">{totalItems}</span> operators
             </div>
 
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={validCurrentPage <= 1}
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="p-1.5 rounded-lg border border-[#E6DDCE] bg-white text-[#8C7E6E] hover:text-[#221912] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                title="Previous Page"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+            {totalPages > 1 && (
+              <nav className="flex items-center gap-1" aria-label="Roster pages">
                 <button
-                  key={pageNum}
                   type="button"
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`w-7 h-7 rounded-lg text-xs font-bold font-mono transition-all cursor-pointer ${
-                    validCurrentPage === pageNum
-                      ? "bg-[#9C5B3C] text-white shadow-2xs"
-                      : "bg-white border border-[#E6DDCE] text-[#8C7E6E] hover:text-[#221912]"
-                  }`}
+                  disabled={validCurrentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className={cn(PAGE_BTN, "text-[#5C4D3E] hover:bg-[#FAF7F2] disabled:opacity-40 disabled:cursor-not-allowed")}
+                  title="Previous page"
                 >
-                  {pageNum}
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
-              ))}
 
-              <button
-                type="button"
-                disabled={validCurrentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                className="p-1.5 rounded-lg border border-[#E6DDCE] bg-white text-[#8C7E6E] hover:text-[#221912] disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                title="Next Page"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── 5. Forward Planning Skill Gap Analysis ────────────────────── */}
-      <div className="bg-white rounded-2xl border border-[#E6DDCE] p-6 shadow-2xs space-y-5">
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-[#E6DDCE]">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-black uppercase tracking-wider text-[#221912] flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-[#9C5B3C]" />
-                <span>Forward Planning Skill Gap Analysis ({forwardPlan.planMonth})</span>
-              </h3>
-              {forwardPlan.criticalShortfallCount > 0 && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-300">
-                  <AlertCircle className="w-3 h-3 text-rose-600" />
-                  <span>{forwardPlan.criticalShortfallCount} Critical Shortfalls</span>
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Quick Summary Badges */}
-          <div className="flex items-center gap-2 flex-wrap text-xs font-mono font-bold">
-            <span className="px-2.5 py-1 rounded-lg bg-[#FAF8F5] border border-[#E6DDCE] text-[#8C7E6E]">
-              Orders: <strong className="text-[#221912]">{forwardPlan.activeOrdersCount}</strong> ({forwardPlan.totalPlannedPieces.toLocaleString()} pcs)
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-[#FAF8F5] border border-[#E6DDCE] text-[#8C7E6E]">
-              Required: <strong className="text-[#221912]">{forwardPlan.totalOperatorsRequired}</strong> Ops
-            </span>
-            <span className="px-2.5 py-1 rounded-lg bg-[#FAF8F5] border border-[#E6DDCE] text-[#8C7E6E]">
-              Available: <strong className="text-[#221912]">{forwardPlan.totalOperatorsAvailable}</strong> Ops
-            </span>
-            <span
-              className={`px-2.5 py-1 rounded-lg border ${
-                forwardPlan.overallSkillGap >= 0
-                  ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                  : "bg-rose-50 text-rose-800 border-rose-300"
-              }`}
-            >
-              {forwardPlan.overallSkillGap >= 0 ? `+${forwardPlan.overallSkillGap} Surplus` : `${forwardPlan.overallSkillGap} Net Deficit`}
-            </span>
-          </div>
-        </div>
-
-        {/* Machine Competency Demand vs. Qualified Supply Table */}
-        <div className="overflow-x-auto rounded-xl border border-[#E6DDCE]">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-[#FAF8F5] border-b border-[#E6DDCE] text-[10.5px] uppercase font-bold text-[#8C7E6E]">
-                <th className="py-2.5 px-3">Machine Class &amp; Category</th>
-                <th className="py-2.5 px-3 text-center">Required (Plan)</th>
-                <th className="py-2.5 px-3 text-center">Qualified (Supply)</th>
-                <th className="py-2.5 px-3 text-center">Competency Gap</th>
-                <th className="py-2.5 px-3">Action Recommendation</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E6DDCE]">
-              {forwardPlan.skillDemands.map((demand) => (
-                <tr key={demand.machineClass} className="hover:bg-[#FAF8F5]/80 transition-colors">
-                  <td className="py-2.5 px-3">
-                    <div className="font-bold text-[#221912]">{demand.machineClass}</div>
-                    <div className="text-[10px] text-[#8C7E6E] font-medium">{demand.category}</div>
-                  </td>
-                  <td className="py-2.5 px-3 text-center font-mono font-bold text-[#221912]">
-                    {demand.requiredOperators} Ops
-                  </td>
-                  <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-800">
-                    {demand.availableQualifiedOperators} Qualified
-                  </td>
-                  <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                        demand.status === "severe_deficit"
-                          ? "bg-rose-50 text-rose-800 border-rose-300 font-mono"
-                          : demand.status === "moderate_deficit"
-                            ? "bg-amber-50 text-amber-800 border-amber-300 font-mono"
-                            : demand.status === "surplus"
-                              ? "bg-sky-50 text-sky-800 border-sky-300 font-mono"
-                              : "bg-emerald-50 text-emerald-800 border-emerald-300 font-mono"
-                      }`}
-                    >
-                      {demand.skillGap > 0
-                        ? `+${demand.skillGap} Surplus`
-                        : demand.skillGap < 0
-                          ? `${demand.skillGap} Deficit`
-                          : "Balanced (0)"}
+                {pageWindow(validCurrentPage, totalPages).map((pageNum, i) =>
+                  pageNum === null ? (
+                    <span key={`gap-${i}`} className="w-8 text-center text-[12.5px] text-[#B5A897]">
+                      …
                     </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-[11px] text-[#221912]">
-                    {demand.actionRecommendation}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  ) : (
+                    <button
+                      key={pageNum}
+                      type="button"
+                      onClick={() => setCurrentPage(pageNum)}
+                      aria-current={validCurrentPage === pageNum ? "page" : undefined}
+                      className={cn(
+                        PAGE_BTN,
+                        "tabular-nums",
+                        validCurrentPage === pageNum
+                          ? "bg-[#9C5B3C] border-[#9C5B3C] text-white"
+                          : "text-[#5C4D3E] hover:bg-[#FAF7F2]"
+                      )}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                )}
 
-        {/* Cross-Training & Skill Ramp-up Roadmap */}
-        {forwardPlan.trainingRoadmap.length > 0 && (
-          <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E6DDCE] space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-black uppercase tracking-wider text-[#221912] flex items-center gap-1.5">
-                <GraduationCap className="w-4 h-4 text-[#9C5B3C]" />
-                <span>Recommended Cross-Training &amp; Skills Ramp-Up Roadmap</span>
-              </h4>
-              <span className="text-[11px] font-mono text-[#8C7E6E]">
-                {forwardPlan.trainingRoadmap.length} Candidate Operators
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-              {forwardPlan.trainingRoadmap.map((cand, idx) => (
-                <div
-                  key={`${cand.operatorId}-${idx}`}
-                  className="p-3 rounded-lg bg-white border border-[#E6DDCE] text-xs space-y-1.5 shadow-2xs"
+                <button
+                  type="button"
+                  disabled={validCurrentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className={cn(PAGE_BTN, "text-[#5C4D3E] hover:bg-[#FAF7F2] disabled:opacity-40 disabled:cursor-not-allowed")}
+                  title="Next page"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-[#221912]">{cand.operatorName}</span>
-                    <span
-                      className={`text-[9.5px] font-bold px-1.5 py-0.2 rounded border ${
-                        cand.status === "In Training"
-                          ? "bg-blue-50 text-blue-800 border-blue-300"
-                          : "bg-amber-50 text-amber-800 border-amber-300"
-                      }`}
-                    >
-                      {cand.status}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-[#8C7E6E] font-mono">
-                    <span>{cand.employeeId}</span>
-                    <span className="mx-1">·</span>
-                    <span className="inline-flex items-center gap-1 align-middle">
-                      Current: <SkillLevelIcon rating={cand.currentRating} size={11} decorative /> L{cand.currentRating}
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-[#221912] pt-1 border-t border-[#F6F1E8] flex items-center justify-between">
-                    <span>Target: <strong>{cand.targetCategory}</strong></span>
-                    <span className="text-[#9C5B3C] font-bold font-mono text-[10px]">
-                      ~{cand.trainingDaysEstimate} Days
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </nav>
+            )}
           </div>
         )}
-      </div>
+      </Section>
 
-      {/* ── 6. Operator Skill Profile Modal ───────────────────────────── */}
+      {/* ── 5. Forward skill-gap analysis ─────────────────────────── */}
+      <Section
+        title="Forward skill-gap analysis"
+        subtitle={`${forwardPlan.planMonth} · operators required per machine class versus qualified operators (Independent or better)`}
+        badge={
+          forwardPlan.criticalShortfallCount > 0 ? (
+            <StatusPill tone="critical">
+              {forwardPlan.criticalShortfallCount} critical {forwardPlan.criticalShortfallCount === 1 ? "shortfall" : "shortfalls"}
+            </StatusPill>
+          ) : undefined
+        }
+        flush
+      >
+        {/* Summary strip */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 border-b border-[#F0EAE0] divide-[#F0EAE0] xl:divide-x">
+          <SummaryTile label="Orders in plan" value={forwardPlan.activeOrdersCount}>
+            <span className="tabular-nums">{forwardPlan.totalPlannedPieces.toLocaleString()}</span> pcs
+          </SummaryTile>
+          <SummaryTile label="Operators required" value={forwardPlan.totalOperatorsRequired}>
+            Across {forwardPlan.skillDemands.length} machine classes
+          </SummaryTile>
+          <SummaryTile label="Operators available" value={forwardPlan.totalOperatorsAvailable}>
+            Active machine operators
+          </SummaryTile>
+          <SummaryTile label="Critical shortfalls" value={forwardPlan.criticalShortfallCount}>
+            {forwardPlan.criticalShortfallCount > 0 ? (
+              <StatusPill tone="critical">Action needed</StatusPill>
+            ) : (
+              <StatusPill tone="good">None</StatusPill>
+            )}
+          </SummaryTile>
+          <SummaryTile
+            label="Net position"
+            value={forwardPlan.overallSkillGap >= 0 ? `+${forwardPlan.overallSkillGap}` : `−${Math.abs(forwardPlan.overallSkillGap)}`}
+          >
+            {forwardPlan.overallSkillGap >= 0 ? (
+              <StatusPill tone="good">Surplus</StatusPill>
+            ) : (
+              <StatusPill tone="critical">Net deficit</StatusPill>
+            )}
+          </SummaryTile>
+        </div>
+
+        {forwardPlan.skillDemands.length === 0 ? (
+          <EmptyHint icon={<TrendingUp />} title="No planned demand yet">
+            Planned orders with operation bulletins will appear here with their machine-class requirements.
+          </EmptyHint>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-[13px]">
+              <thead>
+                <tr className="bg-[#FAF7F2] border-b border-[#F0EAE0]">
+                  <th className={cn(TH, "pl-5 w-[30%]")}>Machine class</th>
+                  <th className={cn(TH, "text-right w-[84px]")}>Required</th>
+                  <th className={cn(TH, "text-right w-[84px]")}>Qualified</th>
+                  <th className={cn(TH, "pl-5 w-[150px]")}>Gap</th>
+                  <th className={cn(TH, "pr-5")}>Recommendation</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F0EAE0]">
+                {forwardPlan.skillDemands.map((demand) => (
+                  <tr key={demand.machineClass} className="hover:bg-[#FCFAF7] transition-colors align-top">
+                    <td className={cn(TD, "pl-5")}>
+                      <div className="font-semibold text-[#221912]">{demand.machineClass}</div>
+                      <div className="text-[11.5px] text-[#8C7E6E]">{demand.category}</div>
+                    </td>
+                    <td className={cn(TD, "text-right font-semibold text-[#221912] tabular-nums")}>{demand.requiredOperators}</td>
+                    <td className={cn(TD, "text-right text-[#221912] tabular-nums")}>{demand.availableQualifiedOperators}</td>
+                    <td className={cn(TD, "pl-5")}>
+                      <StatusPill tone={GAP_TONE[demand.status]}>
+                        {demand.skillGap > 0
+                          ? `+${demand.skillGap} surplus`
+                          : demand.skillGap < 0
+                            ? `−${Math.abs(demand.skillGap)} deficit`
+                            : "Balanced"}
+                      </StatusPill>
+                    </td>
+                    <td className={cn(TD, "pr-5")}>
+                      <p className="line-clamp-2 text-[12.5px] leading-snug text-[#5C4D3E] max-w-[620px]" title={demand.actionRecommendation}>
+                        {demand.actionRecommendation}
+                      </p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      {/* ── 6. Cross-training roadmap ─────────────────────────────── */}
+      {forwardPlan.trainingRoadmap.length > 0 && (
+        <Section
+          title="Cross-training roadmap"
+          subtitle="Operators recommended for cross-training to close machine-class deficits"
+          badge={<CountBadge>{forwardPlan.trainingRoadmap.length}</CountBadge>}
+          actions={<SectionLink to="/skill-matrix">Open skill matrix</SectionLink>}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {forwardPlan.trainingRoadmap.map((cand, idx) => (
+              <div key={`${cand.operatorId}-${idx}`} className="rounded-xl border border-[#E6DDCE] bg-white p-4 flex flex-col gap-3 min-w-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-8 h-8 rounded-full bg-[#F6F1E8] border border-[#E6DDCE] flex items-center justify-center text-[12px] font-semibold text-[#7A452D] shrink-0">
+                      {initials(cand.operatorName)}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold text-[#221912] truncate">{cand.operatorName}</div>
+                      <div className="text-[11.5px] text-[#8C7E6E] tabular-nums">{cand.employeeId}</div>
+                    </div>
+                  </div>
+                  <StatusPill tone={cand.status === "In Training" ? "info" : "neutral"}>{sentenceCase(cand.status)}</StatusPill>
+                </div>
+
+                <dl className="rounded-lg bg-[#FAF7F2] border border-[#F0EAE0] divide-y divide-[#F0EAE0] text-[12.5px]">
+                  <div className="grid grid-cols-[52px_minmax(0,1fr)] gap-3 px-3 py-2">
+                    <dt className="text-[11.5px] text-[#8C7E6E] pt-px">Current</dt>
+                    <dd className="min-w-0">
+                      <div className="font-medium text-[#221912] leading-snug">{cand.currentMachine}</div>
+                      <div className="flex items-center gap-1 text-[11.5px] text-[#5C4D3E]">
+                        <SkillLevelIcon rating={cand.currentRating} size={11} decorative />
+                        L{cand.currentRating} {skillLevelName(cand.currentRating)}
+                      </div>
+                    </dd>
+                  </div>
+                  <div className="grid grid-cols-[52px_minmax(0,1fr)] gap-3 px-3 py-2">
+                    <dt className="text-[11.5px] text-[#8C7E6E] pt-px inline-flex items-start gap-1">
+                      <ArrowRight className="w-3 h-3 mt-0.5 text-[#B5A897]" aria-hidden />
+                      Target
+                    </dt>
+                    <dd className="min-w-0">
+                      <div className="font-medium text-[#221912] leading-snug">{cand.targetMachine}</div>
+                      <div className="text-[11.5px] text-[#5C4D3E]">{cand.targetCategory}</div>
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="text-[#8C7E6E]">Estimated training time</span>
+                  <span className="font-semibold text-[#221912] tabular-nums">~{cand.trainingDaysEstimate} days</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {/* ── 7. Operator skill profile modal ───────────────────────── */}
       {selectedOperatorForModal && (
-        <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[9999] bg-[#221912]/45 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
           <div
             className="bg-white rounded-2xl border border-[#E6DDCE] shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${selectedOperatorForModal.name} profile`}
           >
-            {/* Modal Header */}
-            <div className="p-6 bg-[#FAF8F5] border-b border-[#E6DDCE] flex items-start justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border shadow-2xs ${
-                    selectedOperatorForModal.isAllocated
-                      ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                      : "bg-amber-100 text-amber-900 border-amber-300"
-                  }`}
-                >
-                  <Users className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-black text-[#221912]">
-                      {selectedOperatorForModal.name}
-                    </h3>
-                    <span
-                      className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
-                        selectedOperatorForModal.isAllocated
-                          ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                          : "bg-amber-100 text-amber-900 border-amber-300"
-                      }`}
-                    >
-                      {selectedOperatorForModal.isAllocated
-                        ? `Seated · ${selectedOperatorForModal.assignedLineCode}`
-                        : "Non-Seated"}
-                    </span>
+            {/* Modal header */}
+            <div className="px-6 py-5 border-b border-[#F0EAE0] flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <span className="w-11 h-11 rounded-full bg-[#F6F1E8] border border-[#E6DDCE] flex items-center justify-center text-[14px] font-semibold text-[#7A452D] shrink-0">
+                  {initials(selectedOperatorForModal.name)}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-[17px] font-bold tracking-tight text-[#221912]">{selectedOperatorForModal.name}</h3>
+                    {selectedOperatorForModal.isAllocated ? (
+                      <StatusPill tone="good">Seated · {selectedOperatorForModal.assignedLineCode}</StatusPill>
+                    ) : (
+                      <StatusPill tone="warn">Non-seated</StatusPill>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-[#8C7E6E] mt-0.5 font-mono">
-                    <span className="font-bold text-[#9C5B3C]">
-                      {selectedOperatorForModal.employeeId}
-                    </span>
+                  <div className="flex items-center gap-2 text-[12.5px] text-[#8C7E6E] mt-0.5">
+                    <span className="font-medium text-[#5C4D3E] tabular-nums">{selectedOperatorForModal.employeeId}</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -1379,8 +1129,8 @@ export function PlantManagementDashboard({
                         setCopiedEmpId(selectedOperatorForModal.employeeId);
                         setTimeout(() => setCopiedEmpId(null), 2000);
                       }}
-                      className="text-slate-400 hover:text-[#221912] cursor-pointer"
-                      title="Copy Employee ID"
+                      className="text-[#B5A897] hover:text-[#221912] cursor-pointer"
+                      title="Copy employee ID"
                     >
                       {copiedEmpId === selectedOperatorForModal.employeeId ? (
                         <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -1397,58 +1147,39 @@ export function PlantManagementDashboard({
               <button
                 type="button"
                 onClick={() => setSelectedOperatorForModal(null)}
-                className="w-8 h-8 rounded-full bg-white border border-[#E6DDCE] text-[#8C7E6E] hover:text-[#221912] flex items-center justify-center cursor-pointer transition-colors"
+                className="w-8 h-8 rounded-lg text-[#8C7E6E] hover:text-[#221912] hover:bg-[#FAF7F2] flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                title="Close"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Body */}
+            {/* Modal body */}
             <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
-              {/* Current Allocation Banner */}
-              <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E6DDCE] space-y-2">
-                <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#8C7E6E] block">
-                  Current Floor Deployment Status:
-                </span>
+              <div className="p-4 rounded-xl bg-[#FAF7F2] border border-[#F0EAE0] space-y-3">
+                <div className="text-[12px] font-semibold text-[#8C7E6E]">Current floor deployment</div>
                 {selectedOperatorForModal.isAllocated ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                    <div>
-                      <span className="text-[#8C7E6E] block text-[11px]">Assigned Line:</span>
-                      <strong className="text-[#221912]">
-                        {selectedOperatorForModal.assignedLineCode} ({selectedOperatorForModal.assignedLineName})
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-[#8C7E6E] block text-[11px]">Station / Sequence:</span>
-                      <strong className="text-[#221912]">
-                        Station #{selectedOperatorForModal.assignedStationNum}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-[#8C7E6E] block text-[11px]">Active Operation:</span>
-                      <strong className="text-[#9C5B3C]">
-                        {selectedOperatorForModal.assignedOperationName}
-                      </strong>
-                    </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <Stat label="Assigned line">
+                      {selectedOperatorForModal.assignedLineCode} ({selectedOperatorForModal.assignedLineName})
+                    </Stat>
+                    <Stat label="Station">Station {selectedOperatorForModal.assignedStationNum}</Stat>
+                    <Stat label="Active operation">{selectedOperatorForModal.assignedOperationName}</Stat>
                   </div>
                 ) : selectedOperatorForModal.isNonMachine ? (
-                  <div className="text-xs space-y-1">
-                    <strong className="text-slate-800 block font-bold">
-                      Non-Machine Workforce Role
-                    </strong>
-                    <span className="text-[#8C7E6E]">
+                  <div className="space-y-1">
+                    <div className="text-[13px] font-semibold text-[#221912]">Non-machine workforce role</div>
+                    <p className="text-[12.5px] text-[#8C7E6E] leading-relaxed">
                       Provides indirect support and floor oversight. In accordance with garment manufacturing standards, non-machine workforce are not assigned to sewing machine workstations.
-                    </span>
+                    </p>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
-                      <strong className="text-amber-900 block font-bold">
-                        {selectedOperatorForModal.unallocatedStatus || "Buffer Pool"}
-                      </strong>
-                      <span className="text-[#8C7E6E]">
-                        Available for immediate line deployment &amp; bottleneck relief
-                      </span>
+                      <div className="text-[13px] font-semibold text-[#221912]">
+                        {selectedOperatorForModal.unallocatedStatus || "Buffer pool"}
+                      </div>
+                      <p className="text-[12.5px] text-[#8C7E6E]">Available for immediate line deployment and bottleneck relief</p>
                     </div>
                     <button
                       type="button"
@@ -1456,72 +1187,61 @@ export function PlantManagementDashboard({
                         setSelectedOperatorForModal(null);
                         navigate("/line-balance");
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-[#9C5B3C] text-white font-bold text-xs shadow-2xs hover:bg-[#854B2F] transition-colors"
+                      className="h-8 px-3 rounded-lg bg-[#9C5B3C] hover:bg-[#854B30] text-white text-[12.5px] font-semibold whitespace-nowrap transition-colors cursor-pointer shrink-0"
                     >
-                      Deploy to Line
+                      Deploy to line
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* Certified Skills List */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-[#221912] flex items-center gap-1.5">
-                    <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
-                    <span>Certified Competency Matrix ({selectedOperatorForModal.certifiedOperations?.length || 0} Skills)</span>
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-[14px] font-bold text-[#221912] flex items-center gap-2">
+                    Certified skills
+                    <CountBadge>{selectedOperatorForModal.certifiedOperations?.length || 0}</CountBadge>
                   </h4>
                   {!selectedOperatorForModal.isNonMachine && (
                     <Link
                       to="/skill-matrix"
-                      className="text-xs font-bold text-[#9C5B3C] hover:underline"
+                      className="text-[12.5px] font-semibold text-[#9C5B3C] hover:text-[#7A452D]"
                       onClick={() => setSelectedOperatorForModal(null)}
                     >
-                      Update in Skill Matrix →
+                      Update in skill matrix →
                     </Link>
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  {selectedOperatorForModal.isNonMachine ? (
-                    <p className="text-xs text-[#8C7E6E] p-4 bg-[#FAF8F5] rounded-xl text-center border border-[#E6DDCE]">
-                      Non-machine workforce roles (Inspectors, Helpers, Supervisors) do not operate sewing machines and have no machine skill ratings.
-                    </p>
-                  ) : (!selectedOperatorForModal.certifiedOperations ||
-                    selectedOperatorForModal.certifiedOperations.length === 0) ? (
-                    <p className="text-xs text-[#8C7E6E] italic p-4 bg-[#FAF8F5] rounded-xl text-center border border-[#E6DDCE]">
-                      No individual skill assessments logged for this operator.
-                    </p>
-                  ) : (
-                    selectedOperatorForModal.certifiedOperations.map((c: any, i: number) => (
-                      <div
-                        key={i}
-                        className="p-3 rounded-xl bg-white border border-[#E6DDCE] flex items-center justify-between text-xs"
-                      >
-                        <div className="space-y-0.5">
-                          <div className="font-bold text-[#221912]">{c.operationName}</div>
-                          <div className="text-[10.5px] text-[#8C7E6E]">{c.machineType}</div>
+                {selectedOperatorForModal.isNonMachine ? (
+                  <p className="text-[12.5px] text-[#8C7E6E] p-4 bg-[#FAF7F2] rounded-xl text-center border border-[#F0EAE0]">
+                    Non-machine workforce roles (inspectors, helpers, supervisors) do not operate sewing machines and have no machine skill ratings.
+                  </p>
+                ) : !selectedOperatorForModal.certifiedOperations || selectedOperatorForModal.certifiedOperations.length === 0 ? (
+                  <p className="text-[12.5px] text-[#8C7E6E] p-4 bg-[#FAF7F2] rounded-xl text-center border border-[#F0EAE0]">
+                    No individual skill assessments logged for this operator.
+                  </p>
+                ) : (
+                  <ul className="rounded-xl border border-[#E6DDCE] divide-y divide-[#F0EAE0]">
+                    {selectedOperatorForModal.certifiedOperations.map((c: any, i: number) => (
+                      <li key={i} className="px-4 py-3 flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-semibold text-[#221912] truncate">{c.operationName}</div>
+                          <div className="text-[11.5px] text-[#8C7E6E] truncate">{c.machineType}</div>
                         </div>
-                        <span
-                          className={`inline-flex items-center gap-1.5 font-mono font-bold text-xs px-2.5 py-1 rounded-lg border ${SKILL_LEVELS[clampRating(c.rating)].badge}`}
-                          title={`${SKILL_LEVELS[clampRating(c.rating)].band} — ${SKILL_LEVELS[clampRating(c.rating)].description}`}
-                        >
-                          <SkillLevelIcon rating={c.rating} size={14} decorative />
-                          <span>Level {c.rating} · {skillLevelName(c.rating)}</span>
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
+                        <SkillTag rating={c.rating} nonMachine={false} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="p-4 bg-[#FAF8F5] border-t border-[#E6DDCE] flex items-center justify-end">
+            {/* Modal footer */}
+            <div className="px-6 py-4 border-t border-[#F0EAE0] flex items-center justify-end">
               <button
                 type="button"
                 onClick={() => setSelectedOperatorForModal(null)}
-                className="px-4 py-2 rounded-xl bg-white hover:bg-[#F6F1E8] border border-[#E6DDCE] text-xs font-bold text-[#221912] cursor-pointer"
+                className="h-9 px-4 rounded-lg bg-white hover:bg-[#FAF7F2] border border-[#E6DDCE] text-[12.5px] font-semibold text-[#221912] cursor-pointer transition-colors"
               >
                 Close
               </button>
@@ -1529,6 +1249,93 @@ export function PlantManagementDashboard({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── Local presentation helpers ──────────────────────────────────────────────────────────────────── */
+
+const TH = "py-2.5 px-3 text-[12px] font-semibold text-[#8C7E6E] whitespace-nowrap";
+const TD = "py-3 px-3 align-middle";
+const CONTROL =
+  "h-9 rounded-lg border border-[#E6DDCE] bg-white text-[13px] text-[#221912] focus:outline-none focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15 transition-colors";
+const SELECT_W = "w-[160px] 2xl:w-[190px] px-2.5 pr-7 cursor-pointer truncate";
+const VIEW_BTN = "w-8 h-8 rounded-md flex items-center justify-center transition-colors cursor-pointer";
+const PAGE_BTN =
+  "min-w-8 h-8 px-1.5 rounded-lg border border-[#E6DDCE] bg-white text-[12.5px] font-semibold flex items-center justify-center transition-colors cursor-pointer";
+const SMALL_BTN =
+  "inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-[#E6DDCE] bg-white text-[12px] font-semibold text-[#5C4D3E] hover:bg-[#FAF7F2] hover:text-[#221912] whitespace-nowrap transition-colors cursor-pointer";
+const SMALL_BTN_GHOST =
+  "inline-flex items-center h-7 px-2 rounded-md text-[12px] font-semibold text-[#8C7E6E] hover:bg-[#FAF7F2] hover:text-[#221912] whitespace-nowrap transition-colors cursor-pointer";
+
+const LINE_STATUS_TONE: Record<string, Tone> = {
+  Running: "good",
+  "Needs Manning": "critical",
+  "No Plan": "neutral",
+};
+
+const GAP_TONE: Record<ForwardPlanSkillDemand["status"], Tone> = {
+  severe_deficit: "critical",
+  moderate_deficit: "warn",
+  balanced: "neutral",
+  surplus: "good",
+};
+
+/** "Needs Manning" → "Needs manning" */
+function sentenceCase(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
+}
+
+/** "Line 01 - Sports bra" → "Sports bra" (falls back to the full name) */
+function productOf(lineName: string | undefined): string {
+  if (!lineName) return "—";
+  const m = lineName.match(/^\s*line\s*[\w-]*\s*[-–—:]\s*(.+)$/i);
+  return m ? m[1].trim() : lineName;
+}
+
+function initials(name: string | undefined): string {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+}
+
+/** Page numbers with gaps: 1 … 4 5 6 … 11 */
+function pageWindow(current: number, total: number): (number | null)[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages = new Set([1, total, current - 1, current, current + 1]);
+  if (current <= 3) [2, 3, 4].forEach((p) => pages.add(p));
+  if (current >= total - 2) [total - 3, total - 2, total - 1].forEach((p) => pages.add(p));
+  const sorted = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+  const out: (number | null)[] = [];
+  sorted.forEach((p, i) => {
+    if (i > 0 && p - sorted[i - 1] > 1) out.push(null);
+    out.push(p);
+  });
+  return out;
+}
+
+function SkillTag({ rating, nonMachine }: { rating: number | null; nonMachine: boolean }) {
+  if (nonMachine) return <span className="text-[12.5px] text-[#8C7E6E] whitespace-nowrap">Non-machine role</span>;
+  if (!rating) return <span className="text-[12.5px] text-[#8C7E6E] whitespace-nowrap">Not rated</span>;
+  const lvl = SKILL_LEVELS[clampRating(rating)];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-[12.5px] text-[#221912] whitespace-nowrap"
+      title={`${skillLevelName(rating)} (${lvl.band}) — ${lvl.description}`}
+    >
+      <SkillLevelIcon rating={rating} size={14} decorative />
+      <span className="font-semibold tabular-nums">L{rating}</span>
+      <span className="text-[#5C4D3E]">{skillLevelName(rating)}</span>
+    </span>
+  );
+}
+
+function SummaryTile({ label, value, children }: { label: string; value: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="px-5 py-4 min-w-0">
+      <div className="text-[12px] font-semibold text-[#8C7E6E]">{label}</div>
+      <div className="mt-1 text-[20px] leading-tight font-bold tracking-tight text-[#221912] tabular-nums">{value}</div>
+      {children && <div className="mt-1.5 text-[12px] text-[#8C7E6E] truncate">{children}</div>}
     </div>
   );
 }

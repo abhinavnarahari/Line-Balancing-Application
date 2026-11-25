@@ -1,28 +1,14 @@
-import { useMemo, useState } from "react";
-import { SkillLevelIcon } from "../../components/ui/SkillLevelIcon";
-import { SKILL_LEVELS, clampRating } from "../skill-matrix/skillScale";
-import { motion, AnimatePresence } from "framer-motion";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { saveWorkbook } from "../../utils/excel";
 import {
-  Package,
   Users,
   Zap,
   Activity,
-  TrendingUp,
   AlertTriangle,
-  ChevronRight,
-  RefreshCw,
-  ArrowUpRight,
-  Layers,
-  UserCheck,
-  Target,
   Search,
-  Factory,
   Download,
-  Clock,
-  Flame,
 } from "lucide-react";
 import type { Order } from "../orders/api";
 import type { OperationBulletin } from "../bulletins/api";
@@ -34,6 +20,7 @@ import type { Machine } from "../machines/api";
 import type { AttendanceRecord } from "../attendance/api";
 import type { Shift } from "../shifts/types";
 import type { OperatorTimesheet24h, PieceProductionLog } from "../production-logs/api";
+import { SKILL_LEVELS, clampRating } from "../skill-matrix/skillScale";
 import {
   computePlantKPIs,
   computeOrderPipeline,
@@ -43,8 +30,30 @@ import {
   computePlantAlerts,
   computeLiveProductionSnapshot,
   type LineStatusSummary,
+  type OrderPipelineItem,
+  type PlantAlert,
 } from "./overallDashboardMetrics";
 import { toLocalDateString } from "../../utils/date";
+import { cn } from "../../utils/cn";
+import {
+  DashboardHeader,
+  MetaChip,
+  HeaderButton,
+  AlertRow,
+  KpiCard,
+  Section,
+  SectionLink,
+  StatusPill,
+  CountBadge,
+  Meter,
+  SegmentTabs,
+  BarList,
+  BarLegend,
+  EmptyHint,
+  Stat,
+  type BarRow,
+} from "./DashboardUI";
+import { TONE, type Tone } from "./dashboardTheme";
 
 interface OverallDashboardProps {
   orders: Order[];
@@ -62,73 +71,104 @@ interface OverallDashboardProps {
   loading?: boolean;
 }
 
-const STATUS_CONFIG: Record<
-  LineStatusSummary["status"],
-  { dot: string; badge: string; bar: string; label: string }
-> = {
-  Running: {
-    dot: "bg-emerald-500",
-    badge: "bg-emerald-50 text-emerald-800 border-emerald-200",
-    bar: "bg-emerald-500",
-    label: "Running",
-  },
-  "Ramping Up": {
-    dot: "bg-amber-500",
-    badge: "bg-amber-50 text-amber-800 border-amber-200",
-    bar: "bg-amber-500",
-    label: "Ramping Up",
-  },
-  "Needs Attention": {
-    dot: "bg-rose-500",
-    badge: "bg-rose-50 text-rose-800 border-rose-200",
-    bar: "bg-rose-500",
-    label: "Needs Headcount",
-  },
-  "No Plan": {
-    dot: "bg-[#C5B9A8]",
-    badge: "bg-[#F6F1E8] text-[#8C7E6E] border-[#E6DDCE]",
-    bar: "bg-[#E6DDCE]",
-    label: "Unplanned",
-  },
-  Maintenance: {
-    dot: "bg-blue-500",
-    badge: "bg-blue-50 text-blue-800 border-blue-200",
-    bar: "bg-blue-500",
-    label: "Maintenance",
-  },
+type OrderFilter = "all" | "active" | "critical" | "planned" | "completed";
+type LineFilter = "all" | "running" | "attention" | "unplanned";
+
+/** Filter predicates shared by the order list and the tab counts. */
+function orderMatchesFilter(o: OrderPipelineItem, filter: OrderFilter): boolean {
+  if (filter === "active") return o.status === "IN_PRODUCTION" || o.status === "IN-PRODUCTION";
+  if (filter === "critical") return o.urgency === "critical" && o.status !== "COMPLETED";
+  if (filter === "planned") return o.status === "PLANNED" || o.status === "PENDING";
+  if (filter === "completed") return o.status === "COMPLETED" || o.status === "DELIVERED";
+  return true;
+}
+
+/** Filter predicates shared by the line list and the tab counts. */
+function lineMatchesFilter(l: LineStatusSummary, filter: LineFilter): boolean {
+  if (filter === "running") return l.status === "Running";
+  if (filter === "attention") return l.status === "Needs Attention" || l.status === "Ramping Up";
+  if (filter === "unplanned") return l.status === "No Plan";
+  return true;
+}
+
+const LINE_STATUS: Record<LineStatusSummary["status"], { tone: Tone; label: string }> = {
+  Running: { tone: "good", label: "Running" },
+  "Ramping Up": { tone: "warn", label: "Ramping up" },
+  "Needs Attention": { tone: "critical", label: "Needs headcount" },
+  "No Plan": { tone: "neutral", label: "Unplanned" },
+  Maintenance: { tone: "info", label: "Maintenance" },
 };
 
-const URGENCY_CONFIG = {
-  critical: {
-    border: "border-l-rose-500",
-    badge: "bg-rose-50 text-rose-700 border-rose-200",
-    label: "Critical (<7d)",
-  },
-  high: {
-    border: "border-l-amber-500",
-    badge: "bg-amber-50 text-amber-700 border-amber-200",
-    label: "Urgent (<21d)",
-  },
-  normal: {
-    border: "border-l-[#E6DDCE]",
-    badge: "bg-[#F6F1E8] text-[#8C7E6E] border-[#E6DDCE]",
-    label: "On Track",
-  },
-  completed: {
-    border: "border-l-emerald-400",
-    badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    label: "Completed",
-  },
+const URGENCY: Record<OrderPipelineItem["urgency"], { tone: Tone; label: string; hint: string }> = {
+  critical: { tone: "critical", label: "Critical", hint: "Delivery in under 7 days" },
+  high: { tone: "warn", label: "Urgent", hint: "Delivery in under 21 days" },
+  normal: { tone: "neutral", label: "On track", hint: "Delivery 21+ days away" },
+  completed: { tone: "good", label: "Completed", hint: "Order completed" },
 };
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.25, delay: i * 0.03, ease: "easeOut" as const },
-  }),
+const ALERT_TONE: Record<PlantAlert["severity"], "critical" | "warn" | "info"> = {
+  critical: "critical",
+  warning: "warn",
+  info: "info",
 };
+
+/* ─── Local presentational helpers (same tokens as DashboardUI) ───────────────────────────────────── */
+
+const TH = "px-3 py-2.5 text-left text-[12px] font-semibold text-[#8C7E6E] whitespace-nowrap";
+const TD = "px-3 py-3 align-middle";
+
+function SkeletonValue() {
+  return <span className="inline-block h-6 w-16 rounded bg-[#F0EAE0] animate-pulse align-middle" />;
+}
+
+function AlertAction({ to, tone, children }: { to: string; tone: "critical" | "warn" | "info"; children: ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className={cn(
+        "inline-flex items-center h-8 px-3 rounded-lg border bg-white text-[12.5px] font-semibold whitespace-nowrap transition-colors hover:bg-[#FAF7F2]",
+        TONE[tone].border,
+        TONE[tone].text
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function IconAction({ title, onClick, children }: { title: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-[#E6DDCE] bg-white text-[#8C7E6E] hover:text-[#221912] hover:bg-[#FAF7F2] transition-colors cursor-pointer [&>svg]:w-3.5 [&>svg]:h-3.5"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Compact figure used inside the "Today's output" section. */
+function OutputStat({ label, value, unit, children }: { label: string; value: ReactNode; unit?: string; children?: ReactNode }) {
+  return (
+    <div className="min-w-0 px-5 py-4">
+      <div className="text-[12px] font-semibold text-[#8C7E6E]">{label}</div>
+      <div className="mt-1.5 flex items-baseline gap-1">
+        <span className="text-[22px] leading-none font-bold tracking-tight text-[#221912] tabular-nums">{value}</span>
+        {unit && <span className="text-[12px] font-medium text-[#8C7E6E]">{unit}</span>}
+      </div>
+      {children && <div className="mt-2 text-[12px] text-[#8C7E6E] leading-snug">{children}</div>}
+    </div>
+  );
+}
+
+function daysLabel(days: number): string {
+  if (days === 999) return "No date";
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  return `${days}d left`;
+}
 
 export function OverallDashboard({
   orders = [],
@@ -149,8 +189,8 @@ export function OverallDashboard({
 
   // Search & Filters
   const [orderSearch, setOrderSearch] = useState("");
-  const [orderFilter, setOrderFilter] = useState<"all" | "active" | "critical" | "planned" | "completed">("all");
-  const [lineFilter, setLineFilter] = useState<"all" | "running" | "attention" | "unplanned">("all");
+  const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
+  const [lineFilter, setLineFilter] = useState<LineFilter>("all");
 
   // Real-time computations
   const liveProd = useMemo(
@@ -201,11 +241,7 @@ export function OverallDashboard({
 
   // Filtered Orders
   const filteredOrders = useMemo(() => {
-    let result = orderPipeline;
-    if (orderFilter === "active") result = result.filter((o) => o.status === "IN_PRODUCTION" || o.status === "IN-PRODUCTION");
-    else if (orderFilter === "critical") result = result.filter((o) => o.urgency === "critical" && o.status !== "COMPLETED");
-    else if (orderFilter === "planned") result = result.filter((o) => o.status === "PLANNED" || o.status === "PENDING");
-    else if (orderFilter === "completed") result = result.filter((o) => o.status === "COMPLETED" || o.status === "DELIVERED");
+    let result = orderFilter === "all" ? orderPipeline : orderPipeline.filter((o) => orderMatchesFilter(o, orderFilter));
 
     if (orderSearch.trim()) {
       const q = orderSearch.toLowerCase().trim();
@@ -222,12 +258,39 @@ export function OverallDashboard({
   }, [orderPipeline, orderFilter, orderSearch]);
 
   // Filtered Lines
-  const filteredLines = useMemo(() => {
-    if (lineFilter === "running") return lineGrid.filter((l) => l.status === "Running");
-    if (lineFilter === "attention") return lineGrid.filter((l) => l.status === "Needs Attention" || l.status === "Ramping Up");
-    if (lineFilter === "unplanned") return lineGrid.filter((l) => l.status === "No Plan");
-    return lineGrid;
-  }, [lineGrid, lineFilter]);
+  const filteredLines = useMemo(
+    () => (lineFilter === "all" ? lineGrid : lineGrid.filter((l) => lineMatchesFilter(l, lineFilter))),
+    [lineGrid, lineFilter]
+  );
+
+  // Tab counts (presentation only — same predicates as the lists above)
+  const lineFilterCounts = useMemo(() => {
+    const count = (f: LineFilter) => lineGrid.filter((l) => lineMatchesFilter(l, f)).length;
+    return { all: lineGrid.length, running: count("running"), attention: count("attention"), unplanned: count("unplanned") };
+  }, [lineGrid]);
+
+  const orderFilterCounts = useMemo(() => {
+    const count = (f: OrderFilter) => orderPipeline.filter((o) => orderMatchesFilter(o, f)).length;
+    return {
+      all: orderPipeline.length,
+      active: count("active"),
+      critical: count("critical"),
+      planned: count("planned"),
+      completed: count("completed"),
+    };
+  }, [orderPipeline]);
+
+  const outputRows = useMemo<BarRow[]>(
+    () =>
+      liveProd.perLineProduction.map((lp) => ({
+        id: lp.lineId,
+        label: lp.lineCode,
+        sublabel: lp.isBottlenecked ? `${lp.lineName} · bottleneck` : lp.lineName,
+        value: lp.actualGood,
+        target: lp.targetDailyPcs,
+      })),
+    [liveProd.perLineProduction]
+  );
 
   const criticalCount = orderPipeline.filter((o) => o.urgency === "critical" && o.status !== "COMPLETED").length;
 
@@ -317,785 +380,454 @@ export function OverallDashboard({
     void saveWorkbook(wb, `Factory_Overview_Report_${todayStr}.xlsx`);
   };
 
+  const activeLineCount = lines.filter((l) => l.active !== false).length;
+  const kv = (v: ReactNode) => (loading ? <SkeletonValue /> : v);
+
   return (
     <div className="space-y-6 w-full max-w-[1600px] mx-auto">
-      {/* ── 1. Executive Factory Command Header ─────────────────────── */}
-      <div className="bg-white rounded-2xl border border-[#E6DDCE] p-5 sm:p-6 shadow-[0_1px_3px_rgba(34,25,18,0.05)] flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-black uppercase tracking-wider text-[#9C5B3C] flex items-center gap-1.5 shrink-0">
-              <Factory className="w-3.5 h-3.5" />
-              Factory Overview Command Center
-            </span>
-            <span className="text-[#E6DDCE] hidden sm:inline">/</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-              Live Floor Operations
-            </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#FAF8F5] text-[#8C7E6E] border border-[#E6DDCE] shrink-0">
-              <Clock className="w-3 h-3 text-[#9C5B3C]" />
-              {kpis.activeShiftTiming}
-            </span>
+      {/* ── 1. Header ─────────────────────────────────────────────────── */}
+      <DashboardHeader
+        title="Factory Overview"
+        subtitle={<>Orders, lines & workforce · <span className="tabular-nums">{kpis.activeShiftTiming}</span></>}
+        meta={
+          <>
+            <MetaChip tone="good" title="Live data, refreshed every 15 seconds">Live · syncs every 15s</MetaChip>
             {criticalCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-200 shrink-0">
-                <AlertTriangle className="w-3 h-3 text-rose-600" />
-                {criticalCount} Critical Delivery Risk{criticalCount !== 1 ? "s" : ""}
-              </span>
+              <MetaChip tone="critical">
+                {criticalCount} critical delivery risk{criticalCount !== 1 ? "s" : ""}
+              </MetaChip>
             )}
-          </div>
-          <h1 className="text-xl sm:text-2xl font-black text-[#221912] tracking-tight">
-            Factory Overview Dashboard
-          </h1>
-        </div>
-
-        {/* Action Buttons Toolbar */}
-        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="h-9 px-3.5 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#221912] text-xs font-bold border border-[#E6DDCE] shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-            title="Export full executive factory report to Excel"
-          >
-            <Download className="w-3.5 h-3.5 text-[#9C5B3C]" />
-            <span className="whitespace-nowrap">Export Excel</span>
-          </button>
-          <Link
-            to="/line-balance"
-            className="h-9 px-3.5 rounded-xl bg-[#9C5B3C] hover:bg-[#854B2F] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-          >
-            <Zap className="w-3.5 h-3.5 text-[#FFE5BF]" />
-            <span className="whitespace-nowrap">Line Balancing</span>
-          </Link>
-          <Link
-            to="/monitoring"
-            className="h-9 px-3.5 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold border border-[#E6DDCE] shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-          >
-            <Activity className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="whitespace-nowrap">Live Monitoring</span>
-          </Link>
-          <Link
-            to="/operator-placement"
-            className="h-9 px-3.5 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] text-xs font-bold border border-[#E6DDCE] shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-          >
-            <Users className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="whitespace-nowrap">Operator Placement</span>
-          </Link>
-          {onRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={loading}
-              className="h-9 w-9 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] border border-[#E6DDCE] shadow-2xs flex items-center justify-center transition-colors cursor-pointer shrink-0"
-              title="Refresh Live Factory Data"
+          </>
+        }
+        actions={
+          <>
+            <HeaderButton variant="primary" to="/line-balance" icon={<Zap className="w-3.5 h-3.5" />}>
+              Line balancing
+            </HeaderButton>
+            <HeaderButton to="/monitoring" icon={<Activity className="w-3.5 h-3.5" />}>
+              Live monitoring
+            </HeaderButton>
+            <HeaderButton to="/operator-placement" icon={<Users className="w-3.5 h-3.5" />}>
+              Operator placement
+            </HeaderButton>
+            <HeaderButton
+              onClick={handleExportExcel}
+              icon={<Download className="w-3.5 h-3.5" />}
+              title="Export full executive factory report to Excel"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#9C5B3C]" : ""}`} />
-            </button>
-          )}
-        </div>
-      </div>
+              Export Excel
+            </HeaderButton>
+          </>
+        }
+        onRefresh={onRefresh}
+        refreshing={loading}
+      />
 
-      {/* ── 2. Critical Plant Alerts Bar (if any) ────────────────────── */}
+      {/* ── 2. Alerts ─────────────────────────────────────────────────── */}
       {plantAlerts.length > 0 && (
         <div className="space-y-2">
-          {plantAlerts.slice(0, 2).map((alert) => (
-            <div
-              key={alert.id}
-              className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
-                alert.severity === "critical"
-                  ? "bg-rose-50/80 border-rose-200 text-rose-900"
-                  : alert.severity === "warning"
-                  ? "bg-amber-50/80 border-amber-200 text-amber-900"
-                  : "bg-blue-50/80 border-blue-200 text-blue-900"
-              }`}
-            >
-              <div className="flex items-start sm:items-center gap-2.5">
-                <div
-                  className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                    alert.severity === "critical"
-                      ? "bg-rose-100 text-rose-700"
-                      : alert.severity === "warning"
-                      ? "bg-amber-100 text-amber-700"
-                      : "bg-blue-100 text-blue-700"
-                  }`}
-                >
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <span className="font-bold">{alert.title}</span> —{" "}
-                  <span className="opacity-90">{alert.description}</span>
-                </div>
-              </div>
-              <Link
-                to={alert.actionHref}
-                className={`px-3 py-1 rounded-xl text-xs font-bold border transition-colors shrink-0 flex items-center gap-1 self-start sm:self-auto ${
-                  alert.severity === "critical"
-                    ? "bg-white text-rose-700 border-rose-300 hover:bg-rose-100"
-                    : alert.severity === "warning"
-                    ? "bg-white text-amber-800 border-amber-300 hover:bg-amber-100"
-                    : "bg-white text-blue-800 border-blue-300 hover:bg-blue-100"
-                }`}
+          {plantAlerts.slice(0, 2).map((alert) => {
+            const tone = ALERT_TONE[alert.severity];
+            return (
+              <AlertRow
+                key={alert.id}
+                tone={tone}
+                icon={<AlertTriangle className="w-4 h-4" />}
+                title={alert.title}
+                action={<AlertAction to={alert.actionHref} tone={tone}>{alert.actionText}</AlertAction>}
               >
-                <span>{alert.actionText}</span>
-                <ChevronRight className="w-3 h-3" />
-              </Link>
-            </div>
-          ))}
+                {alert.description}
+              </AlertRow>
+            );
+          })}
         </div>
       )}
 
-      {/* ── 3. Executive KPI Scorecards ─────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {[
-          {
-            label: "Active Orders",
-            value: kpis.activeOrders,
-            sub: `${kpis.totalOrders} total · ${kpis.plannedOrders} planned`,
-            icon: <Package className="w-4 h-4" />,
-            color: "text-[#9C5B3C]",
-            bg: "bg-[#F6F1E8] border-[#E6DDCE]",
-            link: "/orders",
-          },
-          {
-            label: "Active Lines",
-            value: `${kpis.runningLines}/${kpis.activeLines}`,
-            sub: `${kpis.totalLines} lines in factory`,
-            icon: <Layers className="w-4 h-4" />,
-            color: "text-indigo-700",
-            bg: "bg-indigo-50 border-indigo-200",
-            link: "/settings/lines",
-          },
-          {
-            label: "Plant Efficiency",
-            value: `${kpis.avgLineEfficiency}%`,
-            sub: `${kpis.effectiveBulletins} active OBs`,
-            icon: <TrendingUp className="w-4 h-4" />,
-            color: "text-[#77876F]",
-            bg: "bg-[#F3F5F2] border-[#d4decb]",
-            link: "/operation-bulletins",
-          },
-          {
-            label: "Floor Workforce",
-            value: `${workforce.presentToday}/${workforce.totalActive}`,
-            sub: `${workforce.floaterPoolCount} floaters ready`,
-            icon: <Users className="w-4 h-4" />,
-            color: "text-[#8B5E3C]",
-            bg: "bg-[#EFE9DF] border-[#D8C9B8]",
-            link: "/skill-matrix",
-          },
-          {
-            label: "Line Manning %",
-            value: kpis.manningFulfillmentPercent > 0 ? `${kpis.manningFulfillmentPercent}%` : "—",
-            sub: `${kpis.totalDeployedAcrossLines}/${kpis.totalRequiredAcrossLines} seated`,
-            icon: <UserCheck className="w-4 h-4" />,
-            color: kpis.manningFulfillmentPercent >= 80 ? "text-emerald-700" : "text-amber-700",
-            bg: kpis.manningFulfillmentPercent >= 80 ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200",
-            link: "/operator-placement",
-          },
-          {
-            label: "Planned PCs",
-            value: kpis.totalPlannedPcs > 0 ? kpis.totalPlannedPcs.toLocaleString() : "—",
-            sub: `${kpis.completedOrders} orders shipped`,
-            icon: <Target className="w-4 h-4" />,
-            color: "text-[#221912]",
-            bg: "bg-[#E8DCC9] border-[#C5B9A8]",
-            link: "/orders",
-          },
-        ].map((kpi, i) => (
-          <motion.div
-            key={kpi.label}
-            custom={i}
-            variants={cardVariants}
-            initial="hidden"
-            animate="visible"
-            className="bg-white rounded-2xl border border-[#E6DDCE] p-4 shadow-[0_1px_3px_rgba(34,25,18,0.05)] flex flex-col justify-between hover:shadow-md transition-shadow cursor-default"
-          >
-            <div className="flex items-start justify-between mb-2">
-              <div className={`w-8 h-8 rounded-xl ${kpi.bg} border flex items-center justify-center ${kpi.color}`}>
-                {kpi.icon}
-              </div>
-              {kpi.link && (
-                <Link to={kpi.link} className="text-[#8C7E6E] hover:text-[#9C5B3C] transition-colors" title={`Open ${kpi.label}`}>
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                </Link>
-              )}
-            </div>
-            <div>
-              <div className="text-2xl font-black text-[#221912] font-mono leading-tight">
-                {loading ? (
-                  <div className="h-6 w-16 bg-[#F0EAE0] rounded animate-pulse" />
-                ) : (
-                  kpi.value
-                )}
-              </div>
-              <div className="text-[10.5px] font-bold uppercase tracking-wider text-[#8C7E6E] mt-0.5">
-                {kpi.label}
-              </div>
-              <div className="text-[10px] text-[#8C7E6E] mt-0.5 truncate">{kpi.sub}</div>
-            </div>
-          </motion.div>
-        ))}
+      {/* ── 3. KPI row ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <KpiCard
+          label="Active orders"
+          value={kv(kpis.activeOrders)}
+          caption={`${kpis.totalOrders} total · ${kpis.plannedOrders} planned`}
+          to="/orders"
+        />
+        <KpiCard
+          label="Active lines"
+          value={kv(`${kpis.runningLines}/${kpis.activeLines}`)}
+          caption={`${kpis.totalLines} lines in factory`}
+          to="/settings/lines"
+        />
+        <KpiCard
+          label="Plant efficiency"
+          value={kv(`${kpis.avgLineEfficiency}%`)}
+          caption={`${kpis.effectiveBulletins} active OBs`}
+          progress={kpis.avgLineEfficiency}
+          to="/operation-bulletins"
+        />
+        <KpiCard
+          label="Floor workforce"
+          value={kv(`${workforce.presentToday}/${workforce.totalActive}`)}
+          caption={`${workforce.floaterPoolCount} floaters ready`}
+          to="/skill-matrix"
+        />
+        <KpiCard
+          label="Line manning"
+          value={kv(kpis.manningFulfillmentPercent > 0 ? `${kpis.manningFulfillmentPercent}%` : "—")}
+          caption={`${kpis.totalDeployedAcrossLines}/${kpis.totalRequiredAcrossLines} seated`}
+          progress={kpis.manningFulfillmentPercent}
+          to="/operator-placement"
+        />
+        <KpiCard
+          label="Planned pieces"
+          value={kv(kpis.totalPlannedPcs > 0 ? kpis.totalPlannedPcs.toLocaleString() : "—")}
+          caption={`${kpis.completedOrders} orders shipped`}
+          to="/orders"
+        />
       </div>
 
-      {/* ── 4. Live Production Output Pulse & Factory Hourly Pace ─────── */}
-      <div className="bg-white rounded-2xl border border-[#E6DDCE] p-5 sm:p-6 shadow-[0_1px_3px_rgba(34,25,18,0.05)] space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#F0EAE0]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-              <Flame className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-black text-[#221912]">Live Floor Production Output Pulse</h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                  Live Sync (15s)
-                </span>
-              </div>
-              <p className="text-xs text-[#8C7E6E] mt-0.5">
-                Today's actual piece output logged vs planned shift targets across all active sewing lines
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Link
-              to="/monitoring"
-              className="text-xs font-bold text-[#9C5B3C] hover:text-[#854B2F] flex items-center gap-1"
-            >
-              <span>Detailed Floor Boards</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-
-        {/* Live Output KPI Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-[#FAF8F5] p-3.5 rounded-xl border border-[#E6DDCE]">
-            <div className="text-[10.5px] font-extrabold uppercase text-[#8C7E6E] tracking-wider">
-              Good Pieces Produced
-            </div>
-            <div className="text-xl sm:text-2xl font-black font-mono text-emerald-700 mt-1">
-              {liveProd.totalGoodToday.toLocaleString()} <span className="text-xs font-bold text-[#8C7E6E]">pcs</span>
-            </div>
-            <div className="text-[10px] text-[#8C7E6E] mt-0.5">
+      {/* ── 4. Today's output + workforce ─────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <Section
+          className="xl:col-span-2"
+          title="Today's output vs target"
+          subtitle="Good pieces logged on the floor against each line's shift target"
+          actions={
+<SectionLink to="/monitoring">Detailed floor boards</SectionLink>
+          }
+          flush
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-[#F0EAE0] divide-x divide-[#F0EAE0]">
+            <OutputStat label="Good pieces" value={liveProd.totalGoodToday.toLocaleString()} unit="pcs">
               {liveProd.totalRejectToday > 0 ? `${liveProd.totalRejectToday} rejects logged` : "0 defect rejects"}
-            </div>
+            </OutputStat>
+            <OutputStat label="Shift target" value={liveProd.dailyPlannedTarget.toLocaleString()} unit="pcs">
+              Across {activeLineCount} active lines
+            </OutputStat>
+            <OutputStat label="Attainment" value={`${liveProd.targetAttainmentPercent}%`}>
+              <Meter value={liveProd.targetAttainmentPercent} className="mt-1" />
+            </OutputStat>
+            <OutputStat label="Hourly run-rate" value={liveProd.liveHourlyRunRate} unit="pcs/hr">
+              Per elapsed hour
+            </OutputStat>
           </div>
-
-          <div className="bg-[#FAF8F5] p-3.5 rounded-xl border border-[#E6DDCE]">
-            <div className="text-[10.5px] font-extrabold uppercase text-[#8C7E6E] tracking-wider">
-              Shift Daily Target
+          <div className="px-5 pt-4 pb-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <span className="text-[12px] font-semibold text-[#8C7E6E]">By line</span>
+              <BarLegend unit="pcs" />
             </div>
-            <div className="text-xl sm:text-2xl font-black font-mono text-[#221912] mt-1">
-              {liveProd.dailyPlannedTarget.toLocaleString()} <span className="text-xs font-bold text-[#8C7E6E]">pcs</span>
-            </div>
-            <div className="text-[10px] text-[#8C7E6E] mt-0.5">
-              Across {lines.filter((l) => l.active !== false).length} active lines
-            </div>
+            <BarList rows={outputRows} unit="pcs" emptyText="No lines have a shift target yet" />
           </div>
+        </Section>
 
-          <div className="bg-[#FAF8F5] p-3.5 rounded-xl border border-[#E6DDCE]">
-            <div className="text-[10.5px] font-extrabold uppercase text-[#8C7E6E] tracking-wider">
-              Target Attainment
-            </div>
-            <div className={`text-xl sm:text-2xl font-black font-mono mt-1 ${
-              liveProd.targetAttainmentPercent >= 80
-                ? "text-emerald-700"
-                : liveProd.targetAttainmentPercent >= 50
-                ? "text-amber-700"
-                : "text-[#9C5B3C]"
-            }`}>
-              {liveProd.targetAttainmentPercent}%
-            </div>
-            <div className="w-full bg-[#E6DDCE] h-1.5 rounded-full overflow-hidden mt-1.5">
-              <div
-                className="bg-[#9C5B3C] h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, liveProd.targetAttainmentPercent)}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="bg-[#FAF8F5] p-3.5 rounded-xl border border-[#E6DDCE]">
-            <div className="text-[10.5px] font-extrabold uppercase text-[#8C7E6E] tracking-wider">
-              Hourly Run-Rate
-            </div>
-            <div className="text-xl sm:text-2xl font-black font-mono text-[#9C5B3C] mt-1">
-              {liveProd.liveHourlyRunRate} <span className="text-xs font-bold text-[#8C7E6E]">pcs/hr</span>
-            </div>
-            <div className="text-[10px] text-[#8C7E6E] mt-0.5">
-              Factory pace per elapsed hr
-            </div>
-          </div>
-        </div>
-
-        {/* Per-Line Mini Attainment Status Bar */}
-        {liveProd.perLineProduction.length > 0 && (
-          <div className="pt-2">
-            <div className="text-[11px] font-extrabold uppercase tracking-wider text-[#8C7E6E] mb-2">
-              Per-Line Target Fulfillment Progress
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {liveProd.perLineProduction.map((lp) => (
-                <div
-                  key={lp.lineId}
-                  className="bg-white p-3 rounded-xl border border-[#E6DDCE] hover:border-[#9C5B3C] transition-all"
-                >
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-mono font-black text-xs text-[#221912]">
-                      {lp.lineCode} ({lp.lineName})
-                    </span>
-                    <span className="text-xs font-mono font-bold text-[#9C5B3C]">
-                      {lp.attainmentPercent}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-[#F0EAE0] rounded-full overflow-hidden mb-1.5">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        lp.attainmentPercent >= 80 ? "bg-emerald-500" : "bg-[#9C5B3C]"
-                      }`}
-                      style={{ width: `${Math.min(100, lp.attainmentPercent)}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] text-[#8C7E6E]">
-                    <span>
-                      <strong className="text-[#221912] font-mono">{lp.actualGood}</strong> / {lp.targetDailyPcs} pcs
-                    </span>
-                    {lp.isBottlenecked && (
-                      <span className="text-rose-700 font-bold flex items-center gap-0.5">
-                        <AlertTriangle className="w-2.5 h-2.5" /> Bottleneck
-                      </span>
-                    )}
-                  </div>
+        <Section title="Workforce & skills" actions={<SectionLink to="/skill-matrix">Skill matrix</SectionLink>}>
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-2 gap-2.5">
+              {[
+                { label: "Total active", value: workforce.totalActive },
+                { label: "Present today", value: workforce.presentToday },
+                { label: "Avg skill level", value: `L${workforce.avgSkillRating} / 4` },
+                { label: "Floater pool", value: workforce.floaterPoolCount },
+              ].map((m) => (
+                <div key={m.label} className="rounded-lg bg-[#FAF7F2] border border-[#F0EAE0] px-3 py-2.5">
+                  <Stat label={m.label}>
+                    <span className="text-[17px] font-bold tracking-tight">{m.value}</span>
+                  </Stat>
                 </div>
               ))}
             </div>
-          </div>
-        )}
-      </div>
 
-      {/* ── 5. Main 2-Column Operational Grid ───────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* ── Left 2 Columns: Lines Status & Order Pipeline ──────────── */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* ── Production Lines Matrix ──────────────────────────────── */}
-          <div className="bg-white rounded-2xl border border-[#E6DDCE] shadow-[0_1px_3px_rgba(34,25,18,0.05)]">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-5 pb-4 border-b border-[#F0EAE0]">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-black text-[#221912]">Sewing Lines Operational Status</h2>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE]">
-                  {lineGrid.length} lines
-                </span>
+            <div>
+              <div className="flex items-baseline justify-between gap-2 mb-2">
+                <span className="text-[12px] font-semibold text-[#8C7E6E]">Deployment</span>
+                <span className="text-[12px] text-[#8C7E6E] tabular-nums">{workforce.seatedPercent}% on production lines</span>
               </div>
-
-              {/* Line filters */}
-              <div className="flex items-center gap-1 bg-[#FAF8F5] p-1 rounded-xl border border-[#E6DDCE] text-xs">
-                {(
-                  [
-                    { id: "all", label: "All" },
-                    { id: "running", label: "Running" },
-                    { id: "attention", label: "Needs Manning" },
-                    { id: "unplanned", label: "Unplanned" },
-                  ] as const
-                ).map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => setLineFilter(f.id)}
-                    className={`px-3 py-1 rounded-lg font-bold capitalize transition-all cursor-pointer ${
-                      lineFilter === f.id
-                        ? "bg-white text-[#9C5B3C] shadow-2xs border border-[#E6DDCE]"
-                        : "text-[#8C7E6E] hover:text-[#221912]"
-                    }`}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {filteredLines.length === 0 ? (
-              <div className="py-12 text-center text-xs text-[#8C7E6E] italic">
-                No sewing lines match the selected filter.
-              </div>
-            ) : (
-              <div className="divide-y divide-[#F0EAE0]">
-                {filteredLines.map((line, idx) => {
-                  const conf = STATUS_CONFIG[line.status] || STATUS_CONFIG["No Plan"];
-                  const lineProd = liveProd.perLineProduction.find((p) => String(p.lineId) === String(line.lineId));
-                  return (
-                    <motion.div
-                      key={line.lineId}
-                      custom={idx}
-                      variants={cardVariants}
-                      initial="hidden"
-                      animate="visible"
-                      className="p-4 sm:px-5 hover:bg-[#FEFCF9] transition-colors"
-                    >
-                      {/* Row 1: Line identity, status, and action buttons */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5">
-                        <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border shrink-0 ${conf.badge}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${conf.dot} ${line.status === "Running" ? "animate-pulse" : ""}`} />
-                            {conf.label}
-                          </span>
-
-                          <span className="font-mono font-black text-sm text-[#221912]">
-                            {line.lineCode}
-                          </span>
-                          <span className="text-sm font-bold text-[#221912]">
-                            {line.lineName}
-                          </span>
-                          {line.lineType && (
-                            <span className="text-[10px] font-bold text-[#8C7E6E] px-2 py-0.5 rounded-md bg-[#FAF8F5] border border-[#E6DDCE] shrink-0">
-                              {line.lineType}
-                            </span>
-                          )}
-                          {line.bottleneckCount > 0 && (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
-                              {line.bottleneckCount} Bottleneck{line.bottleneckCount > 1 ? "s" : ""}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/line-balance?lineId=${line.lineId}`)}
-                            className="px-3 py-1.5 rounded-xl bg-[#F6F1E8] hover:bg-[#9C5B3C] text-[#9C5B3C] hover:text-white border border-[#E6DDCE] hover:border-[#9C5B3C] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                            title="Open in Line Balancing Engine"
-                          >
-                            <Zap className="w-3.5 h-3.5" />
-                            <span>Balance</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/monitoring?lineId=${line.lineId}`)}
-                            className="p-2 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] border border-[#E6DDCE] text-xs transition-colors cursor-pointer shadow-2xs"
-                            title="Live Monitoring"
-                          >
-                            <Activity className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => navigate(`/operator-placement`)}
-                            className="p-2 rounded-xl bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] border border-[#E6DDCE] text-xs transition-colors cursor-pointer shadow-2xs"
-                            title="Assign Operators"
-                          >
-                            <Users className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Row 2: Order context & Manning / Eff KPIs */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#F0EAE0]/80 text-xs text-[#8C7E6E]">
-                        <div className="flex items-center gap-2 truncate">
-                          {line.hasPlan ? (
-                            <>
-                              <span>Order: <strong className="text-[#221912] font-mono">{line.activeOrderNo}</strong></span>
-                              <span>·</span>
-                              <span>Style: <strong className="text-[#221912]">{line.styleNo}</strong></span>
-                              {line.buyer && line.buyer !== "—" && (
-                                <>
-                                  <span>·</span>
-                                  <span>Buyer: <strong className="text-[#221912]">{line.buyer}</strong></span>
-                                </>
-                              )}
-                            </>
-                          ) : (
-                            <span className="italic text-[#A89A8A]">No production order assigned to line</span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-4 shrink-0 font-mono">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-[#8C7E6E] font-sans font-medium">Manning:</span>
-                            <div className="w-20 h-2 bg-[#F0EAE0] rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all duration-500 ${conf.bar}`}
-                                style={{ width: `${Math.min(100, line.manningPercent)}%` }}
-                              />
-                            </div>
-                            <strong className="text-[#221912] text-xs">{line.operatorsDeployed}/{line.operatorsRequired}</strong>
-                            <span className={`text-[11px] font-bold ${line.manningPercent >= 80 ? "text-emerald-700" : "text-amber-700"}`}>
-                              ({line.manningPercent}%)
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 pl-3 border-l border-[#E6DDCE]">
-                            <span className="text-[11px] text-[#8C7E6E] font-sans font-medium">Target Eff:</span>
-                            <strong className="text-[#221912] text-xs">{line.designEfficiency}%</strong>
-                            {lineProd && lineProd.actualGood > 0 && (
-                              <span className="text-[11px] font-bold text-emerald-700">· {lineProd.actualGood} pcs</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* ── Order Delivery & Readiness Pipeline ──────────────────── */}
-          <div className="bg-white rounded-2xl border border-[#E6DDCE] shadow-[0_1px_3px_rgba(34,25,18,0.05)]">
-            <div className="p-5 pb-4 border-b border-[#F0EAE0] space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-black text-[#221912]">Order Delivery & Readiness Pipeline</h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-[#F6F1E8] text-[#9C5B3C] border border-[#E6DDCE]">
-                    {orderPipeline.length}
-                  </span>
-                  {criticalCount > 0 && (
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" />
-                      {criticalCount} critical
-                    </span>
-                  )}
-                </div>
-
-                {/* Filter Tabs */}
-                <div className="flex flex-wrap items-center gap-1 bg-[#FAF8F5] p-1 rounded-xl border border-[#E6DDCE] text-xs">
-                  {(
-                    [
-                      { id: "all", label: "All" },
-                      { id: "active", label: "In Production" },
-                      { id: "critical", label: "Critical" },
-                      { id: "planned", label: "Planned" },
-                      { id: "completed", label: "Done" },
-                    ] as const
-                  ).map((f) => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setOrderFilter(f.id)}
-                      className={`px-3 py-1 rounded-lg font-bold capitalize transition-all cursor-pointer ${
-                        orderFilter === f.id
-                          ? "bg-white text-[#9C5B3C] shadow-2xs border border-[#E6DDCE]"
-                          : "text-[#8C7E6E] hover:text-[#221912]"
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="w-4 h-4 text-[#8C7E6E] absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={orderSearch}
-                  onChange={(e) => setOrderSearch(e.target.value)}
-                  placeholder="Search by Order No, Buyer (Nike, Zara...), Style, Line, or Bulletin..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#FAF8F5] border border-[#E6DDCE] text-xs text-[#221912] placeholder-[#A89A8A] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#9C5B3C]"
+              <div
+                className="flex h-2.5 w-full rounded-full overflow-hidden bg-[#EFE8DD]"
+                role="img"
+                aria-label={`${workforce.seatedCount} seated on lines, ${workforce.unallocatedCount} floaters`}
+              >
+                <div className="h-full bg-[#9C5B3C]" style={{ width: `${workforce.seatedPercent}%` }} title={`${workforce.seatedPercent}% seated`} />
+                <div
+                  className="h-full bg-[#DDBFA6]"
+                  style={{ width: `${100 - workforce.seatedPercent}%` }}
+                  title={`${100 - workforce.seatedPercent}% floater / available`}
                 />
               </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[#5C4D3E]">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-[#9C5B3C]" />
+                  Seated on lines <strong className="font-semibold text-[#221912] tabular-nums">{workforce.seatedCount}</strong>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-[#DDBFA6]" />
+                  Floaters / buffer <strong className="font-semibold text-[#221912] tabular-nums">{workforce.unallocatedCount}</strong>
+                </span>
+              </div>
             </div>
 
-            <div className="divide-y divide-[#F0EAE0]">
-              <AnimatePresence mode="wait">
-                {filteredOrders.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-[#8C7E6E] italic">
-                    No orders match the selected search or filter criteria.
-                  </div>
-                ) : (
-                  filteredOrders.slice(0, 10).map((order, idx) => {
-                    const urgConf = URGENCY_CONFIG[order.urgency] || URGENCY_CONFIG.normal;
-                    return (
-                      <motion.div
-                        key={order.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ delay: idx * 0.02 }}
-                        className={`p-4 sm:px-5 hover:bg-[#FEFCF9] transition-colors border-l-4 ${urgConf.border}`}
-                      >
-                        {/* Row 1: Order header, Style, Urgency, and Actions */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono font-black text-sm text-[#221912]">
-                              {order.orderNo}
-                            </span>
-                            <span className="text-xs text-[#8C7E6E] font-medium">· Style: <strong className="text-[#221912]">{order.styleNo}</strong></span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${urgConf.badge}`}>
-                              {urgConf.label}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-2 shrink-0">
-                            {/* OB Status */}
-                            <span
-                              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
-                                order.hasOB
-                                  ? "bg-[#F3F5F2] text-[#77876F] border-[#d4decb]"
-                                  : "bg-rose-50 text-rose-700 border-rose-200"
-                              }`}
-                              title={order.bulletinCode ? `Linked to ${order.bulletinCode}` : "No Operation Bulletin linked"}
-                            >
-                              {order.hasOB ? `OB ✓ ${order.bulletinCode ? `(${order.bulletinCode})` : ""}` : "No OB"}
-                            </span>
-
-                            {/* Plan / Line Assignment */}
-                            <span
-                              className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
-                                order.hasPlan
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : "bg-amber-50 text-amber-700 border-amber-200"
-                              }`}
-                            >
-                              {order.hasPlan
-                                ? `Plan ✓ · ${order.assignedLineName || "Assigned"}`
-                                : "Unplanned"}
-                            </span>
-
-                            {/* Balance Action */}
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/line-balance?orderId=${order.id}`)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#F6F1E8] hover:bg-[#9C5B3C] text-[#9C5B3C] hover:text-white border border-[#E6DDCE] hover:border-[#9C5B3C] text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                            >
-                              <Zap className="w-3.5 h-3.5" />
-                              <span>Balance Order</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Row 2: Buyer, Quantity, and Delivery Countdown */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#8C7E6E]">
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <span>Buyer: <strong className="text-[#221912]">{order.buyer}</strong></span>
-                            <span>·</span>
-                            <span className="font-mono">
-                              Quantity: <strong className="text-[#221912]">{order.totalQuantity.toLocaleString()}</strong> pcs
-                            </span>
-                          </div>
-
-                          <div className="font-mono text-xs">
-                            Delivery: <strong className="text-[#221912]">{order.deliveryDate}</strong> ({order.daysUntilDelivery === 999
-                              ? "No Date"
-                              : order.daysUntilDelivery < 0
-                              ? `${Math.abs(order.daysUntilDelivery)}d overdue`
-                              : `${order.daysUntilDelivery}d remaining`})
-                          </div>
-                        </div>
-                      </motion.div>
-                    );
-                  })
-                )}
-              </AnimatePresence>
-            </div>
-
-            {filteredOrders.length > 10 && (
-              <div className="p-4 border-t border-[#F0EAE0] text-center">
-                <Link
-                  to="/orders"
-                  className="text-xs font-bold text-[#9C5B3C] hover:text-[#854B2F] flex items-center justify-center gap-1"
-                >
-                  View all {filteredOrders.length} orders in Master Order Directory
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
+            <div>
+              <div className="flex items-baseline justify-between gap-2 mb-2.5">
+                <span className="text-[12px] font-semibold text-[#8C7E6E]">Skill rating distribution</span>
+                <span className="text-[12px] text-[#8C7E6E] tabular-nums">{workforce.totalCertifiedOperations} ratings</span>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Right 1 Column: Workforce, Machines, OB Coverage & Shortcuts ─ */}
-        <div className="space-y-6">
-          {/* ── Workforce & Skill Matrix Snapshot ─────────────────── */}
-          <div className="bg-white rounded-2xl border border-[#E6DDCE] p-5 shadow-[0_1px_3px_rgba(34,25,18,0.05)]">
-            <div className="flex items-center justify-between pb-3 border-b border-[#F0EAE0]">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-[#8B5E3C]" />
-                <h3 className="text-sm font-bold text-[#221912]">Workforce & Skill Matrix</h3>
-              </div>
-              <Link to="/skill-matrix" className="text-xs font-bold text-[#9C5B3C] hover:underline">
-                Skill Matrix
-              </Link>
-            </div>
-
-            <div className="mt-4 space-y-4">
-              {/* Seated vs Unallocated Floaters */}
-              <div>
-                <div className="flex items-center justify-between text-xs font-bold mb-2">
-                  <span className="text-emerald-800 flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    Seated On Lines ({workforce.seatedCount})
-                  </span>
-                  <span className="text-amber-800 flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                    Floaters / Buffer ({workforce.unallocatedCount})
-                  </span>
-                </div>
-                <div className="h-3 w-full bg-[#F6F1E8] rounded-full overflow-hidden flex border border-[#E6DDCE]">
-                  <div
-                    className="bg-emerald-500 h-full transition-all duration-500"
-                    style={{ width: `${workforce.seatedPercent}%` }}
-                    title={`${workforce.seatedPercent}% Seated`}
-                  />
-                  <div
-                    className="bg-amber-500 h-full transition-all duration-500"
-                    style={{ width: `${100 - workforce.seatedPercent}%` }}
-                    title={`${100 - workforce.seatedPercent}% Floater / Available`}
-                  />
-                </div>
-                <div className="text-center text-[10px] text-[#8C7E6E] mt-1.5">
-                  <strong>{workforce.presentToday}</strong> present today ({workforce.totalActive} active) · <strong>{workforce.seatedPercent}%</strong> on production lines
-                </div>
-              </div>
-
-              {/* Workforce Key Metrics */}
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: "Total Active", value: workforce.totalActive, color: "text-[#221912]" },
-                  { label: "Avg Skill Level", value: `L${workforce.avgSkillRating} / 4`, color: "text-[#8B5E3C]" },
-                  { label: "Floater Pool", value: workforce.floaterPoolCount, color: "text-amber-700" },
-                ].map((m) => (
-                  <div key={m.label} className="bg-[#FAF8F5] rounded-xl p-2.5 border border-[#E6DDCE] text-center">
-                    <div className={`text-base font-black font-mono ${m.color}`}>{m.value}</div>
-                    <div className="text-[9.5px] font-bold uppercase text-[#8C7E6E] leading-tight mt-0.5">{m.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Skill level distribution (4-level scale) */}
-              <div className="space-y-2 pt-1">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-[#8C7E6E]">
-                    Skill Matrix Rating Distribution
-                  </span>
-                  <span className="text-[10px] font-mono text-[#8C7E6E]">
-                    {workforce.totalCertifiedOperations} ratings
-                  </span>
-                </div>
-                {workforce.skillDistribution.map((s) => {
-                  return (
-                    <div key={s.rating}>
-                      <div className="flex items-center justify-between text-[10.5px] mb-0.5">
-                        <span className="text-[#8C7E6E] font-medium flex items-center gap-1">
-                          <SkillLevelIcon rating={s.rating} size={12} decorative />
-                          <strong className="text-[#221912]">L{s.rating}</strong>
-                          <span className="text-[9.5px] text-[#A89A8A]">{s.label}</span>
-                        </span>
-                        <span className="font-mono font-bold text-[#221912]">
-                          {s.count} ({s.percentage}%)
-                        </span>
-                      </div>
-                      <div className="h-1.5 bg-[#F0EAE0] rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${s.percentage}%`, backgroundColor: SKILL_LEVELS[clampRating(s.rating)].color }}
-                        />
-                      </div>
+              <ul className="space-y-2.5">
+                {workforce.skillDistribution.map((s) => (
+                  <li key={s.rating}>
+                    <div className="flex items-baseline justify-between gap-2 text-[12.5px] mb-1">
+                      <span className="min-w-0 truncate">
+                        <strong className="font-semibold text-[#221912]">L{s.rating}</strong>
+                        <span className="text-[#8C7E6E]"> · {SKILL_LEVELS[clampRating(s.rating)].name}</span>
+                      </span>
+                      <span className="tabular-nums text-[#221912] font-semibold whitespace-nowrap">
+                        {s.count}
+                        <span className="font-normal text-[#8C7E6E]"> · {s.percentage}%</span>
+                      </span>
                     </div>
+                    <Meter value={s.percentage} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Section>
+      </div>
+
+      {/* ── 5. Sewing lines ──────────────────────────────────────────── */}
+      <Section
+        title="Sewing lines"
+        badge={<CountBadge>{lineGrid.length}</CountBadge>}
+        actions={
+          <SegmentTabs<LineFilter>
+            value={lineFilter}
+            onChange={setLineFilter}
+            options={[
+              { value: "all", label: "All", count: lineFilterCounts.all },
+              { value: "running", label: "Running", count: lineFilterCounts.running },
+              { value: "attention", label: "Needs manning", count: lineFilterCounts.attention },
+              { value: "unplanned", label: "Unplanned", count: lineFilterCounts.unplanned },
+            ]}
+          />
+        }
+        flush
+      >
+        {filteredLines.length === 0 ? (
+          <EmptyHint title="No sewing lines match the selected filter" />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-[13px]">
+              <thead className="bg-[#FAF7F2] border-b border-[#F0EAE0]">
+                <tr>
+                  <th className={cn(TH, "pl-5")}>Line</th>
+                  <th className={TH}>Status</th>
+                  <th className={TH}>Order / style</th>
+                  <th className={TH}>Manning</th>
+                  <th className={cn(TH, "text-right")}>Target eff.</th>
+                  <th className={cn(TH, "pr-5 text-right")}>
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F0EAE0]">
+                {filteredLines.map((line) => {
+                  const st = LINE_STATUS[line.status] ?? LINE_STATUS["No Plan"];
+                  const lineProd = liveProd.perLineProduction.find((p) => String(p.lineId) === String(line.lineId));
+                  return (
+                    <tr key={line.lineId} className="hover:bg-[#FDFBF8] transition-colors">
+                      <td className={cn(TD, "pl-5")}>
+                        <div className="font-semibold text-[#221912] whitespace-nowrap">{line.lineCode}</div>
+                        <div className="text-[12px] text-[#8C7E6E] truncate max-w-[260px]" title={line.lineName}>
+                          {line.lineName}
+                          {line.lineType ? ` · ${line.lineType}` : ""}
+                        </div>
+                      </td>
+                      <td className={TD}>
+                        <div className="flex flex-col items-start gap-1">
+                          <StatusPill tone={st.tone}>{st.label}</StatusPill>
+                          {line.bottleneckCount > 0 && (
+                            <span className="text-[11.5px] font-semibold text-rose-700">
+                              {line.bottleneckCount} bottleneck{line.bottleneckCount > 1 ? "s" : ""}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={TD}>
+                        {line.hasPlan ? (
+                          <>
+                            <div className="font-semibold text-[#221912] tabular-nums whitespace-nowrap">{line.activeOrderNo}</div>
+                            <div className="text-[12px] text-[#8C7E6E] truncate max-w-[240px]">
+                              {line.styleNo}
+                              {line.buyer && line.buyer !== "—" ? ` · ${line.buyer}` : ""}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-[12.5px] text-[#A89A8A] whitespace-nowrap">No order assigned</span>
+                        )}
+                      </td>
+                      <td className={TD}>
+                        <div className="flex items-center gap-3">
+                          <Meter value={line.manningPercent} className="w-24 shrink-0" />
+                          <span className="tabular-nums font-semibold text-[#221912] whitespace-nowrap">
+                            {line.operatorsDeployed}/{line.operatorsRequired}
+                          </span>
+                          <span className="tabular-nums text-[12px] text-[#8C7E6E] w-10">{line.manningPercent}%</span>
+                        </div>
+                      </td>
+                      <td className={cn(TD, "text-right")}>
+                        <div className="tabular-nums font-semibold text-[#221912]">{line.designEfficiency}%</div>
+                        {lineProd && lineProd.actualGood > 0 && (
+                          <div className="tabular-nums text-[12px] text-[#8C7E6E] whitespace-nowrap">
+                            {lineProd.actualGood.toLocaleString()} pcs today
+                          </div>
+                        )}
+                      </td>
+                      <td className={cn(TD, "pr-5")}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <IconAction title="Balance this line" onClick={() => navigate(`/line-balance?lineId=${line.lineId}`)}>
+                            <Zap />
+                          </IconAction>
+                          <IconAction title="Live Monitoring" onClick={() => navigate(`/monitoring?lineId=${line.lineId}`)}>
+                            <Activity />
+                          </IconAction>
+                          <IconAction title="Assign Operators" onClick={() => navigate(`/operator-placement`)}>
+                            <Users />
+                          </IconAction>
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
-              </div>
-            </div>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
+
+      {/* ── 6. Orders & delivery readiness ───────────────────────────── */}
+      <Section
+        title="Orders & delivery readiness"
+        badge={
+          <>
+            <CountBadge>{orderPipeline.length}</CountBadge>
+            {criticalCount > 0 && <StatusPill tone="critical">{criticalCount} critical</StatusPill>}
+          </>
+        }
+        flush
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-b border-[#F0EAE0]">
+          <SegmentTabs<OrderFilter>
+            value={orderFilter}
+            onChange={setOrderFilter}
+            options={[
+              { value: "all", label: "All", count: orderFilterCounts.all },
+              { value: "active", label: "In production", count: orderFilterCounts.active },
+              { value: "critical", label: "Critical", count: orderFilterCounts.critical },
+              { value: "planned", label: "Planned", count: orderFilterCounts.planned },
+              { value: "completed", label: "Done", count: orderFilterCounts.completed },
+            ]}
+          />
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-[#B5A897] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={orderSearch}
+              onChange={(e) => setOrderSearch(e.target.value)}
+              placeholder="Search order, buyer, style, line or bulletin"
+              aria-label="Search orders"
+              className="w-full h-9 pl-9 pr-3 rounded-lg bg-white border border-[#E6DDCE] text-[13px] text-[#221912] placeholder-[#A89A8A] focus:outline-none focus:border-[#9C5B3C] focus:ring-2 focus:ring-[#9C5B3C]/15"
+            />
           </div>
         </div>
-      </div>
+
+        {filteredOrders.length === 0 ? (
+          <EmptyHint title="No orders match the selected search or filter" />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[880px] text-[13px]">
+              <thead className="bg-[#FAF7F2] border-b border-[#F0EAE0]">
+                <tr>
+                  <th className={cn(TH, "pl-5")}>Order</th>
+                  <th className={TH}>Style</th>
+                  <th className={TH}>Buyer</th>
+                  <th className={cn(TH, "text-right")}>Qty (pcs)</th>
+                  <th className={TH}>Delivery</th>
+                  <th className={TH}>Bulletin</th>
+                  <th className={TH}>Line plan</th>
+                  <th className={cn(TH, "pr-5 text-right")}>
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#F0EAE0]">
+                {filteredOrders.slice(0, 10).map((order) => {
+                  const urg = URGENCY[order.urgency] ?? URGENCY.normal;
+                  const overdue = order.daysUntilDelivery !== 999 && order.daysUntilDelivery < 0;
+                  return (
+                    <tr key={order.id} className="hover:bg-[#FDFBF8] transition-colors">
+                      <td className={cn(TD, "pl-5 font-semibold text-[#221912] tabular-nums whitespace-nowrap")}>{order.orderNo}</td>
+                      <td className={cn(TD, "text-[#221912] whitespace-nowrap")}>{order.styleNo}</td>
+                      <td className={cn(TD, "text-[#5C4D3E]")}>
+                        <span className="block truncate max-w-[160px]" title={order.buyer}>{order.buyer}</span>
+                      </td>
+                      <td className={cn(TD, "text-right tabular-nums font-semibold text-[#221912]")}>
+                        {order.totalQuantity.toLocaleString()}
+                      </td>
+                      <td className={TD}>
+                        <div className="flex items-center gap-2.5 whitespace-nowrap">
+                          <div>
+                            <div className="tabular-nums text-[#221912]">{order.deliveryDate}</div>
+                            <div className={cn("text-[12px] tabular-nums", overdue ? "text-rose-700 font-semibold" : "text-[#8C7E6E]")}>
+                              {daysLabel(order.daysUntilDelivery)}
+                            </div>
+                          </div>
+                          <StatusPill tone={urg.tone} title={urg.hint}>{urg.label}</StatusPill>
+                        </div>
+                      </td>
+                      <td className={TD}>
+                        {order.hasOB ? (
+                          <StatusPill
+                            tone="good"
+                            title={order.bulletinCode ? `Linked to ${order.bulletinCode}` : "Operation Bulletin linked"}
+                          >
+                            {order.bulletinCode || "OB linked"}
+                          </StatusPill>
+                        ) : (
+                          <StatusPill tone="critical" title="No Operation Bulletin linked">No OB</StatusPill>
+                        )}
+                      </td>
+                      <td className={TD}>
+                        {order.hasPlan ? (
+                          <StatusPill tone="good" title={order.assignedLineName ?? "Line plan ready"}>
+                            {order.assignedLineCode || order.assignedLineName || "Assigned"}
+                          </StatusPill>
+                        ) : (
+                          <StatusPill tone="warn">Unplanned</StatusPill>
+                        )}
+                      </td>
+                      <td className={cn(TD, "pr-5 text-right")}>
+                        <button
+                          type="button"
+                          title="Balance this order in the Line Balancing Engine"
+                          onClick={() => navigate(`/line-balance?orderId=${order.id}`)}
+                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#E6DDCE] bg-white text-[12.5px] font-semibold text-[#5C4D3E] hover:text-[#221912] hover:bg-[#FAF7F2] transition-colors cursor-pointer whitespace-nowrap"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          Balance
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {filteredOrders.length > 10 && (
+          <div className="px-5 py-3 border-t border-[#F0EAE0] text-center">
+            <SectionLink to="/orders">View all {filteredOrders.length} orders in the order directory</SectionLink>
+          </div>
+        )}
+      </Section>
     </div>
   );
 }

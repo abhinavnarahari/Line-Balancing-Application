@@ -1,26 +1,36 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { saveWorkbook } from "../../utils/excel";
 import {
-  Layers,
   Users,
-  AlertTriangle,
   Zap,
   Filter,
-  RefreshCw,
   Search,
   Download,
   UserPlus,
   CheckCircle2,
   Clock,
-  Target,
-  Gauge,
   Activity,
   AlertCircle,
+  ChevronDown,
+  ClipboardList,
+  X,
 } from "lucide-react";
 import { CustomSelect } from "../../components/ui/CustomSelect";
+import { cn } from "../../utils/cn";
+import {
+  DashboardHeader,
+  MetaChip,
+  HeaderButton,
+  KpiCard,
+  StatusPill,
+  Meter,
+  SegmentTabs,
+  EmptyHint,
+  Stat,
+} from "./DashboardUI";
+import { TONE, type Tone } from "./dashboardTheme";
 import type { SewingLine } from "../lines/api";
 import type { Order } from "../orders/api";
 import type { OperationBulletin } from "../bulletins/api";
@@ -64,8 +74,10 @@ export function LineLevelDashboard({
   loading = false,
 }: LineLevelDashboardProps) {
   const [selectedLineFilter, setSelectedLineFilter] = useState<string>("ALL");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  // Lines whose station layout is expanded (collapsed by default)
+  const [expandedLines, setExpandedLines] = useState<Set<string>>(() => new Set());
   const [assigningStation, setAssigningStation] = useState<{
     line: LineOperationsSummary;
     station: LineStationCoverage;
@@ -271,818 +283,469 @@ export function LineLevelDashboard({
     }
   };
 
+  // Counts for the status tabs (same rules as the filter above)
+  const statusCounts = useMemo(
+    () => ({
+      ALL: calculatedLines.length,
+      RUNNING: calculatedLines.filter((l) => l.status === "Running").length,
+      NEEDS_ATTENTION: calculatedLines.filter((l) => l.status === "Needs Attention" || l.vacantStationCount > 0).length,
+      RAMPING: calculatedLines.filter((l) => l.status === "Ramping Up").length,
+      NO_PLAN: calculatedLines.filter((l) => l.status === "No Plan").length,
+    }),
+    [calculatedLines]
+  );
+
+  const toggleStations = (lineId: string) => {
+    setExpandedLines((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineId)) next.delete(lineId);
+      else next.add(lineId);
+      return next;
+    });
+  };
+
+  const attainTone = (p: number): Tone => (p >= 90 ? "good" : p >= 70 ? "warn" : "critical");
+  const gapTone = (g: number): Tone => (g >= 0 ? "good" : g >= -5 ? "warn" : "critical");
+  const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+
   return (
     <div className="space-y-6 w-full max-w-[1600px] mx-auto">
-      {/* ── 1. Dashboard Header & Governance Control Strip ─────────────── */}
-      <div className="bg-white rounded-2xl border border-[#E6DDCE] px-6 py-5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#9C5B3C]">
-              Shopfloor Line Monitoring
-            </span>
-            <span className="text-[#E6DDCE] hidden sm:inline">/</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-              Live Floor Synchronized
-            </span>
-            <span className="text-[#E6DDCE] hidden sm:inline">·</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#FAF8F5] text-[#221912] border border-[#E6DDCE]">
-              <Clock className="w-3.5 h-3.5 text-[#9C5B3C]" />
-              {aggregates.activeShiftTiming}
-            </span>
-            <span className="text-[#E6DDCE] hidden sm:inline">·</span>
-            <span className="text-xs font-semibold text-[#8C7E6E]">
-              {calculatedLines.length} Sewing Lines Active
-            </span>
-          </div>
-
-          <h1 className="text-2xl font-black text-[#221912] tracking-tight">
-            Line Operations &amp; Efficiency Review
-          </h1>
-        </div>
-
-        {/* Global Toolbar Actions */}
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
-          {/* Quick Line Selector Dropdown */}
-          <div className="w-56 shrink-0">
-            <CustomSelect
-              value={selectedLineFilter}
-              onChange={val => setSelectedLineFilter(val)}
-              options={[
-                { value: "ALL", label: `All Sewing Lines (${calculatedLines.length})` },
-                ...calculatedLines.map(l => ({
-                  value: String(l.lineId),
-                  label: `${l.lineCode}: ${l.lineName}`
-                }))
-              ]}
-              size="sm"
-              icon={<Filter className="w-3.5 h-3.5" />}
-            />
-          </div>
-
-          {/* Export to Excel */}
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="h-8 px-3 rounded-lg bg-white hover:bg-[#FAF8F5] text-[#221912] border border-[#E6DDCE] text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-            title="Download full operational audit in Excel format"
-          >
-            <Download className="w-3.5 h-3.5 text-[#9C5B3C]" />
-            <span className="whitespace-nowrap">Export Excel</span>
-          </button>
-
-          {/* Rebalance Engine Navigation */}
-          <Link
-            to="/line-balance"
-            className="h-8 px-3.5 rounded-lg bg-[#9C5B3C] hover:bg-[#854B2F] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0"
-          >
-            <Zap className="w-3.5 h-3.5 text-[#FFE5BF]" />
-            <span className="whitespace-nowrap">Balance Lines Engine</span>
-          </Link>
-
-          {/* Refresh Data Button */}
-          {onRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              className="h-8 w-8 rounded-lg bg-white hover:bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] border border-[#E6DDCE] shadow-2xs flex items-center justify-center transition-colors cursor-pointer shrink-0"
-              title="Refresh Line Operations Data"
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <DashboardHeader
+        title="Line Operations"
+        subtitle="Output, efficiency and manning for each sewing line"
+        meta={
+          <>
+            <MetaChip icon={<Clock className="w-3.5 h-3.5" />}>{aggregates.activeShiftTiming}</MetaChip>
+            <MetaChip tone={aggregates.runningLinesCount > 0 ? "good" : "neutral"}>
+              <span className="tabular-nums">
+                {aggregates.runningLinesCount} of {aggregates.activeLinesCount}
+              </span>{" "}
+              lines running
+            </MetaChip>
+            {aggregates.totalVacantStations > 0 && (
+              <MetaChip tone="warn">
+                <span className="tabular-nums">{aggregates.totalVacantStations}</span> stations unmanned
+              </MetaChip>
+            )}
+          </>
+        }
+        actions={
+          <>
+            <div className="w-48">
+              <CustomSelect
+                value={selectedLineFilter}
+                onChange={(val) => setSelectedLineFilter(val)}
+                options={[
+                  { value: "ALL", label: `All sewing lines (${calculatedLines.length})` },
+                  ...calculatedLines.map((l) => ({
+                    value: String(l.lineId),
+                    label: `${l.lineCode}: ${l.lineName}`,
+                  })),
+                ]}
+                size="sm"
+                className="[&>button]:h-9 [&>button]:text-[12.5px]"
+                icon={<Filter className="w-3.5 h-3.5" />}
+              />
+            </div>
+            <HeaderButton
+              icon={<Download className="w-4 h-4" />}
+              onClick={handleExportExcel}
+              title="Download the line review and station manning as an Excel workbook"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-[#9C5B3C]" : ""}`} />
-            </button>
-          )}
-        </div>
-      </div>
+              Export Excel
+            </HeaderButton>
+            <HeaderButton variant="primary" icon={<Zap className="w-4 h-4" />} to="/line-balance">
+              Balance Lines
+            </HeaderButton>
+          </>
+        }
+        onRefresh={onRefresh}
+        refreshing={loading}
+      />
 
-      {/* Assignment Success Banner Alert */}
+      {/* Assignment confirmation */}
       <AnimatePresence>
         {assignSuccessMsg && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center justify-between shadow-xs"
+            exit={{ opacity: 0, y: -6 }}
+            role="status"
+            className={cn("flex items-center gap-3 rounded-xl border px-4 py-3", TONE.good.bg, TONE.good.border)}
           >
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span>{assignSuccessMsg}</span>
-            </div>
+            <CheckCircle2 className={cn("w-4 h-4 shrink-0", TONE.good.text)} />
+            <span className={cn("flex-1 text-[13px] font-semibold", TONE.good.text)}>{assignSuccessMsg}</span>
             <button
               type="button"
               onClick={() => setAssignSuccessMsg(null)}
-              className="text-emerald-700 hover:text-emerald-900 font-black cursor-pointer"
+              className="p-1 rounded-md text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+              aria-label="Dismiss"
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── 2. Top Executive KPI Ribbon: Plant-Wide Line Aggregates ──── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Daily Target vs Actual Output */}
-        <div className="rounded-2xl border border-[#E6DDCE] bg-white p-5 shadow-2xs hover:border-[#B48259]/60 hover:shadow-sm transition-all flex flex-col justify-between space-y-3.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-[#8C7E6E]">
-              Daily Target vs. Actual
-            </span>
-          </div>
-
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight leading-none">
-                {aggregates.totalActualGoodOutput.toLocaleString()}
-              </span>
-              <span className="text-xs font-bold text-[#8C7E6E]">
-                / {aggregates.totalPlannedOutput.toLocaleString()} pcs planned
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 mt-2.5 flex-wrap text-xs">
-              <span
-                className={`inline-flex items-center font-bold px-2.5 py-0.5 rounded-md border ${
-                  aggregates.totalActualGoodOutput >= aggregates.totalPlannedOutput
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                    : "bg-amber-50 text-amber-800 border-amber-200"
-                }`}
-              >
-                {aggregates.overallAttainmentPercent}% Attainment
-              </span>
-              <span className="text-[#8C7E6E] font-medium text-xs">
-                {aggregates.totalActualRejectOutput > 0 ? `${aggregates.totalActualRejectOutput} Rejects (${aggregates.overallDefectRate}%)` : "0 Rejects"}
-              </span>
-            </div>
-          </div>
-
-          <div className="w-full bg-[#F6F1E8] h-2 rounded-full overflow-hidden border border-[#E6DDCE]/60">
-            <div
-              className={`h-full rounded-full transition-all duration-700 ${
-                aggregates.overallAttainmentPercent >= 90
-                  ? "bg-emerald-600"
-                  : aggregates.overallAttainmentPercent >= 70
-                    ? "bg-amber-500"
-                    : "bg-rose-500"
-              }`}
-              style={{ width: `${Math.min(100, aggregates.overallAttainmentPercent)}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Card 2: Overall Production Quantity vs Completed Till Now */}
-        <div className="rounded-2xl border border-[#E6DDCE] bg-white p-5 shadow-2xs hover:border-[#B48259]/60 hover:shadow-sm transition-all flex flex-col justify-between space-y-3.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-[#8C7E6E]">
-              Overall Order Quantity
-            </span>
-          </div>
-
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight leading-none">
-                {aggregates.totalCompletedTillNow.toLocaleString()}
-              </span>
-              <span className="text-xs font-bold text-[#8C7E6E]">
-                / {aggregates.totalOrderQuantity.toLocaleString()} pcs total
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 mt-2.5 flex-wrap text-xs">
-              <span className="inline-flex items-center font-bold px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
-                {aggregates.overallOrderCompletionPercent}% Completed
-              </span>
-              <span className="text-[#8C7E6E] font-medium text-xs">
-                {(aggregates.totalOrderQuantity - aggregates.totalCompletedTillNow).toLocaleString()} Pcs Remaining
-              </span>
-            </div>
-          </div>
-
-          <div className="w-full bg-[#F6F1E8] h-2 rounded-full overflow-hidden border border-[#E6DDCE]/60">
-            <div
-              className="h-full rounded-full bg-emerald-600 transition-all duration-700"
-              style={{ width: `${Math.min(100, Math.max(1, aggregates.overallOrderCompletionPercent))}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Card 3: Planned Design vs Actual Operating Efficiency Review */}
-        <div className="rounded-2xl border border-[#E6DDCE] bg-white p-5 shadow-2xs hover:border-[#B48259]/60 hover:shadow-sm transition-all flex flex-col justify-between space-y-3.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-[#8C7E6E]">
-              Design vs. Actual Efficiency
-            </span>
-          </div>
-
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight leading-none">
-                {aggregates.avgActualEfficiency}%
-              </span>
-              <span className="text-xs font-bold text-[#8C7E6E]">
-                / {aggregates.avgDesignEfficiency}% Design Target
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 mt-2.5 flex-wrap text-xs">
-              <span
-                className={`inline-flex items-center font-bold px-2.5 py-0.5 rounded-md border ${
-                  aggregates.overallEfficiencyGap >= 0
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                    : aggregates.overallEfficiencyGap >= -5
-                      ? "bg-amber-50 text-amber-800 border-amber-200"
-                      : "bg-rose-50 text-rose-800 border-rose-200"
-                }`}
-              >
-                {aggregates.overallEfficiencyGap >= 0 ? `+${aggregates.overallEfficiencyGap}%` : `${aggregates.overallEfficiencyGap}%`} Gap
-              </span>
-              <span className="text-[#8C7E6E] font-medium text-xs">
-                Theoretical OB Benchmark
-              </span>
-            </div>
-          </div>
-
-          <div className="w-full bg-[#F6F1E8] h-2 rounded-full overflow-hidden border border-[#E6DDCE]/60 relative">
-            {/* Benchmark Pin Indicator */}
-            <div
-              className="absolute top-0 bottom-0 w-1 bg-[#221912] z-10 rounded-full"
-              style={{ left: `${Math.min(100, aggregates.avgDesignEfficiency)}%` }}
-              title={`Design Benchmark: ${aggregates.avgDesignEfficiency}%`}
-            />
-            <div
-              className="h-full rounded-full bg-emerald-600 transition-all duration-700"
-              style={{ width: `${Math.min(100, aggregates.avgActualEfficiency)}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Card 4: Floor Operational Status & Lines Health */}
-        <div className="rounded-2xl border border-[#E6DDCE] bg-white p-5 shadow-2xs hover:border-[#B48259]/60 hover:shadow-sm transition-all flex flex-col justify-between space-y-3.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-[#8C7E6E]">
-              Line Health &amp; Running Status
-            </span>
-          </div>
-
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-[#221912] font-mono tracking-tight leading-none">
-                {aggregates.runningLinesCount}
-              </span>
-              <span className="text-xs font-bold text-[#8C7E6E]">
-                / {aggregates.activeLinesCount} Lines Running
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 mt-2.5 flex-wrap text-xs">
-              <span className="inline-flex items-center gap-1.5 font-bold px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                Active Production
-              </span>
-              <span className="text-[#8C7E6E] font-medium text-xs">
-                {aggregates.totalVacantStations > 0 ? `${aggregates.totalVacantStations} Unmanned Stations` : "0 Blockers"}
-              </span>
-            </div>
-          </div>
-
-          <div className="w-full bg-[#F6F1E8] h-2 rounded-full overflow-hidden border border-[#E6DDCE]/60">
-            <div
-              className="h-full rounded-full bg-[#9C5B3C] transition-all duration-700"
-              style={{ width: `${(aggregates.runningLinesCount / Math.max(1, aggregates.activeLinesCount)) * 100}%` }}
-            />
-          </div>
-        </div>
+      {/* ── KPI row ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+        <KpiCard
+          label="Daily output vs target"
+          value={aggregates.totalActualGoodOutput.toLocaleString()}
+          unit={`/ ${aggregates.totalPlannedOutput.toLocaleString()} pcs`}
+          tone={attainTone(aggregates.overallAttainmentPercent)}
+          progress={aggregates.overallAttainmentPercent}
+          caption={
+            <>
+              {aggregates.overallAttainmentPercent}% of target ·{" "}
+              {aggregates.totalActualRejectOutput > 0
+                ? `${aggregates.totalActualRejectOutput} rejects (${aggregates.overallDefectRate}%)`
+                : "no rejects"}
+            </>
+          }
+        />
+        <KpiCard
+          label="Order quantity completed"
+          value={aggregates.totalCompletedTillNow.toLocaleString()}
+          unit={`/ ${aggregates.totalOrderQuantity.toLocaleString()} pcs`}
+          progress={aggregates.overallOrderCompletionPercent}
+          caption={
+            <>
+              {aggregates.overallOrderCompletionPercent}% complete ·{" "}
+              {(aggregates.totalOrderQuantity - aggregates.totalCompletedTillNow).toLocaleString()} pcs left
+            </>
+          }
+        />
+        <KpiCard
+          label="Operating vs design efficiency"
+          value={`${aggregates.avgActualEfficiency}%`}
+          unit={`/ ${aggregates.avgDesignEfficiency}% design`}
+          tone={gapTone(aggregates.overallEfficiencyGap)}
+          progress={aggregates.avgActualEfficiency}
+          caption={<>{signed(aggregates.overallEfficiencyGap)} pts vs design target</>}
+        />
+        <KpiCard
+          label="Line health"
+          value={aggregates.runningLinesCount}
+          unit={`/ ${aggregates.activeLinesCount} lines running`}
+          tone={aggregates.totalVacantStations > 0 ? "warn" : "good"}
+          progress={(aggregates.runningLinesCount / Math.max(1, aggregates.activeLinesCount)) * 100}
+          caption={
+            aggregates.totalVacantStations > 0
+              ? `${aggregates.totalVacantStations} stations unmanned`
+              : "All stations manned"
+          }
+        />
       </div>
 
-      {/* ── 3. Search & Operational Filter Tabs ────────────────────────── */}
-      <div className="bg-white rounded-3xl border border-[#E6DDCE] p-4 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        {/* Status Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 md:pb-0">
-          <button
-            type="button"
-            onClick={() => setStatusFilter("ALL")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-              statusFilter === "ALL"
-                ? "bg-[#221912] text-white shadow-xs"
-                : "bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] border border-[#E6DDCE]"
-            }`}
-          >
-            All Lines ({calculatedLines.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("RUNNING")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-              statusFilter === "RUNNING"
-                ? "bg-emerald-700 text-white shadow-xs"
-                : "bg-emerald-50/60 text-emerald-800 hover:bg-emerald-100/60 border border-emerald-200"
-            }`}
-          >
-            Running ({calculatedLines.filter((l) => l.status === "Running").length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("NEEDS_ATTENTION")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-              statusFilter === "NEEDS_ATTENTION"
-                ? "bg-rose-700 text-white shadow-xs"
-                : "bg-rose-50/60 text-rose-800 hover:bg-rose-100/60 border border-rose-200"
-            }`}
-          >
-            Needs Manning / Attention ({calculatedLines.filter((l) => l.status === "Needs Attention" || l.vacantStationCount > 0).length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("RAMPING")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-              statusFilter === "RAMPING"
-                ? "bg-amber-600 text-white shadow-xs"
-                : "bg-amber-50/60 text-amber-800 hover:bg-amber-100/60 border border-amber-200"
-            }`}
-          >
-            Ramping Up ({calculatedLines.filter((l) => l.status === "Ramping Up").length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("NO_PLAN")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-              statusFilter === "NO_PLAN"
-                ? "bg-[#8C7E6E] text-white shadow-xs"
-                : "bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] border border-[#E6DDCE]"
-            }`}
-          >
-            No Plan / Standby ({calculatedLines.filter((l) => l.status === "No Plan").length})
-          </button>
-        </div>
-
-        {/* Search Input */}
-        <div className="relative min-w-[240px]">
-          <Search className="w-3.5 h-3.5 text-[#8C7E6E] absolute left-3 top-1/2 -translate-y-1/2" />
+      {/* ── Toolbar: status tabs + search ──────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SegmentTabs<StatusFilter>
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[
+            { value: "ALL", label: "All lines", count: statusCounts.ALL },
+            { value: "RUNNING", label: "Running", count: statusCounts.RUNNING },
+            { value: "NEEDS_ATTENTION", label: "Needs manning", count: statusCounts.NEEDS_ATTENTION },
+            { value: "RAMPING", label: "Ramping up", count: statusCounts.RAMPING },
+            { value: "NO_PLAN", label: "No plan", count: statusCounts.NO_PLAN },
+          ]}
+        />
+        <div className="relative w-full sm:w-72">
+          <Search className="w-4 h-4 text-[#B5A897] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search by line, style, buyer, supervisor..."
+            placeholder="Search line, style, order, buyer, supervisor"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 bg-[#FAF8F5] rounded-xl border border-[#E6DDCE] text-xs text-[#221912] placeholder-[#8C7E6E] focus:outline-none focus:border-[#9C5B3C]"
+            aria-label="Search lines"
+            className="w-full h-9 pl-9 pr-3 bg-white rounded-lg border border-[#E6DDCE] text-[13px] text-[#221912] placeholder-[#B5A897] focus:outline-none focus:border-[#9C5B3C] focus:ring-3 focus:ring-[#9C5B3C]/12"
           />
         </div>
       </div>
 
-      {/* ── 4. Line-by-Line Detailed Operational Review Cards ─────────── */}
-      <div className="space-y-6">
+      {/* ── Line cards ─────────────────────────────────────────────────── */}
+      <div className="space-y-5">
         {displayedLines.length === 0 ? (
-          <div className="p-12 text-center bg-white rounded-3xl border border-[#E6DDCE] space-y-3">
-            <AlertTriangle className="w-10 h-10 text-[#9C5B3C] mx-auto opacity-60" />
-            <h3 className="text-base font-black text-[#221912]">No Lines Matched Current Filters</h3>
-            <p className="text-xs text-[#8C7E6E] max-w-md mx-auto">
-              Adjust your search query or status filter to inspect line operations and workstation balance.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setStatusFilter("ALL");
-                setSelectedLineFilter("ALL");
-                setSearchQuery("");
-              }}
-              className="px-4 py-2 bg-[#9C5B3C] text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
+          <div className="bg-white rounded-2xl border border-[#E6DDCE] shadow-[0_1px_2px_rgba(34,25,18,0.04)]">
+            <EmptyHint
+              icon={<Search />}
+              title="No lines match these filters"
+              action={
+                <HeaderButton
+                  onClick={() => {
+                    setStatusFilter("ALL");
+                    setSelectedLineFilter("ALL");
+                    setSearchQuery("");
+                  }}
+                >
+                  Reset filters
+                </HeaderButton>
+              }
             >
-              Reset Filters
-            </button>
+              Change the search or status filter to see line operations and station manning.
+            </EmptyHint>
           </div>
         ) : (
-          displayedLines.map((line) => (
-            <div
-              key={line.lineId}
-              className="bg-white rounded-3xl border border-[#E6DDCE] p-6 shadow-2xs space-y-6 transition-all hover:border-[#9C5B3C]/50"
-            >
-              {/* Line Header Banner */}
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-[#E6DDCE]">
-                <div className="space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <span className="font-mono font-black text-sm px-3 py-1 rounded-xl bg-[#221912] text-white shadow-2xs">
-                      {line.lineCode}
-                    </span>
-                    <h2 className="text-lg font-black text-[#221912] tracking-tight">
-                      {line.lineName}
-                    </h2>
-                    <span
-                      className={`text-[10.5px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
-                        line.status === "Running"
-                          ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                          : line.status === "Needs Attention"
-                            ? "bg-rose-50 text-rose-800 border-rose-300"
-                            : line.status === "Ramping Up"
-                              ? "bg-amber-50 text-amber-800 border-amber-300"
-                              : "bg-zinc-100 text-zinc-700 border-zinc-300"
-                      }`}
-                    >
-                      {line.status}
-                    </span>
-                    <span className="text-xs font-mono text-[#8C7E6E] px-2 py-0.5 rounded-lg bg-[#FAF8F5] border border-[#E6DDCE]">
-                      {line.lineType}
-                    </span>
-                  </div>
+          displayedLines.map((line) => {
+            const lineKey = String(line.lineId);
+            const expanded = expandedLines.has(lineKey);
+            const noPlan = line.status === "No Plan";
+            const vacant = line.stations.filter((s) => s.status === "Vacant").length;
+            const bottlenecks = line.stations.filter((s) => s.status === "Bottleneck").length;
+            const multi = line.stations.filter((s) => s.status === "Multi-Manned").length;
+            const manned = line.stations.length - vacant;
+            const showPanels = !noPlan || line.dailyActualGoodOutput > 0 || line.operatorsDeployed > 0;
 
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-[#8C7E6E]">
-                    <span>Supervisor: <strong className="text-[#221912] font-bold">{line.supervisorName}</strong></span>
-                    <span>·</span>
-                    <span>Floor: <strong className="text-[#221912]">{line.floor}</strong></span>
-                    <span>·</span>
-                    <span>Active Style: <strong className="text-[#9C5B3C] font-mono">{line.activeStyleName}</strong></span>
-                    <span>·</span>
-                    <span>Order: <strong className="text-[#221912]">{line.activeOrderNo}</strong></span>
-                    <span>·</span>
-                    <span>Buyer: <strong className="text-[#221912]">{line.buyer}</strong></span>
-                    {line.orderQuantity > 0 && (
-                      <>
-                        <span>·</span>
-                        <span>Order Qty: <strong className="font-mono text-[#221912]">{line.orderQuantity.toLocaleString()} pcs</strong></span>
-                      </>
+            return (
+              <article
+                key={line.lineId}
+                className="bg-white rounded-2xl border border-[#E6DDCE] shadow-[0_1px_2px_rgba(34,25,18,0.04)] min-w-0 @container"
+              >
+                {/* Line header */}
+                <div className="px-5 py-4 border-b border-[#F0EAE0] space-y-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 min-w-0">
+                      <span className="inline-flex items-center h-6 px-2 rounded-md bg-[#F6F1E8] border border-[#E6DDCE] text-[12px] font-semibold text-[#5C4D3E] tabular-nums">
+                        {line.lineCode}
+                      </span>
+                      <h2 className="text-[15px] font-bold tracking-tight text-[#221912] truncate">{line.lineName}</h2>
+                      <StatusPill tone={LINE_STATUS[line.status].tone}>{LINE_STATUS[line.status].label}</StatusPill>
+                      <span className="text-[12px] text-[#8C7E6E]">{line.lineType}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <HeaderButton to={`/line-balance?lineId=${line.lineId}`} icon={<Zap className="w-4 h-4 text-[#9C5B3C]" />}>
+                        Rebalance Line
+                      </HeaderButton>
+                      <HeaderButton to="/operator-placement" icon={<Users className="w-4 h-4 text-[#9C5B3C]" />}>
+                        Placement Map
+                      </HeaderButton>
+                      <HeaderButton to="/production-logs" icon={<Activity className="w-4 h-4 text-[#9C5B3C]" />}>
+                        Log Output
+                      </HeaderButton>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 @lg:grid-cols-3 @3xl:grid-cols-6 gap-x-6 gap-y-3">
+                    <Stat label="Supervisor">{line.supervisorName}</Stat>
+                    <Stat label="Floor">{line.floor}</Stat>
+                    <Stat label="Style">
+                      <span title={line.activeStyleName}>{line.activeStyleName}</span>
+                    </Stat>
+                    <Stat label="Order">
+                      <span title={line.activeOrderNo}>{line.activeOrderNo}</span>
+                    </Stat>
+                    <Stat label="Buyer">{line.buyer || "—"}</Stat>
+                    <Stat label="Order qty">{line.orderQuantity > 0 ? `${line.orderQuantity.toLocaleString()} pcs` : "—"}</Stat>
+                  </div>
+                </div>
+
+                <div className="p-5 space-y-4">
+                  {/* Three metric panels (skipped for idle lines with no plan and nothing logged) */}
+                  {showPanels && (
+                    <div className="grid grid-cols-1 @3xl:grid-cols-3 gap-4">
+                      <MetricPanel
+                        title="Daily output"
+                        pill={
+                          noPlan ? (
+                            <StatusPill tone="neutral">Not planned</StatusPill>
+                          ) : (
+                            <StatusPill tone={attainTone(line.targetAttainmentPercent)}>
+                              {line.targetAttainmentPercent}% of target
+                            </StatusPill>
+                          )
+                        }
+                        value={line.dailyActualGoodOutput.toLocaleString()}
+                        unit={`/ ${line.dailyPlannedOutput.toLocaleString()} pcs target`}
+                        meter={<Meter value={line.targetAttainmentPercent} />}
+                        rows={[
+                          { label: "Variance", value: `${signed(line.outputVariance)} pcs` },
+                          { label: "Rejects", value: `${line.dailyActualRejectOutput} (${line.defectRatePercent}%)` },
+                          { label: "Hourly rate", value: `${line.actualHourlyRunRate} / ${line.targetHourlyOutput} pcs/hr` },
+                        ]}
+                      />
+                      <MetricPanel
+                        title="Efficiency"
+                        pill={
+                          noPlan ? (
+                            <StatusPill tone="neutral">Not planned</StatusPill>
+                          ) : (
+                            <StatusPill tone={gapTone(line.efficiencyVariance)}>
+                              {signed(line.efficiencyVariance)} pts vs design
+                            </StatusPill>
+                          )
+                        }
+                        value={`${line.actualOperatingEfficiency}%`}
+                        unit={`/ ${line.lineDesignEfficiency}% design`}
+                        meter={<TargetMeter value={line.actualOperatingEfficiency} target={line.lineDesignEfficiency} />}
+                        rows={[
+                          { label: "Balance delay", value: `${line.balanceDelay}%` },
+                          { label: "Pitch time", value: `${line.pitchTimeSec} s (${line.pitchTime.toFixed(2)} min)` },
+                          { label: "Takt time", value: `${line.taktTimeSec} s/pc` },
+                        ]}
+                      />
+                      <MetricPanel
+                        title="Manning & bottleneck"
+                        pill={
+                          noPlan ? (
+                            <StatusPill tone="neutral">Not planned</StatusPill>
+                          ) : line.vacantStationCount === 0 ? (
+                            <StatusPill tone="good">Fully manned</StatusPill>
+                          ) : (
+                            <StatusPill tone="warn">{line.vacantStationCount} vacant</StatusPill>
+                          )
+                        }
+                        value={line.operatorsDeployed}
+                        unit={`/ ${line.operatorsRequired} operators`}
+                        meter={<Meter value={line.manningFulfillmentPercent} />}
+                        rows={[
+                          { label: "Manning", value: `${line.manningFulfillmentPercent}%` },
+                          { label: "Bottleneck", value: line.bottleneckOpName },
+                          {
+                            label: "Bottleneck cycle",
+                            value: `${line.bottleneckCycleTime.toFixed(2)} min · ${line.bottleneckMachineType.split("(")[0].trim()}`,
+                          },
+                        ]}
+                      />
+                    </div>
+                  )}
+
+                  {/* Station layout (collapsed by default) */}
+                  <div className={cn("rounded-xl border", noPlan ? "border-dashed border-[#D6C7B3] bg-[#FAF7F2]" : "border-[#F0EAE0]")}>
+                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 px-4 py-3">
+                      {noPlan ? (
+                        <div className="flex items-start gap-3 min-w-0">
+                          <span className="mt-0.5 w-8 h-8 rounded-lg bg-[#F0EAE0] text-[#8C7E6E] flex items-center justify-center shrink-0">
+                            <ClipboardList className="w-4 h-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-[#221912]">
+                              No active plan — <span className="tabular-nums">{line.stations.length}</span> stations unstaffed
+                            </p>
+                            <p className="text-[12px] text-[#8C7E6E] mt-0.5 tabular-nums">
+                              Balance it for an order to plan stations · target {line.dailyPlannedOutput.toLocaleString()} pcs/day ·{" "}
+                              {line.operatorsRequired} operators · {line.lineDesignEfficiency}% design efficiency
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 min-w-0 text-[13px]">
+                          <span className="font-semibold text-[#221912]">Station layout</span>
+                          <span className="text-[#8C7E6E] tabular-nums">
+                            · {line.stations.length} stations · {manned} manned
+                            {bottlenecks > 0 && ` · ${bottlenecks} bottleneck`}
+                            {multi > 0 && ` · ${multi} multi-manned`}
+                            {vacant > 0 && ` · ${vacant} vacant`}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        {noPlan && (
+                          <HeaderButton variant="primary" to={`/line-balance?lineId=${line.lineId}`} icon={<Zap className="w-4 h-4" />}>
+                            Rebalance Line
+                          </HeaderButton>
+                        )}
+                        {line.stations.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => toggleStations(lineKey)}
+                            aria-expanded={expanded}
+                            className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-[12.5px] font-semibold text-[#5C4D3E] hover:text-[#221912] border border-[#E6DDCE] bg-white hover:bg-[#FAF7F2] transition-colors cursor-pointer whitespace-nowrap"
+                          >
+                            {expanded ? "Hide stations" : "Show stations"}
+                            <ChevronDown className={cn("w-4 h-4 transition-transform", expanded && "rotate-180")} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {expanded && (
+                      <div className="border-t border-[#F0EAE0] p-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+                          {line.stations.map((st) => (
+                            <StationCard
+                              key={st.sequence}
+                              station={st}
+                              onAssign={() => setAssigningStation({ line, station: st })}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
-
-                {/* Line Header Action Buttons */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <Link
-                    to={`/line-balance?lineId=${line.lineId}`}
-                    className="px-3.5 py-2 bg-[#FAF8F5] hover:bg-[#F6F1E8] text-[#221912] text-xs font-bold rounded-xl border border-[#E6DDCE] transition-all flex items-center gap-1.5 shadow-2xs"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-[#9C5B3C]" />
-                    <span>Rebalance Line</span>
-                  </Link>
-
-                  <Link
-                    to="/operator-placement"
-                    className="px-3.5 py-2 bg-[#FAF8F5] hover:bg-[#F6F1E8] text-[#221912] text-xs font-bold rounded-xl border border-[#E6DDCE] transition-all flex items-center gap-1.5 shadow-2xs"
-                  >
-                    <Users className="w-3.5 h-3.5 text-sky-700" />
-                    <span>Placement Map</span>
-                  </Link>
-
-                  <Link
-                    to="/production-logs"
-                    className="px-3.5 py-2 bg-[#9C5B3C] hover:bg-[#854B2F] text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-xs"
-                  >
-                    <Activity className="w-3.5 h-3.5 text-[#FFE5BF]" />
-                    <span>Log Output</span>
-                  </Link>
-                </div>
-              </div>
-
-              {/* ── 3-Panel Analytical Comparison Grid for This Line ──── */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Panel A: Planned vs Actual Output Review */}
-                <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#E6DDCE] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1">
-                      <Target className="w-3.5 h-3.5 text-[#9C5B3C]" />
-                      Daily Output: Target vs. Actual
-                    </span>
-                    <span
-                      className={`text-[10.5px] font-black px-2 py-0.5 rounded-full ${
-                        line.targetAttainmentPercent >= 90
-                          ? "bg-emerald-100 text-emerald-800"
-                          : line.targetAttainmentPercent >= 70
-                            ? "bg-amber-100 text-amber-800"
-                            : "bg-rose-100 text-rose-800"
-                      }`}
-                    >
-                      {line.targetAttainmentPercent}% Attained
-                    </span>
-                  </div>
-
-                  <div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-black text-[#221912] font-mono">
-                        {line.dailyActualGoodOutput.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-[#8C7E6E] font-bold font-mono">
-                        / {line.dailyPlannedOutput.toLocaleString()} Daily Target
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-[#8C7E6E] mt-1">
-                      <span>Variance: <strong className={line.outputVariance >= 0 ? "text-emerald-700 font-mono" : "text-amber-700 font-mono"}>
-                        {line.outputVariance >= 0 ? `+${line.outputVariance} pcs` : `${line.outputVariance} pcs`}
-                      </strong></span>
-                      <span>Rejects: <strong className="font-mono text-rose-700">{line.dailyActualRejectOutput} ({line.defectRatePercent}%)</strong></span>
-                    </div>
-                  </div>
-
-                  <div className="w-full bg-white h-2 rounded-full overflow-hidden border border-[#E6DDCE]">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        line.targetAttainmentPercent >= 90
-                          ? "bg-emerald-600"
-                          : line.targetAttainmentPercent >= 70
-                            ? "bg-amber-500"
-                            : "bg-rose-500"
-                      }`}
-                      style={{ width: `${Math.min(100, line.targetAttainmentPercent)}%` }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-[#8C7E6E] pt-0.5 border-t border-[#E6DDCE]/60">
-                    <span>Hourly Run Rate:</span>
-                    <span className="font-mono font-black text-[#221912]">
-                      {line.actualHourlyRunRate} / {line.targetHourlyOutput} pcs/hr
-                    </span>
-                  </div>
-                </div>
-
-                {/* Panel B: Design Efficiency vs Actual Operating Efficiency Review */}
-                <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#E6DDCE] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1">
-                      <Gauge className="w-3.5 h-3.5 text-[#9C5B3C]" />
-                      Efficiency: Design vs. Operating
-                    </span>
-                    <span
-                      className={`text-[10.5px] font-black px-2 py-0.5 rounded-full ${
-                        line.efficiencyVariance >= 0
-                          ? "bg-emerald-100 text-emerald-800"
-                          : line.efficiencyVariance >= -5
-                            ? "bg-amber-100 text-amber-800"
-                            : "bg-rose-100 text-rose-800"
-                      }`}
-                    >
-                      {line.efficiencyVariance >= 0 ? `+${line.efficiencyVariance}%` : `${line.efficiencyVariance}%`} Δ
-                    </span>
-                  </div>
-
-                  <div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-black text-[#221912] font-mono">
-                        {line.actualOperatingEfficiency}%
-                      </span>
-                      <span className="text-xs text-[#8C7E6E] font-bold font-mono">
-                        (Planned OB Design: {line.lineDesignEfficiency}%)
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-[#8C7E6E] mt-1">
-                      <span>Balance Delay: <strong className="font-mono text-[#221912]">{line.balanceDelay}%</strong></span>
-                      <span>Pitch Time: <strong className="font-mono text-[#221912]">{line.pitchTimeSec}s ({line.pitchTime.toFixed(2)}m)</strong></span>
-                    </div>
-                  </div>
-
-                  {/* Dual Efficiency Bar */}
-                  <div className="w-full bg-white h-2 rounded-full overflow-hidden border border-[#E6DDCE] relative">
-                    <div
-                      className="absolute top-0 bottom-0 w-1 bg-[#221912] z-10"
-                      style={{ left: `${Math.min(100, line.lineDesignEfficiency)}%` }}
-                      title={`Target Design: ${line.lineDesignEfficiency}%`}
-                    />
-                    <div
-                      className="h-full rounded-full bg-emerald-600 transition-all duration-500"
-                      style={{ width: `${Math.min(100, line.actualOperatingEfficiency)}%` }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-[#8C7E6E] pt-0.5 border-t border-[#E6DDCE]/60">
-                    <span>Takt Pace:</span>
-                    <span className="font-mono font-black text-[#221912]">
-                      {line.taktTimeSec} sec/piece
-                    </span>
-                  </div>
-                </div>
-
-                {/* Panel C: Manning Fulfillment & Pacing Bottleneck */}
-                <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-[#E6DDCE] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-sky-700" />
-                      Manning &amp; Bottleneck Review
-                    </span>
-                    <span
-                      className={`text-[10.5px] font-black px-2 py-0.5 rounded-full ${
-                        line.vacantStationCount === 0
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-rose-100 text-rose-800"
-                      }`}
-                    >
-                      {line.vacantStationCount === 0 ? "Fully Manned" : `${line.vacantStationCount} Vacant`}
-                    </span>
-                  </div>
-
-                  <div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-2xl font-black text-[#221912] font-mono">
-                        {line.operatorsDeployed}
-                      </span>
-                      <span className="text-xs text-[#8C7E6E] font-bold font-mono">
-                        / {line.operatorsRequired} Required Operators
-                      </span>
-                      <span className="text-xs font-black text-sky-800 ml-auto font-mono">
-                        {line.manningFulfillmentPercent}%
-                      </span>
-                    </div>
-
-                    <div className="text-xs text-[#8C7E6E] mt-1 line-clamp-1" title={line.bottleneckOpName}>
-                      Pacing Bottleneck: <strong className="text-amber-900 font-semibold">{line.bottleneckOpName}</strong>
-                    </div>
-                  </div>
-
-                  <div className="w-full bg-white h-2 rounded-full overflow-hidden border border-[#E6DDCE]">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        line.manningFulfillmentPercent >= 95 ? "bg-emerald-600" : "bg-amber-500"
-                      }`}
-                      style={{ width: `${Math.min(100, line.manningFulfillmentPercent)}%` }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-[#8C7E6E] pt-0.5 border-t border-[#E6DDCE]/60">
-                    <span>Bottleneck Cycle:</span>
-                    <span className="font-mono font-black text-amber-800">
-                      {line.bottleneckCycleTime.toFixed(2)}m ({line.bottleneckMachineType.split("(")[0]})
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Sequential Workstation Layout & Manning Map ─────────── */}
-              <div className="space-y-3 pt-1">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-[#8C7E6E] flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-[#9C5B3C]" />
-                    Sequential Workstation Manning &amp; Coverage Layout ({line.stations.length} Operations):
-                  </span>
-                  <div className="flex items-center gap-3 text-[10.5px] text-[#8C7E6E] flex-wrap">
-                    <span className="flex items-center gap-1 font-semibold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Manned
-                    </span>
-                    <span className="flex items-center gap-1 font-semibold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Bottleneck
-                    </span>
-                    <span className="flex items-center gap-1 font-semibold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Vacant (Needs Manning)
-                    </span>
-                    <span className="flex items-center gap-1 font-semibold">
-                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" /> Multi-Manned (2x)
-                    </span>
-                  </div>
-                </div>
-
-                {/* Workstation Cards Horizontal Flow Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {line.stations.map((st) => {
-                    const isVacant = st.status === "Vacant";
-                    const isBottleneck = st.status === "Bottleneck";
-                    const isMulti = st.status === "Multi-Manned";
-
-                    return (
-                      <div
-                        key={st.sequence}
-                        className={`p-3 rounded-2xl border text-xs flex flex-col justify-between space-y-2 transition-all ${
-                          isVacant
-                            ? "bg-rose-50/50 border-rose-300 ring-2 ring-rose-300/30"
-                            : isBottleneck
-                              ? "bg-amber-50/50 border-amber-300"
-                              : isMulti
-                                ? "bg-indigo-50/40 border-indigo-300"
-                                : "bg-[#FAF8F5] border-[#E6DDCE] hover:border-[#9C5B3C]"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono font-black text-[10.5px] text-[#221912]">
-                            St #{st.sequence}
-                          </span>
-                          <span
-                            className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md ${
-                              isVacant
-                                ? "bg-rose-100 text-rose-800"
-                                : isBottleneck
-                                  ? "bg-amber-100 text-amber-800"
-                                  : isMulti
-                                    ? "bg-indigo-100 text-indigo-800"
-                                    : "bg-emerald-100 text-emerald-800"
-                            }`}
-                          >
-                            {st.status}
-                          </span>
-                        </div>
-
-                        <div>
-                          <h4 className="font-black text-[11.5px] text-[#221912] line-clamp-1" title={st.operationName}>
-                            {st.operationName}
-                          </h4>
-                          <span className="text-[10px] text-[#8C7E6E] line-clamp-1 mt-0.5">
-                            {st.machineType.split("(")[0]}
-                          </span>
-                        </div>
-
-                        <div className="pt-2 border-t border-[#E6DDCE]/60 space-y-1.5">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-[#8C7E6E]">SMV / CT:</span>
-                            <span className="font-mono font-bold text-[#9C5B3C]">
-                              {st.effectiveCycleTime.toFixed(2)}m
-                            </span>
-                          </div>
-
-                          {isVacant ? (
-                            <button
-                              type="button"
-                              onClick={() => setAssigningStation({ line, station: st })}
-                              className="w-full py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10.5px] shadow-2xs flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                            >
-                              <UserPlus className="w-3 h-3" />
-                              <span>Assign Operator</span>
-                            </button>
-                          ) : (
-                            <div className="space-y-0.5">
-                              <div className="flex items-center justify-between text-[10.5px]">
-                                <span className="font-bold text-[#221912] truncate max-w-[95px]" title={st.assignedOperatorName || ""}>
-                                  {st.assignedOperatorName}
-                                </span>
-                                <span className="text-[9.5px] font-mono text-[#8C7E6E]">
-                                  {st.assignedEmployeeId}
-                                </span>
-                              </div>
-                              {st.actualPiecesLogged > 0 && (
-                                <div className="text-[9.5px] text-emerald-700 font-mono font-bold">
-                                  Logged: {st.actualPiecesLogged} pcs
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          ))
+              </article>
+            );
+          })
         )}
       </div>
 
-      {/* ── 5. Quick Operator Deployment Modal ────────────────────────── */}
+      {/* ── Quick operator assignment modal ─────────────────────────────── */}
       <AnimatePresence>
         {assigningStation && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-[#221912]/40 backdrop-blur-xs">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white border border-[#E6DDCE] rounded-3xl p-6 shadow-2xl max-w-lg w-full space-y-4"
+              exit={{ opacity: 0, scale: 0.97 }}
+              role="dialog"
+              aria-modal="true"
+              className="bg-white border border-[#E6DDCE] rounded-2xl shadow-2xl max-w-lg w-full"
             >
-              <div className="flex items-center justify-between pb-3 border-b border-[#E6DDCE]">
-                <div>
-                  <h3 className="text-base font-black text-[#221912] flex items-center gap-2">
-                    <UserPlus className="w-4 h-4 text-[#9C5B3C]" />
-                    <span>Deploy Operator to Station #{assigningStation.station.sequence}</span>
+              <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-[#F0EAE0]">
+                <div className="min-w-0">
+                  <h3 className="text-[15px] font-bold tracking-tight text-[#221912]">
+                    Assign operator to station {assigningStation.station.sequence}
                   </h3>
-                  <p className="text-xs text-[#8C7E6E] mt-0.5">
-                    {assigningStation.line.lineCode} — {assigningStation.station.operationName} ({assigningStation.station.machineType})
+                  <p className="text-[12.5px] text-[#8C7E6E] mt-0.5">
+                    {assigningStation.line.lineCode} · {assigningStation.station.operationName} ·{" "}
+                    {assigningStation.station.machineType}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setAssigningStation(null)}
-                  className="w-8 h-8 rounded-full bg-[#FAF8F5] text-[#8C7E6E] hover:text-[#221912] font-black text-xs flex items-center justify-center cursor-pointer"
+                  className="p-1.5 rounded-lg text-[#8C7E6E] hover:text-[#221912] hover:bg-[#F6F1E8] cursor-pointer shrink-0"
+                  aria-label="Close"
                 >
-                  ✕
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <div>
-                <span className="text-[11px] font-black uppercase tracking-wider text-[#8C7E6E] block mb-2">
-                  Select Available Buffer / Floating Operator ({unallocatedOperators.length} Available):
-                </span>
+              <div className="p-5">
+                <p className="text-[12.5px] font-semibold text-[#5C4D3E] mb-2.5">
+                  Available buffer operators <span className="text-[#8C7E6E] font-normal tabular-nums">({unallocatedOperators.length})</span>
+                </p>
 
                 {unallocatedOperators.length === 0 ? (
-                  <div className="p-6 text-center bg-[#FAF8F5] rounded-2xl border border-[#E6DDCE] space-y-2">
-                    <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
-                    <p className="text-xs font-bold text-[#221912]">No unallocated operators in buffer pool</p>
-                    <p className="text-[11px] text-[#8C7E6E]">
+                  <div className="rounded-xl border border-[#E6DDCE] bg-[#FAF7F2]">
+                    <EmptyHint icon={<AlertCircle />} title="No unallocated operators in the buffer pool">
                       All active operators are currently assigned to running lines.
-                    </p>
+                    </EmptyHint>
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+                  <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
                     {unallocatedOperators.map((op) => (
                       <div
                         key={op.id}
                         onClick={() => !isAssigning && handleAssignOperator(op)}
-                        className="p-3 rounded-2xl border border-[#E6DDCE] hover:border-[#9C5B3C] bg-white hover:bg-[#FAF8F5] transition-all cursor-pointer flex items-center justify-between group"
+                        className="px-3.5 py-2.5 rounded-xl border border-[#E6DDCE] hover:border-[#D6C7B3] bg-white hover:bg-[#FAF7F2] transition-colors cursor-pointer flex items-center justify-between gap-3 group"
                       >
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-2 font-black text-xs text-[#221912] group-hover:text-[#9C5B3C]">
-                            <span>{op.name}</span>
-                            <span className="font-mono text-[10px] text-[#8C7E6E]">({op.employeeId})</span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 text-[13px] font-semibold text-[#221912]">
+                            <span className="truncate">{op.name}</span>
+                            <span className="text-[11.5px] font-normal text-[#8C7E6E] tabular-nums">{op.employeeId}</span>
                           </div>
-                          <span className="text-[11px] text-[#8C7E6E]">{op.department || "Sewing Department"}</span>
+                          <span className="text-[12px] text-[#8C7E6E]">{op.department || "Sewing Department"}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10.5px] font-bold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200">
-                            {op.role || "Operator"}
-                          </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <StatusPill tone="neutral" icon={<span />}>{op.role || "Operator"}</StatusPill>
                           <button
                             type="button"
                             disabled={isAssigning}
-                            className="px-2.5 py-1 rounded-xl bg-[#9C5B3C] group-hover:bg-[#854B2F] text-white font-bold text-[10px] shadow-2xs"
+                            className="h-8 px-3 rounded-lg bg-[#9C5B3C] group-hover:bg-[#854B30] text-white font-semibold text-[12px] disabled:opacity-60"
                           >
-                            {isAssigning ? "Assigning..." : "Assign"}
+                            {isAssigning ? "Assigning…" : "Assign"}
                           </button>
                         </div>
                       </div>
@@ -1094,6 +757,139 @@ export function LineLevelDashboard({
           </div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/* ─── Local presentation helpers ─────────────────────────────────────────────────────────────────── */
+
+type StatusFilter = "ALL" | "RUNNING" | "NEEDS_ATTENTION" | "RAMPING" | "NO_PLAN";
+
+const LINE_STATUS: Record<LineOperationsSummary["status"], { tone: Tone; label: string }> = {
+  Running: { tone: "good", label: "Running" },
+  "Ramping Up": { tone: "warn", label: "Ramping up" },
+  "Needs Attention": { tone: "critical", label: "Needs attention" },
+  "No Plan": { tone: "neutral", label: "No plan" },
+};
+
+/** One of the three per-line metric panels: headline number, meter and three label/value rows. */
+function MetricPanel({
+  title,
+  pill,
+  value,
+  unit,
+  meter,
+  rows,
+}: {
+  title: string;
+  pill: React.ReactNode;
+  value: React.ReactNode;
+  unit: string;
+  meter: React.ReactNode;
+  rows: { label: string; value: string }[];
+}) {
+  return (
+    <div className="rounded-xl border border-[#F0EAE0] bg-[#FAF7F2] p-4 min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12.5px] font-semibold text-[#5C4D3E]">{title}</span>
+        {pill}
+      </div>
+      <div className="mt-2.5 flex items-baseline gap-1.5 min-w-0">
+        <span className="text-[22px] leading-none font-bold tracking-tight text-[#221912] tabular-nums">{value}</span>
+        <span className="text-[12px] text-[#8C7E6E] tabular-nums truncate">{unit}</span>
+      </div>
+      <div className="mt-3">{meter}</div>
+      <dl className="mt-3.5 pt-3 border-t border-[#EDE5D8] space-y-1.5">
+        {rows.map((r) => (
+          <div key={r.label} className="flex items-baseline justify-between gap-3 text-[12.5px] min-w-0">
+            <dt className="text-[#8C7E6E] whitespace-nowrap">{r.label}</dt>
+            <dd className="font-semibold text-[#221912] tabular-nums truncate text-right" title={r.value}>
+              {r.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/** Meter with a dark tick marking the target (same vocabulary as BarList). */
+function TargetMeter({ value, target }: { value: number; target: number }) {
+  const clamp = (n: number) => Math.max(0, Math.min(100, n));
+  return (
+    <div
+      className="relative h-1.5 rounded-full bg-[#EFE8DD]"
+      role="meter"
+      aria-valuenow={Math.round(value)}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      title={`Operating ${value}% · design ${target}%`}
+    >
+      <div className="absolute inset-y-0 left-0 rounded-full bg-[#9C5B3C]" style={{ width: `${clamp(value)}%` }} />
+      <div
+        className="absolute -top-1 -bottom-1 w-0.5 rounded-full bg-[#221912]/70"
+        style={{ left: `calc(${clamp(target)}% - 1px)` }}
+        aria-hidden
+      />
+    </div>
+  );
+}
+
+function StationCard({ station: st, onAssign }: { station: LineStationCoverage; onAssign: () => void }) {
+  const isVacant = st.status === "Vacant";
+  const isBottleneck = st.status === "Bottleneck";
+  const isMulti = st.status === "Multi-Manned";
+  return (
+    <div
+      className={cn(
+        "rounded-xl border p-3 flex flex-col gap-2 min-w-0",
+        isVacant
+          ? "border-dashed border-[#D6C7B3] bg-[#FAF7F2]"
+          : isBottleneck
+            ? "border-amber-300 bg-white shadow-[inset_3px_0_0_0_#F59E0B]"
+            : "border-[#E6DDCE] bg-white"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2 h-[22px]">
+        <span className="text-[11.5px] font-semibold text-[#8C7E6E] tabular-nums">Station {st.sequence}</span>
+        {isBottleneck && <StatusPill tone="warn">Bottleneck</StatusPill>}
+        {isMulti && <StatusPill tone="info">Multi-manned</StatusPill>}
+        {isVacant && <span className="text-[11.5px] font-medium text-[#8C7E6E]">Vacant</span>}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[12.5px] font-semibold leading-snug text-[#221912] line-clamp-2 min-h-[34px]" title={st.operationName}>
+          {st.operationName}
+        </p>
+        <p className="text-[11.5px] text-[#8C7E6E] truncate mt-0.5" title={st.machineType}>
+          {st.machineType.split("(")[0].trim()}
+        </p>
+      </div>
+      <div className="mt-auto pt-2 border-t border-[#F0EAE0] space-y-1">
+        <div className="flex items-center justify-between text-[11.5px]">
+          <span className="text-[#8C7E6E]">Cycle time</span>
+          <span className="font-semibold text-[#221912] tabular-nums">{st.effectiveCycleTime.toFixed(2)} min</span>
+        </div>
+        {isVacant ? (
+          <button
+            type="button"
+            onClick={onAssign}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#9C5B3C] hover:text-[#7A452D] hover:underline underline-offset-2 cursor-pointer"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            Assign operator
+          </button>
+        ) : (
+          <div className="flex items-baseline justify-between gap-2 text-[12px] min-w-0">
+            <span className="font-semibold text-[#221912] truncate" title={st.assignedOperatorName || ""}>
+              {st.assignedOperatorName}
+            </span>
+            <span className="text-[11px] text-[#8C7E6E] tabular-nums shrink-0">{st.assignedEmployeeId}</span>
+          </div>
+        )}
+        {!isVacant && st.actualPiecesLogged > 0 && (
+          <div className="text-[11.5px] text-[#8C7E6E] tabular-nums">{st.actualPiecesLogged} pcs logged today</div>
+        )}
+      </div>
     </div>
   );
 }
